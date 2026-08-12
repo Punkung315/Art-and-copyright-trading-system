@@ -1,0 +1,125 @@
+package com.maejo.artmarket.service;
+
+import com.maejo.artmarket.dto.*;
+import com.maejo.artmarket.entity.Artwork;
+import com.maejo.artmarket.entity.User;
+import com.maejo.artmarket.enums.PublishStatus;
+import com.maejo.artmarket.enums.Role;
+import com.maejo.artmarket.repository.ArtworkRepository;
+import com.maejo.artmarket.repository.UserRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * UserService — Business Logic ของยูสเคส:
+ *   3.1.6 View Profile
+ *   3.1.7 Edit Profile
+ */
+@Service
+@RequiredArgsConstructor
+public class UserService {
+
+    private final UserRepository    userRepository;
+    private final ArtworkRepository artworkRepository;
+
+    // =========================================================================
+    // ยูสเคส 3.1.6 View Profile
+    // Basic Flow: รับ userId → ค้นหาใน DB → คืนข้อมูล + รายการผลงาน (ถ้าเป็น Seller)
+    // Alternate Flow 4.1.1: ไม่พบ → "ไม่พบข้อมูลผู้ใช้งาน"
+    // =========================================================================
+
+    @Transactional(readOnly = true)
+    public ApiResponse<ProfileResponse> viewProfile(Integer targetUserId, String currentUsername) {
+
+        // Basic Flow ข้อ 4.1 — ค้นหาผู้ใช้จากฐานข้อมูล
+        Optional<User> userOpt = userRepository.findById(targetUserId);
+
+        // Alternate Flow 4.1.1 — "ไม่พบข้อมูลผู้ใช้งาน"
+        if (userOpt.isEmpty()) {
+            return ApiResponse.error("ไม่พบข้อมูลผู้ใช้งาน");
+        }
+
+        User targetUser = userOpt.get();
+
+        // ตรวจว่ากำลังดูโปรไฟล์ตัวเองหรือคนอื่น
+        // ถ้าดูของตัวเอง → แสดง email, phoneNumber ด้วย
+        // ถ้าดูของคนอื่น → ซ่อน email, phoneNumber (privacy)
+        boolean isSelf = currentUsername != null
+                && currentUsername.equals(targetUser.getUsername());
+
+        // ดึงผลงาน — เฉพาะ Seller เท่านั้นที่มี artwork
+        // และถ้าดูโปรไฟล์คนอื่น → เห็นแค่งานที่ PUBLISHED แล้ว
+        // ถ้าดูโปรไฟล์ตัวเอง → เห็นทุกงาน (ทั้ง DRAFT และ PUBLISHED)
+        List<ArtworkSummaryResponse> artworks = List.of();
+        if (targetUser.getRole() == Role.SELLER) {
+            List<Artwork> artworkEntities;
+            if (isSelf) {
+                // ดูของตัวเอง → เห็นทุกงาน
+                artworkEntities = artworkRepository.findBySeller_User_UserId(targetUserId);
+            } else {
+                // ดูของคนอื่น → เห็นเฉพาะ published
+                artworkEntities = artworkRepository.findBySeller_User_UserIdAndPublishStatus(
+                        targetUserId, PublishStatus.PUBLISHED);
+            }
+            artworks = artworkEntities.stream()
+                    .map(ArtworkSummaryResponse::from)
+                    .toList();
+        }
+
+        // Basic Flow ข้อ 5 — คืนค่าข้อมูล
+        return ApiResponse.ok("ดึงข้อมูลผู้ใช้งานสำเร็จ",
+                ProfileResponse.from(targetUser, artworks, isSelf));
+    }
+
+    // =========================================================================
+    // ยูสเคส 3.1.7 Edit Profile
+    // Basic Flow: รับข้อมูลใหม่ → validate → อัปเดตใน DB → คืนโปรไฟล์ที่อัปเดตแล้ว
+    // Alternate Flow 3.1: validation ไม่ผ่าน → จัดการโดย GlobalExceptionHandler
+    // Alternate Flow 5.1.1: แก้ไขไม่สำเร็จ → "ไม่สามารถแก้ไขได้ กรุณาลองอีกครั้ง"
+    // =========================================================================
+
+    @Transactional
+    public ApiResponse<ProfileResponse> editProfile(String currentUsername, EditProfileRequest req) {
+
+        User user = userRepository.findByUsername(currentUsername)
+                .orElseThrow(() -> new RuntimeException("ไม่พบผู้ใช้"));
+
+        // ตรวจ username ใหม่ซ้ำกับคนอื่นไหม (ถ้าส่ง username มาและไม่ใช่อันเดิม)
+        if (StringUtils.hasText(req.getUsername())
+                && !req.getUsername().equals(user.getUsername())
+                && userRepository.existsByUsername(req.getUsername())) {
+            return ApiResponse.error("ชื่อผู้ใช้นี้ถูกใช้งานแล้ว กรุณาใช้ชื่ออื่น");
+        }
+
+        // ตรวจ email ใหม่ซ้ำกับคนอื่นไหม
+        if (StringUtils.hasText(req.getEmail())
+                && !req.getEmail().equals(user.getEmail())
+                && userRepository.existsByEmail(req.getEmail())) {
+            return ApiResponse.error("อีเมลนี้ถูกใช้งานแล้ว กรุณาใช้อีเมลอื่น");
+        }
+
+        // Basic Flow ข้อ 5.1 — อัปเดตเฉพาะ field ที่ส่งมา (partial update)
+        // ถ้า field ไหนเป็น null หรือ blank → คงค่าเดิมไว้
+        if (StringUtils.hasText(req.getUsername()))    user.setUsername(req.getUsername());
+        if (StringUtils.hasText(req.getFullName()))    user.setFullName(req.getFullName());
+        if (StringUtils.hasText(req.getEmail()))       user.setEmail(req.getEmail());
+        if (StringUtils.hasText(req.getPhoneNumber())) user.setPhoneNumber(req.getPhoneNumber());
+        if (StringUtils.hasText(req.getProfileImage())) user.setProfileImage(req.getProfileImage());
+
+        try {
+            userRepository.save(user);
+        } catch (Exception e) {
+            // Alternate Flow 5.1.1 — "ไม่สามารถแก้ไขได้ กรุณาลองอีกครั้ง"
+            return ApiResponse.error("ไม่สามารถแก้ไขได้ กรุณาลองอีกครั้ง");
+        }
+
+        // คืนโปรไฟล์ที่อัปเดตแล้ว (isSelf=true เพราะแก้ข้อมูลตัวเอง)
+        return ApiResponse.ok("แก้ไขข้อมูลสำเร็จ",
+                ProfileResponse.from(user, List.of(), true));
+    }
+}

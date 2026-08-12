@@ -1,0 +1,45 @@
+package com.maejo.artmarket.dto;
+
+import com.maejo.artmarket.entity.Artwork;
+import com.maejo.artmarket.enums.ArtworkStatus;
+import lombok.Builder;
+import lombok.Data;
+
+/**
+ * DTO สำหรับ Search Art (ยูสเคส 3.1.1)
+ * ใช้ตอนแสดงรายการผลงานในหน้าค้นหา — ส่งแค่ข้อมูลที่จำเป็นสำหรับ card/thumbnail
+ * ไม่ส่ง field ทุกอันของ Artwork เพราะ bandwidth และ security (ไม่ expose ข้อมูลที่ไม่จำเป็น)
+ *
+ * ชื่อ field ตรงกับที่ SRS (View Art หน้า 23) ระบุไว้ว่าต้องแสดง
+ */
+@Data
+@Builder
+public class ArtworkSummaryResponse {
+
+    private Integer artworkId;
+    private String artworkName;
+    private String artworkImage;
+    private String artworkType;
+    private String artworkStyle;
+    private Double price;
+    private ArtworkStatus artworkStatus;
+
+    // ข้อมูลผู้ขาย (แสดงบน card ว่างานนี้เป็นของใคร)
+    private Integer sellerId;
+    private String sellerName; // มาจาก seller.user.fullName
+
+    /** แปลง Entity → DTO ในที่เดียว ไม่ต้องกระจาย logic ไปหลายที่ */
+    public static ArtworkSummaryResponse from(Artwork artwork) {
+        return ArtworkSummaryResponse.builder()
+                .artworkId(artwork.getArtworkId())
+                .artworkName(artwork.getArtworkName())
+                .artworkImage(artwork.getArtworkImage())
+                .artworkType(artwork.getArtworkType())
+                .artworkStyle(artwork.getArtworkStyle())
+                .price(artwork.getPrice())
+                .artworkStatus(artwork.getArtworkStatus())
+                .sellerId(artwork.getSeller().getSellerId())
+                .sellerName(artwork.getSeller().getUser().getFullName())
+                .build();
+    }
+}
