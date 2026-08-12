@@ -24,16 +24,21 @@ spring:
 server:
   port: 8080
 
-# JWT config (เลือกใช้ชุดใดชุดหนึ่งให้ตรงกับโค้ด)
-jwt:
-  secret: artmarket-super-secret-key-maejo-university-2026-change-this-in-production
-  expiration-ms: 86400000   # 24 ชั่วโมง
-
-# หรือถ้าโค้ดอ่านจาก app.jwt ให้ใช้ชุดนี้แทน
+# หมายเหตุ: เอา top-level "jwt:" อันเก่าออกแล้ว เหลือแค่ "app.jwt" อันเดียว
+# เพราะ JwtUtil.java อ่านจาก ${app.jwt.secret} / ${app.jwt.expiration-ms} เท่านั้น
+# การมี 2 ชุดพร้อมกันไม่ได้ทำให้ error แต่ทำให้งงว่าอันไหนถูกใช้จริง เลยตัดออก
 app:
   jwt:
     secret: artmarket-maejo-super-secret-key-change-this-in-production-min-256bit
-    expiration-ms: 86400000
+    expiration-ms: 86400000   # 24 ชั่วโมง
+
+  # ตั้งค่าบัญชี Admin เริ่มต้น (สร้างอัตโนมัติตอนแอปสตาร์ทครั้งแรก โดย DataSeeder.java)
+  # จุดนี้เคยหายไปจากไฟล์ที่อัปโหลดมา เป็นสาเหตุหนึ่งที่ทำให้สับสนว่า config ตรงไหนที่ควบคุมการสร้าง Admin
+  # (ตัว DataSeeder มี default ในตัวอยู่แล้วถ้าไม่ใส่ส่วนนี้ แต่ใส่ไว้ให้เห็นชัดเจนกว่า)
+  seed-admin:
+    enabled: true
+    username: admin
+    password: Admin1234!
 
 logging:
   level:
