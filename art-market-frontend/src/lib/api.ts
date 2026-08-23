@@ -302,7 +302,11 @@ interface BeCartItem {
 
 interface BeTransfer {
   copyrightId: number;
-  orderId: number;
+  /** งานศิลปะที่ขอโอนลิขสิทธิ์ — ตัวอ้างอิงหลักของสัญญา */
+  artworkId: number | null;
+  artworkName: string | null;
+  /** null ได้ ถ้าผู้ซื้อขอเฉพาะลิขสิทธิ์โดยไม่ได้ซื้อชิ้นงานต้นฉบับ */
+  orderId: number | null;
   buyerId: number;
   sellerId: number;
   buyerUserId: number | null;
@@ -320,6 +324,9 @@ interface BeTransfer {
   nationalNo: string;
   transferStatus: "PENDING" | "SIGNED" | "COMPLETED" | "REJECTED";
   transferDate: string;
+  /** ข้อตกลงที่ผู้ซื้อระบุตอนยื่นคำขอ */
+  agreement: string | null;
+  /** คำตอบ/เหตุผลของผู้ขาย — null จนกว่าผู้ขายจะตอบ */
   sellerResponseDetail: string | null;
   documentFile: string | null;
   copyrightPrice: number | null;
@@ -600,8 +607,9 @@ function mapTransfer(t: BeTransfer): CopyrightTransfer {
   const art = t.artworks?.[0];
   return {
     id: String(t.copyrightId),
-    artworkId: art ? String(art.artworkId) : "",
-    artworkName: art?.artworkName ?? "",
+    // ใช้ field ระดับบนก่อน แล้วค่อย fallback ไปที่ artworks[0]
+    artworkId: String(t.artworkId ?? art?.artworkId ?? ""),
+    artworkName: t.artworkName ?? art?.artworkName ?? "",
     artworkImage: imageOrPlaceholder(art?.artworkImage, art?.artworkId ?? t.copyrightId, art?.artworkName ?? ""),
     // เทียบกับ user.id ในหน้า /copyright/[id] เพื่อตัดสินว่าใครเป็นผู้ซื้อ/ผู้ขาย
     buyerId: String(t.buyerUserId ?? t.buyerId),
@@ -621,8 +629,9 @@ function mapTransfer(t: BeTransfer): CopyrightTransfer {
       province: t.province,
       postalCode: t.postalCode,
     },
-    // backend ยังไม่มีคอลัมน์เก็บข้อความข้อตกลงแยก จึงใช้คำตอบของผู้ขายแทน
-    agreement: t.sellerResponseDetail ?? "",
+    // ข้อตกลงของผู้ซื้อ กับคำตอบของผู้ขาย เป็นคนละข้อความกัน
+    // (เดิม fallback ไปใช้ sellerResponseDetail ทำให้ช่องนี้ว่างจนกว่าผู้ขายจะตอบ)
+    agreement: t.agreement ?? "",
     responseDetail: t.sellerResponseDetail ?? undefined,
     documentFile: t.documentFile ?? undefined,
     transferStatus: TRANSFER_STATUS_MAP[t.transferStatus],
@@ -1241,6 +1250,7 @@ export async function sendCopyrightTransfer(input: {
       district: input.address.district,
       province: input.address.province,
       postalCode: input.address.postalCode,
+      agreement: input.agreement,
     }),
   });
   return mapTransfer(t);

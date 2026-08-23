@@ -13,6 +13,12 @@ import java.util.List;
 @Builder
 public class CopyrightTransferResponse {
     private Integer copyrightId;
+
+    /** งานศิลปะที่ขอโอนลิขสิทธิ์ — ตัวอ้างอิงหลักของสัญญา */
+    private Integer artworkId;
+    private String  artworkName;
+
+    /** null ได้ ถ้าผู้ซื้อขอเฉพาะลิขสิทธิ์โดยไม่ได้ซื้อชิ้นงานต้นฉบับ */
     private Integer orderId;
     private String  buyerName;
     private String  sellerName;
@@ -27,6 +33,9 @@ public class CopyrightTransferResponse {
     private String province;
     private String postalCode;
     private String nationalNo;
+
+    /** รายละเอียดข้อตกลงที่ผู้ซื้อระบุตอนยื่นคำขอ — คนละตัวกับ sellerResponseDetail */
+    private String agreement;
 
     private CopyrightTransferStatus transferStatus;
 
@@ -55,7 +64,7 @@ public class CopyrightTransferResponse {
     public static CopyrightTransferResponse from(CopyrightTransfer ct) {
         return CopyrightTransferResponse.builder()
                 .copyrightId(ct.getCopyrightId())
-                .orderId(ct.getOrder().getOrderId())
+                .orderId(ct.getOrder() != null ? ct.getOrder().getOrderId() : null)
                 .buyerName(ct.getBuyer().getUser().getFullName())
                 .sellerName(ct.getSeller().getUser().getFullName())
                 .fullName(ct.getFullName())
@@ -67,20 +76,21 @@ public class CopyrightTransferResponse {
                 .province(ct.getProvince())
                 .postalCode(ct.getPostalCode())
                 .nationalNo(ct.getNationalNo())
+                .agreement(ct.getAgreement())
+                .artworkId(ct.getArtwork().getArtworkId())
+                .artworkName(ct.getArtwork().getArtworkName())
                 .buyerId(ct.getBuyer().getBuyerId())
                 .buyerUserId(ct.getBuyer().getUser().getUserId())
                 .sellerUserId(ct.getSeller().getUser().getUserId())
                 .sellerId(ct.getSeller().getSellerId())
                 .documentFile(ct.getDocumentFile())
                 .sellerSignature(ct.getSellerSignature())
-                .copyrightPrice(ct.getOrder().getOrderItems().stream()
-                        .map(i -> i.getArtwork().getCopyrightPrice() != null
-                                ? i.getArtwork().getCopyrightPrice()
-                                : 0.0)
-                        .reduce(0.0, Double::sum))
-                .artworks(ct.getOrder().getOrderItems().stream()
-                        .map(i -> ArtworkSummaryResponse.from(i.getArtwork()))
-                        .toList())
+                // ราคาและรายละเอียดงานอ่านจาก artwork ของสัญญาโดยตรง
+                // (เดิมไล่จาก orderItems ซึ่งใช้ไม่ได้แล้วเมื่อสัญญาไม่จำเป็นต้องมี order)
+                .copyrightPrice(ct.getArtwork().getCopyrightPrice() != null
+                        ? ct.getArtwork().getCopyrightPrice()
+                        : 0.0)
+                .artworks(List.of(ArtworkSummaryResponse.from(ct.getArtwork())))
                 .transferStatus(ct.getTransferStatus())
                 .transferDate(ct.getTransferDate())
                 .sellerResponseDetail(ct.getSellerResponseDetail())

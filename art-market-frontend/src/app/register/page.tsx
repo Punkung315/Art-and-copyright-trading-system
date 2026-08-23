@@ -48,7 +48,7 @@ export default function RegisterBuyerPage() {
   return (
     <Container className="flex justify-center py-14">
       <Card className="w-full max-w-md p-8">
-        <h1 className="font-serif text-2xl font-bold text-stone-900">สมัครสมาชิก (ผู้ซื้อ)</h1>
+        <h1 className="font-serif text-2xl font-bold text-stone-900">สมัครสมาชิก</h1>
         <p className="mt-1 text-sm text-stone-500">
           สมัครสมาชิกเพื่อเริ่มเลือกซื้อผลงานศิลปะและลิขสิทธิ์ผลงาน
         </p>

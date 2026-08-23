@@ -70,6 +70,16 @@ public class CopyrightTransfer {
     @Column(nullable = false)
     private String nationalNo;
 
+    /**
+     * รายละเอียดข้อตกลงที่ผู้ซื้อระบุตอนยื่นคำขอ (ฟอร์ม Send Copyright Transfer ช่อง "รายละเอียดข้อตกลง")
+     *
+     * เดิมไม่มีคอลัมน์นี้ ข้อความที่ผู้ซื้อพิมพ์จึงถูกทิ้งไปตั้งแต่ชั้น DTO
+     * ทำให้หน้าสัญญาทั้งฝั่งผู้ซื้อและผู้ขายแสดงหัวข้อ "รายละเอียดข้อตกลง" แบบว่างเปล่า
+     * (คนละตัวกับ sellerResponseDetail ด้านล่าง ซึ่งเป็นคำตอบของ "ผู้ขาย")
+     */
+    @Column(length = 1000)
+    private String agreement;
+
     // ---- เพิ่มเติม: คำตอบ/เหตุผลจากผู้ขายตอน Receive Copyright Transfer ----
     @Column(length = 1000)
     private String sellerResponseDetail;
@@ -82,8 +92,25 @@ public class CopyrightTransfer {
     @JoinColumn(name = "seller_id", nullable = false)
     private Seller seller;
 
+    /**
+     * งานศิลปะที่ขอโอนลิขสิทธิ์ — เป็นตัวอ้างอิงหลักของสัญญา
+     *
+     * เดิมสัญญาผูกกับ Order อย่างเดียว ทำให้ต้อง "ซื้อชิ้นงานก่อน" ถึงจะขอลิขสิทธิ์ได้
+     * แต่ลิขสิทธิ์กับตัวชิ้นงานเป็นสินค้าคนละชิ้นกัน ผู้ซื้อจึงควรขอซื้อเฉพาะลิขสิทธิ์ได้
+     * โดยไม่ต้องซื้อชิ้นงานต้นฉบับ จึงย้ายตัวอ้างอิงหลักมาที่ Artwork แทน
+     */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "order_id", nullable = false)
+    @JoinColumn(name = "artwork_id", nullable = false)
+    private Artwork artwork;
+
+    /**
+     * คำสั่งซื้อที่เกี่ยวข้อง — เป็น null ได้
+     *
+     * ถ้าผู้ซื้อเคยสั่งซื้อชิ้นงานนี้อยู่แล้ว ระบบจะผูกคำสั่งซื้อนั้นไว้ให้เพื่อการอ้างอิง
+     * แต่ถ้าขอซื้อเฉพาะลิขสิทธิ์โดยไม่ได้ซื้อชิ้นงาน field นี้จะว่าง
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "order_id")
     private Orders order;
 
     @PrePersist

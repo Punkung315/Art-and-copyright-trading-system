@@ -3,6 +3,7 @@ package com.maejo.artmarket.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 /**
@@ -48,4 +49,13 @@ public class SendCopyrightTransferRequest {
     @NotBlank(message = "กรุณากรอกเลขบัตรประชาชน")
     @Pattern(regexp = "^[0-9]{13}$", message = "เลขบัตรประชาชนต้องเป็นตัวเลข 13 หลัก")
     private String nationalNo;
+
+    /**
+     * รายละเอียดข้อตกลงที่ผู้ซื้อยอมรับ (ช่อง "รายละเอียดข้อตกลง" ในฟอร์ม)
+     *
+     * ไม่บังคับที่ชั้นนี้ (frontend ตรวจว่าห้ามว่างอยู่แล้ว) เพื่อไม่ให้ client เก่าที่ยังไม่ส่ง
+     * field นี้พังไปเลย — ถ้าไม่ส่งมา service จะเติมข้อความมาตรฐานให้แทน
+     */
+    @Size(max = 1000, message = "รายละเอียดข้อตกลงต้องไม่เกิน 1000 ตัวอักษร")
+    private String agreement;
 }

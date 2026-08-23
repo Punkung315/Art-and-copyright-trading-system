@@ -3,6 +3,7 @@ package com.maejo.artmarket.service;
 import com.maejo.artmarket.dto.*;
 import com.maejo.artmarket.entity.*;
 import com.maejo.artmarket.enums.CopyrightTransferStatus;
+import com.maejo.artmarket.enums.PublishStatus;
 import com.maejo.artmarket.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,12 @@ public class CopyrightTransferService {
     private final BuyerRepository   buyerRepository;
     private final SellerRepository  sellerRepository;
     private final OrdersRepository  ordersRepository;
+    private final ArtworkRepository artworkRepository;
+
+    /** ข้อความข้อตกลงมาตรฐาน ใช้เมื่อ client ไม่ได้ส่ง agreement มา */
+    private static final String DEFAULT_AGREEMENT =
+            "ข้าพเจ้าตกลงซื้อสิทธิ์ในลิขสิทธิ์ของผลงานชิ้นนี้ตามราคาที่กำหนด "
+          + "และยินยอมปฏิบัติตามข้อตกลงการโอนลิขสิทธิ์ทุกประการ";
 
     // =========================================================================
     // ยูสเคส 3.1.12 Send Copyright Transfer
@@ -40,42 +47,64 @@ public class CopyrightTransferService {
             return ApiResponse.error("ไม่พบข้อมูลผู้ซื้อ");
         }
 
-        // รับได้ทั้ง orderId ตรงๆ และ artworkId (frontend เข้าจากหน้ารายละเอียดงานศิลปะ
-        // /copyright/new/[artworkId] ซึ่งรู้แค่ artworkId ไม่รู้ orderId)
-        Optional<Orders> orderOpt;
-        if (req.getOrderId() != null) {
-            orderOpt = ordersRepository.findById(req.getOrderId());
-        } else if (req.getArtworkId() != null) {
-            orderOpt = ordersRepository
-                    .findByBuyerAndArtwork(buyer.getBuyerId(), req.getArtworkId())
-                    .stream().findFirst();
+        // ระบุงานศิลปะที่ต้องการขอลิขสิทธิ์
+        // รับ artworkId เป็นหลัก (frontend เข้าจากหน้ารายละเอียดงาน /copyright/new/[artworkId])
+        // ส่วน orderId ยังรับได้เพื่อความเข้ากันได้กับของเดิม โดยจะแปลงเป็นงานชิ้นแรกใน order นั้น
+        Artwork artwork = null;
+        if (req.getArtworkId() != null) {
+            artwork = artworkRepository.findById(req.getArtworkId()).orElse(null);
+        } else if (req.getOrderId() != null) {
+            Orders o = ordersRepository.findById(req.getOrderId()).orElse(null);
+            if (o != null && !o.getOrderItems().isEmpty()) {
+                artwork = o.getOrderItems().get(0).getArtwork();
+            }
         } else {
-            return ApiResponse.error("กรุณาระบุคำสั่งซื้อหรืองานศิลปะ");
+            return ApiResponse.error("กรุณาระบุงานศิลปะที่ต้องการขอโอนลิขสิทธิ์");
         }
 
-        if (orderOpt.isEmpty()) {
-            return ApiResponse.error("ไม่พบรายการคำสั่งซื้อ");
+        if (artwork == null) {
+            return ApiResponse.error("ไม่พบงานศิลปะที่ต้องการ");
         }
 
-        Orders order = orderOpt.get();
-
-        if (!order.getBuyer().getBuyerId().equals(buyer.getBuyerId())) {
-            return ApiResponse.error("ไม่มีสิทธิ์เข้าถึงคำสั่งซื้อนี้");
+        if (artwork.getPublishStatus() != PublishStatus.PUBLISHED) {
+            return ApiResponse.error("งานศิลปะชิ้นนี้ยังไม่ได้เผยแพร่");
         }
 
-        if (copyrightTransferRepository.existsByOrder_OrderId(order.getOrderId())) {
-            return ApiResponse.error("คำสั่งซื้อนี้มีการส่งสัญญาโอนลิขสิทธิ์ไปแล้ว");
+        // ผู้ขายต้องตั้งราคาลิขสิทธิ์ไว้ ถึงจะถือว่าเปิดขายลิขสิทธิ์ของงานชิ้นนี้
+        if (artwork.getCopyrightPrice() == null || artwork.getCopyrightPrice() <= 0) {
+            return ApiResponse.error("งานศิลปะชิ้นนี้ไม่ได้เปิดขายลิขสิทธิ์");
         }
 
-        if (order.getOrderItems().isEmpty()) {
-            return ApiResponse.error("คำสั่งซื้อไม่มีรายการสินค้า");
+        Seller seller = artwork.getSeller();
+
+        // กันไม่ให้ผู้ขายขอซื้อลิขสิทธิ์งานของตัวเอง
+        if (seller.getUser().getUserId().equals(buyer.getUser().getUserId())) {
+            return ApiResponse.error("ไม่สามารถขอโอนลิขสิทธิ์งานของตัวเองได้");
         }
-        // หา seller จากชิ้นงานแรกใน order (ดูหมายเหตุใน QuotationResponse เรื่องข้อจำกัดของโมเดล)
-        Seller seller = order.getOrderItems().get(0).getArtwork().getSeller();
+
+        // กันส่งคำขอซ้ำสำหรับงานชิ้นเดียวกันที่ยังดำเนินการอยู่
+        // (ถ้าเคยถูกปฏิเสธไปแล้ว ให้ยื่นใหม่ได้)
+        boolean duplicate = copyrightTransferRepository
+                .existsByBuyer_BuyerIdAndArtwork_ArtworkIdAndTransferStatusIn(
+                        buyer.getBuyerId(),
+                        artwork.getArtworkId(),
+                        List.of(CopyrightTransferStatus.PENDING,
+                                CopyrightTransferStatus.SIGNED,
+                                CopyrightTransferStatus.COMPLETED));
+        if (duplicate) {
+            return ApiResponse.error("คุณส่งคำขอโอนลิขสิทธิ์ของงานชิ้นนี้ไปแล้ว");
+        }
+
+        // ถ้าผู้ซื้อเคยสั่งซื้อชิ้นงานนี้ ให้ผูกคำสั่งซื้อไว้เพื่อการอ้างอิง
+        // แต่ไม่บังคับ — ขอซื้อเฉพาะลิขสิทธิ์โดยไม่ซื้อชิ้นงานก็ได้
+        Orders order = ordersRepository
+                .findByBuyerAndArtwork(buyer.getBuyerId(), artwork.getArtworkId())
+                .stream().findFirst().orElse(null);
 
         try {
             CopyrightTransfer transfer = CopyrightTransfer.builder()
-                    .order(order)
+                    .artwork(artwork)
+                    .order(order)   // null ได้ ถ้าไม่เคยซื้อชิ้นงานนี้
                     .buyer(buyer)
                     .seller(seller)
                     .fullName(req.getFullName())
@@ -87,6 +116,11 @@ public class CopyrightTransferService {
                     .province(req.getProvince())
                     .postalCode(req.getPostalCode())
                     .nationalNo(req.getNationalNo())
+                    // เก็บข้อความข้อตกลงที่ผู้ซื้อยอมรับไว้เป็น snapshot ของสัญญาฉบับนี้
+                    // ถ้า client เก่าไม่ส่งมา ใช้ข้อความมาตรฐานแทนเพื่อไม่ให้สัญญาว่างเปล่า
+                    .agreement(req.getAgreement() != null && !req.getAgreement().isBlank()
+                            ? req.getAgreement().trim()
+                            : DEFAULT_AGREEMENT)
                     .transferStatus(CopyrightTransferStatus.PENDING)
                     .build();
 

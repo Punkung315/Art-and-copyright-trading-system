@@ -1,6 +1,7 @@
 package com.maejo.artmarket.repository;
 
 import com.maejo.artmarket.entity.CopyrightTransfer;
+import com.maejo.artmarket.enums.CopyrightTransferStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -21,4 +22,13 @@ public interface CopyrightTransferRepository extends JpaRepository<CopyrightTran
 
     /** ป้องกันส่งสัญญาซ้ำสำหรับ order เดียวกัน */
     boolean existsByOrder_OrderId(Integer orderId);
+
+    /**
+     * มีคำขอโอนลิขสิทธิ์ของงานชิ้นนี้จากผู้ซื้อรายนี้ที่ยังดำเนินการอยู่หรือไม่
+     *
+     * ใช้แทนการเช็คซ้ำด้วย order_id เดิม เพราะตอนนี้สัญญาผูกกับงานศิลปะ ไม่ใช่คำสั่งซื้อ
+     * ส่งสถานะที่ถือว่า "ยังดำเนินการอยู่" เข้ามา เพื่อให้คำขอที่เคยถูกปฏิเสธยื่นใหม่ได้
+     */
+    boolean existsByBuyer_BuyerIdAndArtwork_ArtworkIdAndTransferStatusIn(
+            Integer buyerId, Integer artworkId, List<CopyrightTransferStatus> statuses);
 }

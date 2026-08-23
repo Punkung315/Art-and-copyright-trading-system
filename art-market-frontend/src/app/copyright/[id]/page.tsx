@@ -119,7 +119,10 @@ function CopyrightDetailContent({ id }: { id: string }) {
 
         <div className="mt-4">
           <p className="mb-1 text-sm font-medium text-stone-700">รายละเอียดข้อตกลง</p>
-          <p className="text-sm text-stone-600">{transfer.agreement}</p>
+          {/* สัญญาเก่าที่บันทึกก่อนมีคอลัมน์ agreement จะไม่มีข้อความ — บอกให้ชัดแทนที่จะปล่อยว่าง */}
+          <p className={`text-sm whitespace-pre-line ${transfer.agreement ? "text-stone-600" : "text-stone-400"}`}>
+            {transfer.agreement || "ผู้ซื้อไม่ได้ระบุรายละเอียดข้อตกลงเพิ่มเติม"}
+          </p>
         </div>
 
         {transfer.responseDetail && (
