@@ -44,6 +44,46 @@ public class ArtworkController {
         return ResponseEntity.ok(artworkService.searchArtworks(request));
     }
 
+    /**
+     * หน้าแรก — งานมาใหม่ล่าสุด
+     * GET /api/artworks/latest?limit=8
+     *
+     * ต้องประกาศก่อน @GetMapping("/{id}") เพื่อความชัดเจน (Spring เลือก literal path
+     * ก่อน path variable อยู่แล้ว แต่เรียงแบบนี้อ่านง่ายกว่าและกันพลาดตอนแก้ทีหลัง)
+     */
+    @GetMapping("/latest")
+    public ResponseEntity<ApiResponse<List<ArtworkSummaryResponse>>> listLatest(
+            @RequestParam(required = false) Integer limit) {
+        return ResponseEntity.ok(artworkService.listLatest(limit));
+    }
+
+    /**
+     * หน้าแรก — แนะนำสำหรับคุณ
+     * GET /api/artworks/recommended?limit=8
+     *
+     * ไม่บังคับ login: ถ้ายังไม่ได้เข้าสู่ระบบจะคืนงานล่าสุดให้แทน
+     * (userDetails เป็น null ได้เพราะ endpoint นี้ permitAll)
+     */
+    @GetMapping("/recommended")
+    public ResponseEntity<ApiResponse<List<ArtworkSummaryResponse>>> listRecommended(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestParam(required = false) Integer limit) {
+        String username = userDetails != null ? userDetails.getUsername() : null;
+        return ResponseEntity.ok(artworkService.listRecommended(username, limit));
+    }
+
+    /**
+     * หน้า Search — ตัวเลือกของตัวกรอง (ประเภท / สไตล์ / เทคนิค / ช่วงราคา)
+     * GET /api/artworks/facets
+     *
+     * อ่านค่าที่มีอยู่จริงในฐานข้อมูล ทำให้ตัวกรองอัปเดตตามข้อมูลเสมอ
+     * โดยไม่ต้องไปแก้รายการที่ hardcode ไว้ใน frontend ทุกครั้งที่มีงานประเภทใหม่
+     */
+    @GetMapping("/facets")
+    public ResponseEntity<ApiResponse<ArtworkFacetsResponse>> getFacets() {
+        return ResponseEntity.ok(artworkService.getFacets());
+    }
+
     /** ยูสเคส 3.1.2 View Art — GET /api/artworks/{id} */
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<ArtworkDetailResponse>> getArtworkById(

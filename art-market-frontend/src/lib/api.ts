@@ -38,6 +38,7 @@ import {
   TransferStatus,
   User,
 } from "@/types";
+import { artworkPlaceholder, avatarPlaceholder } from "./placeholder";
 
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, "") ||
@@ -279,6 +280,9 @@ interface BePayment {
   buyerId: number;
   buyerName: string | null;
   buyerUserId: number | null;
+  sellerName: string | null;
+  sellerId: number | null;
+  sellerUserId: number | null;
   grandTotal: number;
   shippingCost: number;
   slipTransfer?: string | null;
@@ -345,6 +349,28 @@ interface BeSellerVerify {
 
 /* ------------------------------- mappers -------------------------------- */
 
+/**
+ * backend เก็บรูปเป็น null ได้ (ข้อมูล seed ไม่มีไฟล์รูปจริง)
+ * แต่เพจใช้ค่านี้เป็น src ของ <img> ตรงๆ ถ้าส่งสตริงว่างไปเบราว์เซอร์จะโหลดหน้าซ้ำทั้งหน้า
+ * และ Next.js จะเตือน 'An empty string was passed to the src attribute'
+ * จึงเติมรูป SVG แทนให้ที่นี่ (ตัวเดียวกับที่ mock เดิมใช้) — เพจไม่ต้องแก้
+ */
+function imageOrPlaceholder(
+  image: string | null | undefined,
+  seed: string | number,
+  label: string
+): string {
+  return image || artworkPlaceholder(String(seed), label || "Art");
+}
+
+function avatarOrPlaceholder(
+  image: string | null | undefined,
+  seed: string | number,
+  label: string
+): string {
+  return image || avatarPlaceholder(String(seed), label || "U");
+}
+
 function mapAddress(a: BeAddress): Address {
   return {
     id: String(a.addressId),
@@ -368,7 +394,7 @@ function mapProfile(p: BeProfile): User {
     fullName: p.fullName ?? undefined,
     phoneNumber: p.phoneNumber ?? undefined,
     nationalNo: p.nationalNo ?? undefined,
-    profileImage: p.profileImage ?? undefined,
+    profileImage: avatarOrPlaceholder(p.profileImage, p.userId, p.fullName || p.username),
     address: p.addresses?.length ? mapAddress(p.addresses[0]) : undefined,
     roles,
     sellerStatus: p.sellerStatus ?? "none",
@@ -384,7 +410,7 @@ function mapAuthToUser(a: BeAuth): User {
     password: "",
     email: a.email ?? "",
     fullName: a.fullName ?? undefined,
-    profileImage: a.profileImage ?? undefined,
+    profileImage: avatarOrPlaceholder(a.profileImage, a.userId, a.fullName || a.username),
     roles,
     sellerStatus:
       a.roleName === "SELLER" ? (a.sellerVerified ? "approved" : "pending") : "none",
@@ -408,7 +434,7 @@ function mapArtworkSummary(a: BeArtworkSummary): Artwork {
     sellerId: String(a.sellerUserId ?? a.sellerId),
     sellerName: a.sellerName ?? "",
     artworkName: a.artworkName,
-    artworkImage: a.artworkImage ?? "",
+    artworkImage: imageOrPlaceholder(a.artworkImage, a.artworkId, a.artworkName),
     artworkType: a.artworkType ?? "",
     artworkStyle: a.artworkStyle ?? "",
     artworkMediums: "",
@@ -492,7 +518,7 @@ function mapOrderItem(i: BeOrderItem): OrderItem {
     id: String(i.orderItemId),
     artworkId: String(i.artworkId),
     artworkName: i.artworkName,
-    artworkImage: i.artworkImage ?? "",
+    artworkImage: imageOrPlaceholder(i.artworkImage, i.artworkId, i.artworkName),
     price: i.price,
   };
 }
@@ -548,10 +574,12 @@ function mapPayment(p: BePayment): Payment {
     orderId: String(p.orderId),
     buyerId: String(p.buyerUserId ?? p.buyerId),
     buyerName: p.buyerName ?? "",
-    sellerId: p.artworks?.length
-      ? String(p.artworks[0].sellerUserId ?? p.artworks[0].sellerId)
-      : "",
-    sellerName: p.artworks?.length ? p.artworks[0].sellerName ?? "" : "",
+    // endpoint รายการ (PaymentSummaryResponse) ส่ง sellerName มาตรงๆ
+    // ส่วน endpoint รายละเอียด (PaymentDetailResponse) ต้องดึงจาก artworks
+    sellerId: String(
+      p.sellerUserId ?? p.artworks?.[0]?.sellerUserId ?? p.artworks?.[0]?.sellerId ?? ""
+    ),
+    sellerName: p.sellerName ?? p.artworks?.[0]?.sellerName ?? "",
     totalPrice,
     shippingCost: p.shippingCost ?? 0,
     grandTotal: p.grandTotal ?? 0,
@@ -574,7 +602,7 @@ function mapTransfer(t: BeTransfer): CopyrightTransfer {
     id: String(t.copyrightId),
     artworkId: art ? String(art.artworkId) : "",
     artworkName: art?.artworkName ?? "",
-    artworkImage: art?.artworkImage ?? "",
+    artworkImage: imageOrPlaceholder(art?.artworkImage, art?.artworkId ?? t.copyrightId, art?.artworkName ?? ""),
     // เทียบกับ user.id ในหน้า /copyright/[id] เพื่อตัดสินว่าใครเป็นผู้ซื้อ/ผู้ขาย
     buyerId: String(t.buyerUserId ?? t.buyerId),
     buyerName: t.buyerName ?? "",
@@ -800,20 +828,95 @@ export async function verifySeller(
 
 /* ------------------------------ Artworks ------------------------------ */
 
+export type ArtworkSort = "newest" | "price_asc" | "price_desc" | "name";
+
 export interface ArtworkSearchParams {
   q?: string;
   artworkType?: string;
+  artworkStyle?: string;
+  artworkMediums?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  minSize?: number;
+  maxSize?: number;
+  sort?: ArtworkSort;
+  limit?: number;
 }
 
 export async function searchArtworks(
   params: ArtworkSearchParams = {}
 ): Promise<Artwork[]> {
   const list = await requestOr<BeArtworkSummary[]>(
-    `/artworks${qs({ keyword: params.q, artworkType: params.artworkType })}`,
+    `/artworks${qs({
+      keyword: params.q,
+      artworkType: params.artworkType,
+      artworkStyle: params.artworkStyle,
+      artworkMediums: params.artworkMediums,
+      minPrice: params.minPrice,
+      maxPrice: params.maxPrice,
+      minSize: params.minSize,
+      maxSize: params.maxSize,
+      sort: params.sort,
+      limit: params.limit,
+    })}`,
     [],
     { auth: false }
   );
   return list.map(mapArtworkSummary);
+}
+
+/** งานมาใหม่ล่าสุด — ใช้ในหน้าแรก */
+export async function listLatestArtworks(limit = 8): Promise<Artwork[]> {
+  const list = await requestOr<BeArtworkSummary[]>(
+    `/artworks/latest${qs({ limit })}`,
+    [],
+    { auth: false }
+  );
+  return list.map(mapArtworkSummary);
+}
+
+/**
+ * แนะนำสำหรับคุณ — ใช้ในหน้าแรก
+ *
+ * ส่ง token ไปด้วยถ้ามี (auth: true) เพื่อให้ backend แนะนำจากประวัติของผู้ใช้คนนั้น
+ * ถ้ายังไม่ได้ login backend จะคืนงานล่าสุดให้แทน ไม่ error
+ */
+export async function listRecommendedArtworks(limit = 8): Promise<Artwork[]> {
+  const list = await requestOr<BeArtworkSummary[]>(
+    `/artworks/recommended${qs({ limit })}`,
+    []
+  );
+  return list.map(mapArtworkSummary);
+}
+
+export interface FacetValue {
+  value: string;
+  count: number;
+}
+
+export interface ArtworkFacets {
+  types: FacetValue[];
+  styles: FacetValue[];
+  mediums: FacetValue[];
+  minPrice: number | null;
+  maxPrice: number | null;
+}
+
+/**
+ * ตัวเลือกของตัวกรองในหน้า Search
+ *
+ * ดึงจากฐานข้อมูลจริงแทนการ hardcode ไว้ในโค้ด
+ * พอผู้ขายเพิ่มงานประเภทใหม่ ตัวกรองจะมีตัวเลือกนั้นให้เลือกเองทันที
+ */
+export async function getArtworkFacets(): Promise<ArtworkFacets> {
+  const empty: ArtworkFacets = {
+    types: [],
+    styles: [],
+    mediums: [],
+    minPrice: null,
+    maxPrice: null,
+  };
+  return requestOr<ArtworkFacets>("/artworks/facets", empty, { auth: false });
 }
 
 export async function getArtwork(id: string): Promise<Artwork | undefined> {
@@ -936,7 +1039,7 @@ export async function listCart(
           sellerId: "",
           sellerName: "",
           artworkName: i.artworkName,
-          artworkImage: i.artworkImage ?? "",
+          artworkImage: imageOrPlaceholder(i.artworkImage, i.artworkId, i.artworkName),
           artworkType: "",
           artworkStyle: "",
           artworkMediums: "",

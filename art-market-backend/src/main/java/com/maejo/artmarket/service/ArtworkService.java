@@ -6,13 +6,19 @@ import com.maejo.artmarket.entity.Seller;
 import com.maejo.artmarket.enums.ArtworkStatus;
 import com.maejo.artmarket.enums.PublishStatus;
 import com.maejo.artmarket.repository.ArtworkRepository;
+import com.maejo.artmarket.repository.CartItemRepository;
+import com.maejo.artmarket.repository.OrderItemRepository;
 import com.maejo.artmarket.repository.SellerRepository;
+import com.maejo.artmarket.repository.UserRepository;
+import org.springframework.data.domain.Sort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -25,21 +31,52 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class ArtworkService {
 
-    private final ArtworkRepository artworkRepository;
-    private final SellerRepository  sellerRepository;
+    private final ArtworkRepository   artworkRepository;
+    private final SellerRepository    sellerRepository;
+    private final OrderItemRepository orderItemRepository;
+    private final CartItemRepository  cartItemRepository;
+    private final UserRepository      userRepository;
+
+    /** ค่าที่ไม่มีทางตรงกับข้อมูลจริง ใช้กันไม่ให้ IN () กลายเป็น list ว่างซึ่งทำให้ SQL พัง */
+    private static final String NO_MATCH = "__NO_MATCH__";
 
     // =========================================================================
     // ยูสเคส 3.1.1 Search Art
     // =========================================================================
 
+    /**
+     * แปลงค่า sort ที่รับมาเป็น Sort object
+     *
+     * ใช้ whitelist แทนการต่อสตริงเข้า ORDER BY ตรงๆ เพราะค่านี้มาจาก query string ของผู้ใช้
+     * ถ้าต่อสตริงเองจะเปิดช่องให้ยิง JPQL injection เข้ามาได้
+     */
+    private Sort resolveSort(String sort) {
+        String key = (sort == null) ? "" : sort;
+
+        if ("price_asc".equals(key))  return Sort.by(Sort.Direction.ASC,  "price");
+        if ("price_desc".equals(key)) return Sort.by(Sort.Direction.DESC, "price");
+        if ("name".equals(key))       return Sort.by(Sort.Direction.ASC,  "artworkName");
+
+        // ค่าเริ่มต้น = newest (และเป็นค่าที่ใช้เมื่อส่งค่าที่ไม่รู้จักมาด้วย)
+        return Sort.by(Sort.Direction.DESC, "artworkId");
+    }
+
     @Transactional(readOnly = true)
     public ApiResponse<List<ArtworkSummaryResponse>> searchArtworks(ArtworkSearchRequest req) {
-        String keyword      = StringUtils.hasText(req.getKeyword())      ? req.getKeyword().trim()      : null;
-        String artworkType  = StringUtils.hasText(req.getArtworkType())  ? req.getArtworkType().trim()  : null;
-        String artworkStyle = StringUtils.hasText(req.getArtworkStyle()) ? req.getArtworkStyle().trim() : null;
+        String keyword        = StringUtils.hasText(req.getKeyword())        ? req.getKeyword().trim()        : null;
+        String artworkType    = StringUtils.hasText(req.getArtworkType())    ? req.getArtworkType().trim()    : null;
+        String artworkStyle   = StringUtils.hasText(req.getArtworkStyle())   ? req.getArtworkStyle().trim()   : null;
+        String artworkMediums = StringUtils.hasText(req.getArtworkMediums()) ? req.getArtworkMediums().trim() : null;
 
         List<Artwork> artworks = artworkRepository.searchArtworks(
-                keyword, artworkType, artworkStyle, req.getMinPrice(), req.getMaxPrice());
+                keyword, artworkType, artworkStyle, artworkMediums,
+                req.getMinPrice(), req.getMaxPrice(),
+                req.getMinSize(), req.getMaxSize(),
+                resolveSort(req.getSort()));
+
+        if (req.getLimit() != null && req.getLimit() > 0) {
+            artworks = artworks.stream().limit(req.getLimit()).toList();
+        }
 
         // "ค้นหาแล้วไม่เจอ" ไม่ใช่ error ของระบบ — เป็นผลลัพธ์ที่ถูกต้องคือ list ว่าง
         // เดิมคืน success=false ทำให้ frontend เด้ง toast error ทุกครั้งที่ผลการค้นหาว่าง
@@ -47,6 +84,119 @@ public class ArtworkService {
         return ApiResponse.ok(
                 artworks.isEmpty() ? "ไม่พบงานศิลปะที่ค้นหา" : "พบผลงาน " + artworks.size() + " รายการ",
                 artworks.stream().map(ArtworkSummaryResponse::from).toList());
+    }
+
+    // =========================================================================
+    // หน้าแรก — งานมาใหม่ล่าสุด
+    // =========================================================================
+
+    /**
+     * งานที่เผยแพร่ล่าสุด เรียงจากใหม่ไปเก่า
+     * เรียงด้วย artworkId แทน publishDate เพราะ publishDate เก็บเป็น String
+     * (ผู้ขายกรอกเอง) เรียงตามตัวอักษรจึงไม่ตรงกับลำดับเวลาจริงเสมอไป
+     */
+    @Transactional(readOnly = true)
+    public ApiResponse<List<ArtworkSummaryResponse>> listLatest(Integer limit) {
+        ArtworkSearchRequest req = new ArtworkSearchRequest();
+        req.setSort("newest");
+        req.setLimit(limit != null && limit > 0 ? limit : 8);
+        return searchArtworks(req);
+    }
+
+    // =========================================================================
+    // หน้าแรก — แนะนำสำหรับคุณ
+    // =========================================================================
+
+    /**
+     * แนะนำงานจากประเภทและสไตล์ที่ผู้ใช้เคยสั่งซื้อหรือใส่ตะกร้าไว้
+     *
+     * ระบบยังไม่มีตารางเก็บประวัติการดู จึงใช้ "สิ่งที่เคยสนใจจริง" (order + cart)
+     * เป็นตัวแทนความชอบแทน ถ้ายังไม่มีประวัติเลยจะคืนงานล่าสุดให้แทน
+     * เพื่อไม่ให้แถวนี้ว่างเปล่าสำหรับผู้ใช้ใหม่
+     */
+    @Transactional(readOnly = true)
+    public ApiResponse<List<ArtworkSummaryResponse>> listRecommended(String username, Integer limit) {
+        int max = (limit != null && limit > 0) ? limit : 8;
+
+        if (username == null) {
+            return listLatest(max);
+        }
+
+        Integer currentUserId = userRepository.findByUsername(username)
+                .map(u -> u.getUserId())
+                .orElse(null);
+        if (currentUserId == null) {
+            return listLatest(max);
+        }
+
+        // งานที่เคยซื้อ + งานที่อยู่ในตะกร้า = สิ่งที่ผู้ใช้สนใจ
+        List<Integer> interestedIds = new ArrayList<>();
+        interestedIds.addAll(orderItemRepository.findArtworkIdsPurchasedBy(username));
+        interestedIds.addAll(cartItemRepository.findArtworkIdsInCartOf(username));
+
+        if (interestedIds.isEmpty()) {
+            return listLatest(max);
+        }
+
+        List<String> types  = artworkRepository.findTypesOfArtworks(interestedIds)
+                .stream().filter(Objects::nonNull).toList();
+        List<String> styles = artworkRepository.findStylesOfArtworks(interestedIds)
+                .stream().filter(Objects::nonNull).toList();
+
+        if (types.isEmpty() && styles.isEmpty()) {
+            return listLatest(max);
+        }
+
+        // IN () ที่เป็น list ว่างทำให้ SQL พัง — ใส่ค่าที่ไม่มีทางตรงกันแทน
+        List<String>  safeTypes  = types.isEmpty()  ? List.of(NO_MATCH) : types;
+        List<String>  safeStyles = styles.isEmpty() ? List.of(NO_MATCH) : styles;
+
+        List<Artwork> found = artworkRepository.findRecommended(
+                safeTypes, safeStyles, interestedIds, currentUserId);
+
+        if (found.isEmpty()) {
+            return listLatest(max);
+        }
+
+        List<ArtworkSummaryResponse> result = found.stream()
+                .limit(max)
+                .map(ArtworkSummaryResponse::from)
+                .toList();
+
+        return ApiResponse.ok("แนะนำสำหรับคุณ " + result.size() + " รายการ", result);
+    }
+
+    // =========================================================================
+    // หน้า Search — ตัวเลือกของตัวกรอง
+    // =========================================================================
+
+    /** อ่านค่าประเภท/สไตล์/เทคนิคที่มีอยู่จริงในฐานข้อมูล พร้อมจำนวนงานในแต่ละค่า */
+    @Transactional(readOnly = true)
+    public ApiResponse<ArtworkFacetsResponse> getFacets() {
+        List<Object[]> priceRow = artworkRepository.priceRange();
+        Double minPrice = null;
+        Double maxPrice = null;
+        if (!priceRow.isEmpty() && priceRow.get(0)[0] != null) {
+            minPrice = (Double) priceRow.get(0)[0];
+            maxPrice = (Double) priceRow.get(0)[1];
+        }
+
+        ArtworkFacetsResponse facets = ArtworkFacetsResponse.builder()
+                .types(toFacetValues(artworkRepository.countByType()))
+                .styles(toFacetValues(artworkRepository.countByStyle()))
+                .mediums(toFacetValues(artworkRepository.countByMediums()))
+                .minPrice(minPrice)
+                .maxPrice(maxPrice)
+                .build();
+
+        return ApiResponse.ok("ดึงตัวเลือกตัวกรองสำเร็จ", facets);
+    }
+
+    private List<ArtworkFacetsResponse.FacetValue> toFacetValues(List<Object[]> rows) {
+        return rows.stream()
+                .filter(r -> r[0] != null && !((String) r[0]).isBlank())
+                .map(r -> new ArtworkFacetsResponse.FacetValue((String) r[0], (Long) r[1]))
+                .toList();
     }
 
     // =========================================================================

@@ -43,7 +43,8 @@ export function Navbar() {
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex">
-          <NavLink href="/">ค้นหางานศิลปะ</NavLink>
+          <NavLink href="/">หน้าแรก</NavLink>
+            <NavLink href="/search">ค้นหางานศิลปะ</NavLink>
           {user && <NavLink href="/orders">คำสั่งซื้อของฉัน</NavLink>}
           {user && <NavLink href="/copyright">การโอนลิขสิทธิ์</NavLink>}
           {isSeller && <NavLink href="/seller">พื้นที่ผู้ขาย</NavLink>}
@@ -117,7 +118,8 @@ export function Navbar() {
       {open && (
         <div className="border-t border-stone-200 bg-white md:hidden">
           <Container className="flex flex-col gap-1 py-3">
-            <NavLink href="/">ค้นหางานศิลปะ</NavLink>
+            <NavLink href="/">หน้าแรก</NavLink>
+            <NavLink href="/search">ค้นหางานศิลปะ</NavLink>
             {user && <NavLink href="/orders">คำสั่งซื้อของฉัน</NavLink>}
             {user && <NavLink href="/copyright">การโอนลิขสิทธิ์</NavLink>}
             {isSeller && <NavLink href="/seller">พื้นที่ผู้ขาย</NavLink>}

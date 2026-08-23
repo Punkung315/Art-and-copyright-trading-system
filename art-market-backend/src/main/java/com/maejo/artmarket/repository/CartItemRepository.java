@@ -24,4 +24,9 @@ public interface CartItemRepository extends JpaRepository<CartItem, Integer> {
 
     /** ป้องกันใส่ของซ้ำ — ตรวจว่า artwork ชิ้นนี้อยู่ในตะกร้าของ buyer คนนี้แล้วหรือยัง */
     boolean existsByArtwork_ArtworkIdAndBuyer_BuyerId(Integer artworkId, Integer buyerId);
+
+    /** รหัสงานศิลปะที่ผู้ใช้รายนี้ใส่ไว้ในตะกร้า — ใช้ร่วมกับประวัติการซื้อเพื่อหาความสนใจ */
+    @Query("SELECT DISTINCT c.artwork.artworkId FROM CartItem c " +
+           "WHERE c.buyer.user.username = :username")
+    List<Integer> findArtworkIdsInCartOf(@Param("username") String username);
 }

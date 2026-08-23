@@ -24,4 +24,22 @@ public class ArtworkSearchRequest {
 
     /** กรองด้วยราคาขั้นสูง */
     private Double maxPrice;
+
+    /** กรองด้วยเทคนิค (artworkMediums) เช่น สีน้ำมัน / สีอะคริลิก — สำหรับตัวกรองในหน้า Search */
+    private String artworkMediums;
+
+    /** ช่วงขนาดผลงาน — สำหรับตัวกรอง "ขนาด" (เล็ก / กลาง / ใหญ่) */
+    private Double minSize;
+    private Double maxSize;
+
+    /**
+     * การเรียงลำดับ: newest (ค่าเริ่มต้น) | price_asc | price_desc | name
+     *
+     * แปลงเป็น Sort object ใน ArtworkService แทนการต่อสตริงเข้า ORDER BY
+     * เพราะ ORDER BY ใน JPQL ใส่เป็นพารามิเตอร์ไม่ได้ และการต่อสตริงเองเสี่ยง SQL injection
+     */
+    private String sort;
+
+    /** จำกัดจำนวนผลลัพธ์ — ใช้กับแถวแนะนำในหน้าแรก (null = ไม่จำกัด) */
+    private Integer limit;
 }

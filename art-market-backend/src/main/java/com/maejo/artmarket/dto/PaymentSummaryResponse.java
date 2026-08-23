@@ -18,11 +18,24 @@ public class PaymentSummaryResponse {
     private Integer       buyerId;
     private String        buyerName;
     private Integer       buyerUserId;
+
+    /**
+     * ชื่อผู้ขาย — เดิม DTO ตัวนี้ไม่มี ทำให้หน้า List Payment ของ Admin
+     * แสดงเป็น "ผู้ซื้อ X → ผู้ขาย" โดยช่องชื่อผู้ขายว่างเปล่า
+     * (PaymentDetailResponse มีข้อมูลนี้ผ่าน artworks แต่ endpoint รายการใช้ DTO ตัวนี้)
+     */
+    private String        sellerName;
+    private Integer       sellerId;
+    private Integer       sellerUserId;
     private Double        grandTotal;
     private Double        shippingCost;
     private PaymentStatus transferStatus;
 
     public static PaymentSummaryResponse from(Payment p) {
+        // 1 คำสั่งซื้อ = 1 ผู้ขาย ในโมเดลปัจจุบัน จึงหยิบผู้ขายจากชิ้นแรกมาเป็นตัวแทน
+        var items = p.getOrder().getOrderItems();
+        var seller = items.isEmpty() ? null : items.get(0).getArtwork().getSeller();
+
         return PaymentSummaryResponse.builder()
                 .paymentId(p.getPaymentId())
                 .orderId(p.getOrder().getOrderId())
@@ -32,6 +45,9 @@ public class PaymentSummaryResponse {
                 .grandTotal(p.getGrandTotal())
                 .shippingCost(p.getShippingCost())
                 .transferStatus(p.getTransferStatus())
+                .sellerName(seller != null ? seller.getUser().getFullName() : null)
+                .sellerId(seller != null ? seller.getSellerId() : null)
+                .sellerUserId(seller != null ? seller.getUser().getUserId() : null)
                 .build();
     }
 }
