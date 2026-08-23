@@ -2,6 +2,7 @@ package com.maejo.artmarket.dto;
 
 import com.maejo.artmarket.entity.Artwork;
 import com.maejo.artmarket.enums.ArtworkStatus;
+import com.maejo.artmarket.enums.PublishStatus;
 import lombok.Builder;
 import lombok.Data;
 
@@ -33,11 +34,20 @@ public class ArtworkDetailResponse {
     private Double height;
     private String publishDate;
     private ArtworkStatus artworkStatus;
+    private PublishStatus publishStatus;
 
     // --- ข้อมูลผู้ขาย (แสดงในหน้า detail เพื่อให้ผู้ซื้อรู้ว่างานนี้ของใคร) ---
     private Integer sellerId;
     private String sellerName;
     private String sellerProfileImage;
+    /**
+     * รหัส "ผู้ใช้" (users.user_id) ไม่ใช่รหัสในตาราง buyer/seller/artwork
+     *
+     * จำเป็นเพราะฝั่ง frontend รู้จักตัวตนของคนที่ login อยู่ผ่าน userId เท่านั้น
+     * ถ้าเทียบกับ sellerId/buyerId ตรงๆ จะไม่มีวันตรงกัน (คนละ id space)
+     * ทำให้เช็ค "นี่คืองาน/สัญญาของฉันไหม" ผิดพลาดแบบเงียบๆ
+     */
+    private Integer sellerUserId;
 
     public static ArtworkDetailResponse from(Artwork artwork) {
         return ArtworkDetailResponse.builder()
@@ -59,9 +69,11 @@ public class ArtworkDetailResponse {
                 .height(artwork.getHeight())
                 .publishDate(artwork.getPublishDate())
                 .artworkStatus(artwork.getArtworkStatus())
+                .publishStatus(artwork.getPublishStatus())
                 .sellerId(artwork.getSeller().getSellerId())
                 .sellerName(artwork.getSeller().getUser().getFullName())
                 .sellerProfileImage(artwork.getSeller().getUser().getProfileImage())
+                .sellerUserId(artwork.getSeller().getUser().getUserId())
                 .build();
     }
 }

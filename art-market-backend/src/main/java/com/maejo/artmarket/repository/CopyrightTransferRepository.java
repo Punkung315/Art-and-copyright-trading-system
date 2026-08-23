@@ -16,6 +16,9 @@ public interface CopyrightTransferRepository extends JpaRepository<CopyrightTran
     /** Security check — ตรวจว่าสัญญานี้เป็นของผู้ขายคนนี้จริงก่อนตอบรับ/ปฏิเสธ */
     Optional<CopyrightTransfer> findByCopyrightIdAndSeller_SellerId(Integer copyrightId, Integer sellerId);
 
+    /** ใช้ในยูสเคส Sign Agreement — ผู้ซื้อเซ็นสัญญาของตัวเองเท่านั้น */
+    Optional<CopyrightTransfer> findByCopyrightIdAndBuyer_BuyerId(Integer copyrightId, Integer buyerId);
+
     /** ป้องกันส่งสัญญาซ้ำสำหรับ order เดียวกัน */
     boolean existsByOrder_OrderId(Integer orderId);
 }

@@ -47,8 +47,12 @@ public class ArtworkController {
     /** ยูสเคส 3.1.2 View Art — GET /api/artworks/{id} */
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<ArtworkDetailResponse>> getArtworkById(
-            @PathVariable Integer id) {
-        return ResponseEntity.ok(artworkService.getArtworkById(id));
+            @PathVariable Integer id,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        // userDetails เป็น null ได้ เพราะ endpoint นี้ permitAll (ยูสเคส View Art ไม่ต้อง login)
+        // ส่งเข้าไปเพื่อให้เจ้าของงานเปิดงานที่ยังเป็น DRAFT ของตัวเองมาแก้ได้
+        String currentUsername = userDetails != null ? userDetails.getUsername() : null;
+        return ResponseEntity.ok(artworkService.getArtworkById(id, currentUsername));
     }
 
     // -----------------------------------------------------------------------

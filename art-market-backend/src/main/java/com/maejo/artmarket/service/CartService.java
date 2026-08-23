@@ -97,10 +97,7 @@ public class CartService {
         List<CartItem> cartItems = cartItemRepository.findByBuyerId(buyer.getBuyerId());
 
         // Alternate Flow 3.1.1
-        if (cartItems.isEmpty()) {
-            return ApiResponse.error("ไม่พบรายการคำสั่งซื้อ");
-        }
-
+        // ตะกร้าว่างไม่ใช่ error — คืน list ว่างให้ frontend แสดงหน้า "ตะกร้าว่าง" ได้ตามปกติ
         double totalPrice = cartItems.stream().mapToDouble(CartItem::getPriceAtAdd).sum();
 
         CartListResponse response = CartListResponse.builder()

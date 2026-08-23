@@ -62,7 +62,8 @@ public class EditProfileRequest {
      * SRS กำหนดว่าต้องเป็น .png หรือ .jpg เท่านั้น
      * ตรวจสอบนามสกุลไฟล์ด้วย @Pattern ป้องกัน path traversal เบื้องต้น
      */
-    @Pattern(regexp = "^.+\\.(png|jpg|jpeg|PNG|JPG|JPEG)$",
+    // รับได้ทั้งชื่อไฟล์และ data URL (frontend อัปโหลดรูปแล้วแปลงเป็น base64)
+    @Pattern(regexp = "^(data:image/(png|jpe?g);base64,.+|.+\\.(png|jpg|jpeg|PNG|JPG|JPEG))$",
              message = "รูปภาพต้องเป็นไฟล์ .png หรือ .jpg เท่านั้น")
     private String profileImage;
 }

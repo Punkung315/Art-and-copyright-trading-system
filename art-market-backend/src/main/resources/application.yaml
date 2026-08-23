@@ -35,6 +35,11 @@ app:
   # ตั้งค่าบัญชี Admin เริ่มต้น (สร้างอัตโนมัติตอนแอปสตาร์ทครั้งแรก โดย DataSeeder.java)
   # จุดนี้เคยหายไปจากไฟล์ที่อัปโหลดมา เป็นสาเหตุหนึ่งที่ทำให้สับสนว่า config ตรงไหนที่ควบคุมการสร้าง Admin
   # (ตัว DataSeeder มี default ในตัวอยู่แล้วถ้าไม่ใส่ส่วนนี้ แต่ใส่ไว้ให้เห็นชัดเจนกว่า)
+  # origin ของ frontend ที่อนุญาตให้เรียก API ข้ามพอร์ตได้ (คั่นหลายค่าด้วย ,)
+  # ถ้าไม่มีส่วนนี้ เบราว์เซอร์จะบล็อกทุก request จาก Next.js ด้วย CORS error
+  cors:
+    allowed-origins: http://localhost:3000,http://127.0.0.1:3000
+
   seed-admin:
     enabled: true
     username: admin

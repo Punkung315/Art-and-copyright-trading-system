@@ -34,6 +34,7 @@ public class CopyrightTransfer {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer copyrightId;
 
+    @Column(columnDefinition = "LONGTEXT")
     private String documentFile;
 
     @Column(nullable = false, updatable = false)
@@ -43,6 +44,7 @@ public class CopyrightTransfer {
     @Column(nullable = false)
     private CopyrightTransferStatus transferStatus;
 
+    @Column(columnDefinition = "LONGTEXT")
     private String sellerSignature;
 
     // ---- เพิ่มเติม: ข้อมูลสัญญาที่ผู้ซื้อกรอกตอน Send Copyright Transfer ----

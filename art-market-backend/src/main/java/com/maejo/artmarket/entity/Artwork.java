@@ -18,6 +18,9 @@ public class Artwork {
     private Integer artworkId;
     @Column(nullable = false)
     private String artworkName;
+    // รูปงานศิลปะเก็บเป็น data URL (base64) ได้ ซึ่งยาวเกิน VARCHAR(255) มาก
+    // ถ้าไม่ระบุ columnDefinition Hibernate จะสร้างเป็น varchar(255) แล้ว insert พังทันที
+    @Column(columnDefinition = "LONGTEXT")
     private String artworkImage;
     private String artworkType;
     private String artworkStyle;

@@ -41,8 +41,11 @@ public class ArtworkService {
         List<Artwork> artworks = artworkRepository.searchArtworks(
                 keyword, artworkType, artworkStyle, req.getMinPrice(), req.getMaxPrice());
 
-        if (artworks.isEmpty()) return ApiResponse.error("ไม่พบงานศิลปะที่ค้นหา");
-        return ApiResponse.ok("พบผลงาน " + artworks.size() + " รายการ",
+        // "ค้นหาแล้วไม่เจอ" ไม่ใช่ error ของระบบ — เป็นผลลัพธ์ที่ถูกต้องคือ list ว่าง
+        // เดิมคืน success=false ทำให้ frontend เด้ง toast error ทุกครั้งที่ผลการค้นหาว่าง
+        // และแยกไม่ออกจากกรณี backend พังจริง (SRS Alternate Flow ให้ "แสดงข้อความ" ไม่ใช่ error)
+        return ApiResponse.ok(
+                artworks.isEmpty() ? "ไม่พบงานศิลปะที่ค้นหา" : "พบผลงาน " + artworks.size() + " รายการ",
                 artworks.stream().map(ArtworkSummaryResponse::from).toList());
     }
 
@@ -50,11 +53,32 @@ public class ArtworkService {
     // ยูสเคส 3.1.2 View Art
     // =========================================================================
 
+    /**
+     * ดูรายละเอียดงานศิลปะ
+     *
+     * @param currentUsername username ของคนที่ login อยู่ (null ได้ เพราะ endpoint นี้ public)
+     *
+     * เดิมใช้ findPublishedById() อย่างเดียว ทำให้ผู้ขาย "เปิดงาน DRAFT ของตัวเองมาแก้ไม่ได้"
+     * (หน้า /seller/art/[id]/edit โหลดแล้วขึ้นไม่พบงานศิลปะ) เพราะงานที่ยังไม่ publish
+     * ถูกกรองทิ้งตั้งแต่ระดับ query จึงเพิ่มทางลัดสำหรับเจ้าของงานเข้ามา
+     */
     @Transactional(readOnly = true)
-    public ApiResponse<ArtworkDetailResponse> getArtworkById(Integer artworkId) {
-        return artworkRepository.findPublishedById(artworkId)
-                .map(a -> ApiResponse.ok("ดึงข้อมูลผลงานสำเร็จ", ArtworkDetailResponse.from(a)))
-                .orElse(ApiResponse.error("ไม่พบงานศิลปะที่ต้องการ"));
+    public ApiResponse<ArtworkDetailResponse> getArtworkById(Integer artworkId, String currentUsername) {
+
+        Optional<Artwork> published = artworkRepository.findPublishedById(artworkId);
+        if (published.isPresent()) {
+            return ApiResponse.ok("ดึงข้อมูลผลงานสำเร็จ", ArtworkDetailResponse.from(published.get()));
+        }
+
+        if (currentUsername != null) {
+            Optional<Artwork> own = artworkRepository.findById(artworkId)
+                    .filter(a -> a.getSeller().getUser().getUsername().equals(currentUsername));
+            if (own.isPresent()) {
+                return ApiResponse.ok("ดึงข้อมูลผลงานสำเร็จ", ArtworkDetailResponse.from(own.get()));
+            }
+        }
+
+        return ApiResponse.error("ไม่พบงานศิลปะที่ต้องการ");
     }
 
     // =========================================================================
@@ -117,9 +141,10 @@ public class ArtworkService {
         List<Artwork> artworks = artworkRepository.findBySeller_SellerId(seller.getSellerId());
 
         // Alternate Flow 3.1 — "ยังไม่มีรายการงานศิลปะ"
-        if (artworks.isEmpty()) return ApiResponse.error("ยังไม่มีรายการงานศิลปะ");
-
-        return ApiResponse.ok("พบ " + artworks.size() + " รายการ",
+        // คืน success=true พร้อม list ว่าง เพื่อให้ frontend แสดง empty state ได้
+        // แทนที่จะเด้ง error ทุกครั้งที่ผู้ขายยังไม่มีผลงาน
+        return ApiResponse.ok(
+                artworks.isEmpty() ? "ยังไม่มีรายการงานศิลปะ" : "พบ " + artworks.size() + " รายการ",
                 artworks.stream().map(ArtworkSummaryResponse::from).toList());
     }
 

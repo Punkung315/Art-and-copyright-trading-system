@@ -44,12 +44,9 @@ public class OrderService {
 
         List<Orders> orders = ordersRepository.findByBuyer_BuyerId(buyer.getBuyerId());
 
-        // Alternate Flow 3.1.1
-        if (orders.isEmpty()) {
-            return ApiResponse.error("ไม่พบรายการคำสั่งซื้อ");
-        }
-
-        return ApiResponse.ok("พบคำสั่งซื้อ " + orders.size() + " รายการ",
+        // Alternate Flow 3.1.1 — ยังไม่เคยสั่งซื้อ = list ว่าง ไม่ใช่ error
+        return ApiResponse.ok(
+                orders.isEmpty() ? "ไม่พบรายการคำสั่งซื้อ" : "พบคำสั่งซื้อ " + orders.size() + " รายการ",
                 orders.stream().map(OrderDetailResponse::from).toList());
     }
 

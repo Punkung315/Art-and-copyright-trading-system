@@ -40,7 +40,19 @@ public class CopyrightTransferService {
             return ApiResponse.error("ไม่พบข้อมูลผู้ซื้อ");
         }
 
-        Optional<Orders> orderOpt = ordersRepository.findById(req.getOrderId());
+        // รับได้ทั้ง orderId ตรงๆ และ artworkId (frontend เข้าจากหน้ารายละเอียดงานศิลปะ
+        // /copyright/new/[artworkId] ซึ่งรู้แค่ artworkId ไม่รู้ orderId)
+        Optional<Orders> orderOpt;
+        if (req.getOrderId() != null) {
+            orderOpt = ordersRepository.findById(req.getOrderId());
+        } else if (req.getArtworkId() != null) {
+            orderOpt = ordersRepository
+                    .findByBuyerAndArtwork(buyer.getBuyerId(), req.getArtworkId())
+                    .stream().findFirst();
+        } else {
+            return ApiResponse.error("กรุณาระบุคำสั่งซื้อหรืองานศิลปะ");
+        }
+
         if (orderOpt.isEmpty()) {
             return ApiResponse.error("ไม่พบรายการคำสั่งซื้อ");
         }
@@ -51,7 +63,7 @@ public class CopyrightTransferService {
             return ApiResponse.error("ไม่มีสิทธิ์เข้าถึงคำสั่งซื้อนี้");
         }
 
-        if (copyrightTransferRepository.existsByOrder_OrderId(req.getOrderId())) {
+        if (copyrightTransferRepository.existsByOrder_OrderId(order.getOrderId())) {
             return ApiResponse.error("คำสั่งซื้อนี้มีการส่งสัญญาโอนลิขสิทธิ์ไปแล้ว");
         }
 
@@ -94,9 +106,9 @@ public class CopyrightTransferService {
         if (buyer == null) return ApiResponse.error("ไม่พบข้อมูลผู้ซื้อ");
 
         List<CopyrightTransfer> transfers = copyrightTransferRepository.findByBuyer_BuyerId(buyer.getBuyerId());
-        if (transfers.isEmpty()) return ApiResponse.error("ไม่พบข้อมูลสัญญาการโอนลิขสิทธิ์");
-
-        return ApiResponse.ok("พบสัญญา " + transfers.size() + " ฉบับ",
+        // list ว่าง = ยังไม่มีสัญญา ไม่ใช่ error
+        return ApiResponse.ok(
+                transfers.isEmpty() ? "ไม่พบข้อมูลสัญญาการโอนลิขสิทธิ์" : "พบสัญญา " + transfers.size() + " ฉบับ",
                 transfers.stream().map(CopyrightTransferResponse::from).toList());
     }
 
@@ -114,9 +126,9 @@ public class CopyrightTransferService {
         List<CopyrightTransfer> transfers = copyrightTransferRepository.findBySeller_SellerId(seller.getSellerId());
 
         // Alternate Flow 4.1.1
-        if (transfers.isEmpty()) return ApiResponse.error("ไม่พบข้อมูลสัญญาการโอนลิขสิทธิ์");
-
-        return ApiResponse.ok("พบสัญญา " + transfers.size() + " ฉบับ",
+        // list ว่าง = ยังไม่มีสัญญา ไม่ใช่ error
+        return ApiResponse.ok(
+                transfers.isEmpty() ? "ไม่พบข้อมูลสัญญาการโอนลิขสิทธิ์" : "พบสัญญา " + transfers.size() + " ฉบับ",
                 transfers.stream().map(CopyrightTransferResponse::from).toList());
     }
 
@@ -125,6 +137,50 @@ public class CopyrightTransferService {
      * approved=true  → transferStatus = SIGNED
      * approved=false → transferStatus = REJECTED
      */
+    // =========================================================================
+    // ยูสเคส 3.1.16 Sign Agreement — ผู้ซื้ออัปโหลดสัญญาที่ลงนามแล้ว
+    //
+    // ลำดับสถานะทั้งหมดของสัญญา:
+    //   PENDING   ผู้ซื้อส่งคำขอ → รอผู้ขายตอบ
+    //   SIGNED    ผู้ขายตอบรับแล้ว → รอผู้ซื้อดาวน์โหลดไปเซ็นแล้วอัปกลับ
+    //   COMPLETED ผู้ซื้ออัปไฟล์ที่เซ็นแล้ว → สัญญาสมบูรณ์
+    //   REJECTED  ผู้ขายปฏิเสธ
+    //
+    // เดิมไม่มีเมธอดนี้เลย สัญญาจึงค้างที่ SIGNED ตลอดไปและ documentFile เป็น null เสมอ
+    // =========================================================================
+
+    @Transactional
+    public ApiResponse<CopyrightTransferResponse> signAgreement(
+            String username, Integer copyrightId, SignCopyrightTransferRequest req) {
+
+        Buyer buyer = buyerRepository.findByUser_Username(username).orElse(null);
+        if (buyer == null) {
+            return ApiResponse.error("ไม่พบข้อมูลผู้ซื้อ");
+        }
+
+        Optional<CopyrightTransfer> transferOpt = copyrightTransferRepository
+                .findByCopyrightIdAndBuyer_BuyerId(copyrightId, buyer.getBuyerId());
+        if (transferOpt.isEmpty()) {
+            return ApiResponse.error("ไม่สามารถค้นหาไฟล์เอกสารสัญญาการโอนได้");
+        }
+
+        CopyrightTransfer transfer = transferOpt.get();
+
+        if (transfer.getTransferStatus() != CopyrightTransferStatus.SIGNED) {
+            return ApiResponse.error("ต้องรอผู้ขายตอบรับสัญญาก่อนจึงจะลงนามได้");
+        }
+
+        try {
+            transfer.setDocumentFile(req.getDocumentFile());
+            transfer.setTransferStatus(CopyrightTransferStatus.COMPLETED);
+            copyrightTransferRepository.save(transfer);
+            return ApiResponse.ok("ลงนามสัญญาโอนลิขสิทธิ์สำเร็จ",
+                    CopyrightTransferResponse.from(transfer));
+        } catch (Exception e) {
+            return ApiResponse.error("ไม่สามารถบันทึกไฟล์สัญญาได้ กรุณาลองใหม่อีกครั้ง");
+        }
+    }
+
     @Transactional
     public ApiResponse<CopyrightTransferResponse> receiveCopyrightTransfer(
             String username, Integer copyrightId, ReceiveCopyrightTransferRequest req) {

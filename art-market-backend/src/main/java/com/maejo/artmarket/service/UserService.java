@@ -33,6 +33,17 @@ public class UserService {
     // Alternate Flow 4.1.1: ไม่พบ → "ไม่พบข้อมูลผู้ใช้งาน"
     // =========================================================================
 
+    /**
+     * โปรไฟล์ของตัวเอง — ใช้คืนสถานะ session ให้ frontend ตอน refresh หน้า
+     * เรียกซ้ำ viewProfile() เพื่อไม่ให้ logic การซ่อน/แสดง field แตกออกเป็นสองที่
+     */
+    @Transactional(readOnly = true)
+    public ApiResponse<ProfileResponse> myProfile(String currentUsername) {
+        return userRepository.findByUsername(currentUsername)
+                .map(u -> viewProfile(u.getUserId(), currentUsername))
+                .orElse(ApiResponse.error("ไม่พบข้อมูลผู้ใช้งาน"));
+    }
+
     @Transactional(readOnly = true)
     public ApiResponse<ProfileResponse> viewProfile(Integer targetUserId, String currentUsername) {
 

@@ -17,6 +17,7 @@ public class PaymentSummaryResponse {
     private Integer       orderId;
     private Integer       buyerId;
     private String        buyerName;
+    private Integer       buyerUserId;
     private Double        grandTotal;
     private Double        shippingCost;
     private PaymentStatus transferStatus;
@@ -27,6 +28,7 @@ public class PaymentSummaryResponse {
                 .orderId(p.getOrder().getOrderId())
                 .buyerId(p.getOrder().getBuyer().getBuyerId())
                 .buyerName(p.getOrder().getBuyer().getUser().getFullName())
+                .buyerUserId(p.getOrder().getBuyer().getUser().getUserId())
                 .grandTotal(p.getGrandTotal())
                 .shippingCost(p.getShippingCost())
                 .transferStatus(p.getTransferStatus())

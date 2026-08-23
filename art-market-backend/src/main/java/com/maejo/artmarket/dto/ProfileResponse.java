@@ -27,20 +27,52 @@ public class ProfileResponse {
     private String email;          // null ถ้าดูโปรไฟล์คนอื่น
     private String phoneNumber;    // null ถ้าดูโปรไฟล์คนอื่น
     private String profileImage;
+    private String nationalNo;     // null ถ้าดูโปรไฟล์คนอื่น
     private Role role;
+
+    /**
+     * สถานะการเป็นผู้ขาย ใช้แทนแนวคิด sellerStatus ของฝั่ง frontend
+     *   "none"     — ยังไม่ได้สมัครเป็นผู้ขาย (ไม่มี record Seller)
+     *   "pending"  — สมัครแล้ว รอ Admin อนุมัติ (verified = false)
+     *   "approved" — Admin อนุมัติแล้ว (verified = true)
+     *
+     * ก่อนหน้านี้ไม่มี field นี้เลย frontend จึงไม่มีทางรู้ว่าผู้ขายผ่านการอนุมัติหรือยัง
+     */
+    private String sellerStatus;
+    private Integer sellerId;
+
+    /** ที่อยู่ของผู้ใช้ — ใช้เติมฟอร์มสัญญาโอนลิขสิทธิ์และใบเสนอราคาอัตโนมัติ */
+    private List<SellerVerifyResponse.AddressResponse> addresses;
 
     /** รายการผลงาน — แสดงเฉพาะเมื่อ user เป็น Seller (SRS: "รายการงานศิลปะ") */
     private List<ArtworkSummaryResponse> artworks;
 
     public static ProfileResponse from(User user, List<ArtworkSummaryResponse> artworks, boolean isSelf) {
+        String sellerStatus = "none";
+        Integer sellerId = null;
+        if (user.getSeller() != null) {
+            sellerStatus = user.getSeller().isVerified() ? "approved" : "pending";
+            sellerId = user.getSeller().getSellerId();
+        }
+
+        List<SellerVerifyResponse.AddressResponse> addresses = isSelf && user.getAddresses() != null
+                ? user.getAddresses().stream()
+                      .map(SellerVerifyResponse.AddressResponse::from)
+                      .toList()
+                : List.of();
+
         return ProfileResponse.builder()
                 .userId(user.getUserId())
                 .username(user.getUsername())
                 .fullName(user.getFullName())
                 .email(isSelf ? user.getEmail() : null)
                 .phoneNumber(isSelf ? user.getPhoneNumber() : null)
+                .nationalNo(isSelf ? user.getNationalNo() : null)
                 .profileImage(user.getProfileImage())
                 .role(user.getRole())
+                .sellerStatus(sellerStatus)
+                .sellerId(sellerId)
+                .addresses(addresses)
                 .artworks(artworks)
                 .build();
     }

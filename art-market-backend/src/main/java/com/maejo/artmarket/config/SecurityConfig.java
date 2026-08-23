@@ -16,6 +16,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfigurationSource;
 
 /**
  * SecurityConfig — กำหนดสิทธิ์การเข้าถึงแต่ละ endpoint ตาม role
@@ -40,10 +41,14 @@ public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
     private final UserDetailsServiceImpl userDetailsService;
+    private final CorsConfigurationSource corsConfigurationSource;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
+            // CORS ต้องเปิดตรงนี้ด้วย ไม่ใช่แค่ประกาศ bean CorsConfigurationSource เฉยๆ
+            // ไม่งั้น Spring Security จะ reject preflight (OPTIONS) ก่อนถึง MVC layer
+            .cors(cors -> cors.configurationSource(corsConfigurationSource))
             .csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(session ->
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -61,6 +66,11 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT,   "/api/artworks/**").hasRole("SELLER")
                 .requestMatchers(HttpMethod.PATCH, "/api/artworks/**").hasRole("SELLER")
 
+                // GET /api/users/me ต้อง login และต้องมาก่อน permitAll ของ /api/users/**
+                // ไม่งั้น "me" จะถูก match เป็น {id} แบบ public แล้ว @AuthenticationPrincipal จะเป็น null
+                .requestMatchers(HttpMethod.GET, "/api/users/me").authenticated()
+                .requestMatchers(HttpMethod.PUT, "/api/users/me").authenticated()
+
                 // Public endpoints
                 .requestMatchers(HttpMethod.GET, "/api/artworks", "/api/artworks/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/users/**").permitAll()   // View Profile — ดูของใครก็ได้
@@ -74,21 +84,27 @@ public class SecurityConfig {
                 // Register Seller — ต้องเป็น Buyer ก่อน
                 .requestMatchers("/api/auth/register-seller").hasRole("BUYER")
 
-                // Edit Profile — ต้อง login
-                .requestMatchers(HttpMethod.PUT, "/api/users/me").authenticated()
-
                 // Seller order management — SELLER เท่านั้น
                 .requestMatchers("/api/seller/**").hasRole("SELLER")
 
-                // Cart / Confirm Order / View Order / Make Payment — BUYER เท่านั้น
-                .requestMatchers("/api/cart/**").hasRole("BUYER")
-                .requestMatchers("/api/orders/**").hasRole("BUYER")
-                .requestMatchers("/api/payments/**").hasRole("BUYER")
+                // ==============================================================
+                // Cart / Order / Payment — เดิมล็อกไว้ที่ hasRole("BUYER") อย่างเดียว
+                // แต่ registerSeller() เปลี่ยน user.role จาก BUYER → SELLER ทับไปเลย
+                // ทำให้คนที่สมัครเป็นผู้ขายแล้ว "ซื้อของไม่ได้อีกต่อไป" (403 ทุก endpoint)
+                // ทั้งที่ record Buyer ของเขายังอยู่ครบและ SRS ไม่ได้ห้ามผู้ขายซื้องานคนอื่น
+                // จึงเปิดให้ทั้งสอง role เข้าได้ ส่วนการตรวจสิทธิ์ระดับข้อมูล
+                // (เป็นเจ้าของ order นั้นจริงไหม) service layer ตรวจอยู่แล้ว
+                // ==============================================================
+                .requestMatchers("/api/cart/**").hasAnyRole("BUYER", "SELLER")
+                .requestMatchers("/api/orders/**").hasAnyRole("BUYER", "SELLER")
+                .requestMatchers("/api/payments/**").hasAnyRole("BUYER", "SELLER")
 
                 // Copyright Transfer — เฉพาะเจาะจงต้องมาก่อน ตาม pattern เดียวกับ artwork ด้านบน
-                .requestMatchers(HttpMethod.GET,   "/api/copyright-transfers/sent").hasRole("BUYER")
-                .requestMatchers(HttpMethod.POST,  "/api/copyright-transfers").hasRole("BUYER")
+                .requestMatchers(HttpMethod.GET,   "/api/copyright-transfers/sent").hasAnyRole("BUYER", "SELLER")
+                .requestMatchers(HttpMethod.POST,  "/api/copyright-transfers").hasAnyRole("BUYER", "SELLER")
                 .requestMatchers(HttpMethod.GET,   "/api/copyright-transfers/received").hasRole("SELLER")
+                // ผู้ซื้อเป็นคนเซ็นสัญญากลับ (Sign Agreement 3.1.16) จึงต้องเข้าได้ด้วย
+                .requestMatchers(HttpMethod.PATCH, "/api/copyright-transfers/*/sign").hasAnyRole("BUYER", "SELLER")
                 .requestMatchers(HttpMethod.PATCH, "/api/copyright-transfers/**").hasRole("SELLER")
 
                 // อื่นๆ ต้อง login

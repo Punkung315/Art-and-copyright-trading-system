@@ -4,6 +4,7 @@ import com.maejo.artmarket.entity.OrderItem;
 import com.maejo.artmarket.entity.Orders;
 import com.maejo.artmarket.enums.AvailabilityStatus;
 import com.maejo.artmarket.enums.OrderStatus;
+import com.maejo.artmarket.enums.PaymentStatus;
 import com.maejo.artmarket.enums.ShippingStatus;
 import lombok.Builder;
 import lombok.Data;
@@ -27,6 +28,12 @@ public class SellerOrderResponse {
     private LocalDateTime orderDate;
     private OrderStatus orderStatus;
     private Double totalAmount;      // เฉพาะส่วนของผู้ขายคนนี้
+
+    /** ข้อมูลผู้ซื้อและสถานะการชำระเงิน — หน้า /seller/orders ต้องใช้แสดงตาราง */
+    private Integer buyerId;
+    private String  buyerName;
+    private Integer buyerUserId;
+    private PaymentStatus paymentStatus;   // null = ผู้ซื้อยังไม่ได้อัปสลิป
     private List<SellerOrderItemDetail> items;
 
     @Data
@@ -61,8 +68,14 @@ public class SellerOrderResponse {
 
         double totalAmount = sellerItems.stream().mapToDouble(OrderItem::getPrice).sum();
 
+        var payment = order.getPayment();
+
         return SellerOrderResponse.builder()
                 .orderId(order.getOrderId())
+                .buyerId(order.getBuyer().getBuyerId())
+                .buyerName(order.getBuyer().getUser().getFullName())
+                .buyerUserId(order.getBuyer().getUser().getUserId())
+                .paymentStatus(payment != null ? payment.getTransferStatus() : null)
                 .orderDate(order.getOrderDate())
                 .orderStatus(order.getOrderStatus())
                 .totalAmount(totalAmount)

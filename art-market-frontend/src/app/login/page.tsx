@@ -79,7 +79,7 @@ export default function LoginPage() {
           <p className="font-medium text-stone-600">บัญชีทดสอบ</p>
           <p>ผู้ซื้อ: punchapong / password1</p>
           <p>ผู้ขาย (อนุมัติแล้ว): nichaart / password1</p>
-          <p>ผู้ขาย (รออนุมัติ): pending_artist / password1</p>
+          <p>ผู้ขาย (รออนุมัติ): pendingartist / password1</p>
         </div>
       </Card>
     </Container>

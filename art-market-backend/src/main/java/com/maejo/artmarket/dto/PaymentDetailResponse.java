@@ -19,6 +19,7 @@ public class PaymentDetailResponse {
     private Integer       orderId;
     private Integer       buyerId;
     private String        buyerName;
+    private Integer       buyerUserId;
     private Double        grandTotal;
     private Double        shippingCost;
     private String        slipTransfer;
@@ -36,6 +37,7 @@ public class PaymentDetailResponse {
                 .orderId(p.getOrder().getOrderId())
                 .buyerId(p.getOrder().getBuyer().getBuyerId())
                 .buyerName(p.getOrder().getBuyer().getUser().getFullName())
+                .buyerUserId(p.getOrder().getBuyer().getUser().getUserId())
                 .grandTotal(p.getGrandTotal())
                 .shippingCost(p.getShippingCost())
                 .slipTransfer(p.getSlipTransfer())

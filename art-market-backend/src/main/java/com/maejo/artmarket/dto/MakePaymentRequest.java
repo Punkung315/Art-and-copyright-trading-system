@@ -23,7 +23,9 @@ public class MakePaymentRequest {
      * Alternate Flow 4.1 — "กรุณาแนบสลิปการโอนเงินเพื่อยืนยันใหม่อีกครั้ง"
      */
     @NotBlank(message = "กรุณาแนบสลิปการโอนเงินเพื่อยืนยันใหม่อีกครั้ง")
-    @Pattern(regexp = "^.+\\.(png|jpg|jpeg|PNG|JPG|JPEG)$",
+    // รับได้ทั้ง path/ชื่อไฟล์ และ data URL (data:image/png;base64,...)
+    // เดิมรับเฉพาะชื่อไฟล์ลงท้าย .png/.jpg ทำให้ frontend ที่อ่านไฟล์เป็น base64 ส่งไม่ผ่าน validation เลย
+    @Pattern(regexp = "^(data:image/(png|jpe?g);base64,.+|.+\\.(png|jpg|jpeg|PNG|JPG|JPEG))$",
              message = "กรุณาแนบสลิปการโอนเงินเพื่อยืนยันใหม่อีกครั้ง")
     private String slipTransfer;
 }

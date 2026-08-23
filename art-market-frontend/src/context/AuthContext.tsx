@@ -2,12 +2,14 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { Admin, User } from "@/types";
-import { ensureSeeded, getUser, loginUser, registerBuyer } from "@/lib/api";
+import { getMe, loginUser, registerBuyer, setToken } from "@/lib/api";
 import { readStorage, writeStorage } from "@/lib/storage";
 
 interface Session {
   kind: "user" | "admin";
   id: string;
+  /** เก็บ username ของ admin ไว้ด้วย เพราะ backend ไม่มี endpoint ดึงข้อมูล admin กลับมา */
+  username?: string;
 }
 
 interface AuthContextValue {
@@ -31,16 +33,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    ensureSeeded();
     const session = readStorage<Session | null>(SESSION_KEY, null);
     (async () => {
       if (session?.kind === "user") {
-        const u = await getUser(session.id);
+        // ดึงโปรไฟล์จาก backend ด้วย JWT ที่เก็บไว้ (แทนการอ่าน localStorage แบบเดิม)
+        // ถ้า token หมดอายุหรือถูกเพิกถอน getMe() จะคืน undefined → ถือว่าหลุด session
+        const u = await getMe();
         if (u) setUserState(u);
+        else writeStorage(SESSION_KEY, null);
       } else if (session?.kind === "admin") {
-        const admins = readStorage<Admin[]>("amk_admins", []);
-        const a = admins.find((x) => x.id === session.id);
-        if (a) setAdmin(a);
+        setAdmin({
+          id: session.id,
+          username: session.username ?? "admin",
+          password: "",
+        });
       }
       setLoading(false);
     })();
@@ -55,7 +61,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } else {
       setAdmin(result.admin);
       setUserState(null);
-      writeStorage(SESSION_KEY, { kind: "admin", id: result.admin.id });
+      writeStorage(SESSION_KEY, {
+        kind: "admin",
+        id: result.admin.id,
+        username: result.admin.username,
+      });
     }
   }
 
@@ -70,11 +80,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUserState(null);
     setAdmin(null);
     writeStorage(SESSION_KEY, null);
+    setToken(null); // ทิ้ง JWT ด้วย ไม่งั้น request ถัดไปยังแนบ token เดิมไปอยู่
   }
 
   async function refresh() {
     if (!user) return;
-    const u = await getUser(user.id);
+    const u = await getMe();
     if (u) setUserState(u);
   }
 

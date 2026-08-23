@@ -1,6 +1,7 @@
 package com.maejo.artmarket.exception;
 
 import com.maejo.artmarket.dto.ApiResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -16,6 +17,7 @@ import java.util.stream.Collectors;
  * ทำให้ frontend อ่าน error ได้ง่าย ไม่ต้องไป parse structure ต่างกัน
  */
 @RestControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler {
 
     /**
@@ -47,6 +49,9 @@ public class GlobalExceptionHandler {
     /** catch-all สำหรับ exception ที่ไม่ได้คาดไว้ */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Object>> handleGeneral(Exception ex) {
+        // เดิมกลืน exception ทิ้งเงียบๆ ทำให้เวลา 500 ขึ้นมาไม่มีร่องรอยใน log เลย
+        // ต้อง log stack trace ไว้ ไม่งั้นหา bug ตอน integrate frontend ไม่ได้
+        log.error("Unhandled exception: {}", ex.getMessage(), ex);
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.error("เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง"));

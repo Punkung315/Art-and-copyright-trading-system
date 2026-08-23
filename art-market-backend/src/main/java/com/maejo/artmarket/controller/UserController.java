@@ -50,6 +50,23 @@ public class UserController {
     }
 
     /**
+     * GET /api/users/me — โปรไฟล์ของคนที่ login อยู่
+     *
+     * เพิ่มเข้ามาเพราะ frontend ต้อง "คืนสถานะ session" ตอน refresh หน้า
+     * โดยมีแค่ token ในมือ ไม่รู้ userId ของตัวเอง (JWT เก็บแค่ username)
+     *
+     * หมายเหตุ: Spring จับ @GetMapping("/{id}") ก่อน ถ้า path เป็นตัวเลข
+     * ส่วน "/me" เป็น literal path ที่ specific กว่า Spring จึงเลือกอันนี้ให้เอง
+     * แต่ต้องประกาศใน SecurityConfig ให้ GET /api/users/me เป็น authenticated
+     * มาก่อนกฎ permitAll ของ /api/users/** ด้วย
+     */
+    @GetMapping("/me")
+    public ResponseEntity<ApiResponse<ProfileResponse>> myProfile(
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(userService.myProfile(userDetails.getUsername()));
+    }
+
+    /**
      * ยูสเคส 3.1.7 Edit Profile
      *
      * PUT /api/users/me

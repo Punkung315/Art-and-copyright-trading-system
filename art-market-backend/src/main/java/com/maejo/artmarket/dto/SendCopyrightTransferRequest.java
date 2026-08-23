@@ -13,8 +13,17 @@ import lombok.Data;
 @Data
 public class SendCopyrightTransferRequest {
 
-    @NotNull(message = "กรุณาระบุคำสั่งซื้อ")
+    /**
+     * ระบุคำสั่งซื้อโดยตรง — หรือจะส่ง artworkId มาแทนก็ได้
+     *
+     * เดิมบังคับ @NotNull แต่ frontend เข้าหน้านี้จากหน้ารายละเอียดงานศิลปะ
+     * (/copyright/new/[artworkId]) ซึ่งรู้แค่ artworkId ไม่รู้ orderId
+     * จึงเปิดให้ส่งอย่างใดอย่างหนึ่ง แล้วให้ service หา order ให้เอง
+     */
     private Integer orderId;
+
+    /** ทางเลือกแทน orderId — ระบบจะหาคำสั่งซื้อของผู้ซื้อที่มีงานชิ้นนี้อยู่ให้เอง */
+    private Integer artworkId;
 
     @NotBlank(message = "กรุณากรอกชื่อ-นามสกุล")
     private String fullName;

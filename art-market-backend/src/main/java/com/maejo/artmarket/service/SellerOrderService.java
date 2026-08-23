@@ -47,15 +47,14 @@ public class SellerOrderService {
         List<Orders> orders = ordersRepository.findOrdersContainingSellerItems(seller.getSellerId());
 
         // Alternate Flow 3.1.1
-        if (orders.isEmpty()) {
-            return ApiResponse.error("ไม่พบรายการคำสั่งซื้อ");
-        }
-
+        // ยังไม่มีใครสั่งซื้องานของผู้ขายรายนี้ = list ว่าง ไม่ใช่ error
         List<SellerOrderResponse> result = orders.stream()
                 .map(o -> SellerOrderResponse.from(o, seller.getSellerId()))
                 .toList();
 
-        return ApiResponse.ok("พบคำสั่งซื้อ " + result.size() + " รายการ", result);
+        return ApiResponse.ok(
+                result.isEmpty() ? "ไม่พบรายการคำสั่งซื้อ" : "พบคำสั่งซื้อ " + result.size() + " รายการ",
+                result);
     }
 
     // =========================================================================

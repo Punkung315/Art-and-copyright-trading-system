@@ -63,6 +63,22 @@ public class CopyrightTransferController {
      * Body: { "approved": true, "detail": "ยินดีโอนลิขสิทธิ์ตามเงื่อนไขที่เสนอมา" }
      * Body: { "approved": false, "detail": "ราคาที่เสนอมายังไม่ตรงตามที่ต้องการ" }
      */
+    /**
+     * ยูสเคส 3.1.16 Sign Agreement — BUYER เท่านั้น
+     * PATCH /api/copyright-transfers/{id}/sign
+     * Body: { "documentFile": "uploads/contract_signed_12.pdf" }
+     *
+     * ใช้ได้เมื่อผู้ขายตอบรับแล้ว (transferStatus = SIGNED) เท่านั้น
+     */
+    @PatchMapping("/{id}/sign")
+    public ResponseEntity<ApiResponse<CopyrightTransferResponse>> signAgreement(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable Integer id,
+            @Valid @RequestBody SignCopyrightTransferRequest request) {
+        return ResponseEntity.ok(
+                copyrightTransferService.signAgreement(userDetails.getUsername(), id, request));
+    }
+
     @PatchMapping("/{id}/respond")
     public ResponseEntity<ApiResponse<CopyrightTransferResponse>> receiveCopyrightTransfer(
             @AuthenticationPrincipal UserDetails userDetails,

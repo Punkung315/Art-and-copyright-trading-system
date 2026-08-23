@@ -20,6 +20,13 @@ public class CartItemResponse {
     private LocalDateTime addDate;
     private Double  priceAtAdd;
 
+    /**
+     * ข้อมูลงานศิลปะแบบย่อ (รวมชื่อผู้ขายและสถานะ)
+     * เพิ่มเข้ามาเพื่อให้หน้าตะกร้าแสดงผลได้ครบในการเรียก API ครั้งเดียว
+     * ไม่ต้องยิง GET /api/artworks/{id} ซ้ำทีละชิ้น
+     */
+    private ArtworkSummaryResponse artwork;
+
     public static CartItemResponse from(CartItem c) {
         return CartItemResponse.builder()
                 .cartItemId(c.getCartItemId())
@@ -28,6 +35,7 @@ public class CartItemResponse {
                 .artworkImage(c.getArtwork().getArtworkImage())
                 .addDate(c.getAddDate())
                 .priceAtAdd(c.getPriceAtAdd())
+                .artwork(ArtworkSummaryResponse.from(c.getArtwork()))
                 .build();
     }
 }

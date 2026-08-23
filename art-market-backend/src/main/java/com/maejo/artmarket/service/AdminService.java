@@ -38,8 +38,8 @@ public class AdminService {
     @Transactional(readOnly = true)
     public ApiResponse<List<UserSummaryResponse>> listUsers() {
         List<User> users = userRepository.findAll();
-        if (users.isEmpty()) return ApiResponse.error("ไม่พบข้อมูลผู้ใช้งาน");
-        return ApiResponse.ok("พบผู้ใช้งาน " + users.size() + " ราย",
+        return ApiResponse.ok(
+                users.isEmpty() ? "ไม่พบข้อมูลผู้ใช้งาน" : "พบผู้ใช้งาน " + users.size() + " ราย",
                 users.stream().map(UserSummaryResponse::from).toList());
     }
 
@@ -51,8 +51,9 @@ public class AdminService {
     @Transactional(readOnly = true)
     public ApiResponse<List<SellerVerifyResponse>> listPendingSellers() {
         List<Seller> pending = sellerRepository.findByVerifiedFalse();
-        if (pending.isEmpty()) return ApiResponse.error("ไม่มีรายการผู้สมัครขายรออนุมัติ");
-        return ApiResponse.ok("พบผู้สมัครขายรออนุมัติ " + pending.size() + " ราย",
+        return ApiResponse.ok(
+                pending.isEmpty() ? "ไม่มีรายการผู้สมัครขายรออนุมัติ"
+                                  : "พบผู้สมัครขายรออนุมัติ " + pending.size() + " ราย",
                 pending.stream().map(SellerVerifyResponse::from).toList());
     }
 
@@ -105,10 +106,12 @@ public class AdminService {
 
     @Transactional(readOnly = true)
     public ApiResponse<List<PaymentSummaryResponse>> listPayments() {
-        List<Payment> payments = paymentRepository
-                .findByTransferStatus(PaymentStatus.PENDING_CONFIRMATION);
-        if (payments.isEmpty()) return ApiResponse.error("ไม่พบรายการการโอนเงิน");
-        return ApiResponse.ok("พบรายการโอนเงิน " + payments.size() + " รายการ",
+        // เดิมกรองเฉพาะ PENDING_CONFIRMATION ทำให้หน้า List Payment ของ Admin
+        // "รายการหายไป" ทันทีที่กดอนุมัติ ตรวจสอบย้อนหลังไม่ได้เลย
+        // SRS ยูสเคส List Payment ระบุว่าแสดง "รายการการโอนเงินทั้งหมด"
+        List<Payment> payments = paymentRepository.findAll();
+        return ApiResponse.ok(
+                payments.isEmpty() ? "ไม่พบรายการการโอนเงิน" : "พบรายการโอนเงิน " + payments.size() + " รายการ",
                 payments.stream().map(PaymentSummaryResponse::from).toList());
     }
 

@@ -19,6 +19,8 @@ public class Payment {
     @Column(nullable = false)
     private Double grandTotal;
     private Double shippingCost;
+    // สลิปโอนเงินเก็บเป็น data URL ได้ → ต้องเป็น LONGTEXT
+    @Column(columnDefinition = "LONGTEXT")
     private String slipTransfer;
 
     @Enumerated(EnumType.STRING)

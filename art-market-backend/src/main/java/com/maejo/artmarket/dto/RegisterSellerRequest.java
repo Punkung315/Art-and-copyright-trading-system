@@ -34,6 +34,14 @@ public class RegisterSellerRequest {
              message = "เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลัก ไม่มีช่องว่าง")
     private String phoneNumber;
 
+    /**
+     * เลขบัตรประชาชน 13 หลัก
+     * เดิม DTO ไม่มี field นี้ ทำให้ SellerVerifyResponse.nationalNo เป็น null เสมอ
+     * ทั้งที่หน้า Verify Seller ของ Admin และใบสัญญาโอนลิขสิทธิ์ต้องใช้
+     */
+    @Pattern(regexp = "^[0-9]{13}$", message = "เลขบัตรประชาชนต้องเป็นตัวเลข 13 หลัก")
+    private String nationalNo;
+
     /** ที่อยู่ — ตรงกับ Address entity (ยูสเคสระบุว่าต้องกรอกที่อยู่ตอนสมัครเป็น Seller) */
     @Valid
     @NotNull(message = "กรุณากรอกข้อมูลที่อยู่")

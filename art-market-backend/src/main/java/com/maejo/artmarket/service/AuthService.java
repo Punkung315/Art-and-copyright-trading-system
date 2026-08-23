@@ -110,8 +110,18 @@ public class AuthService {
         // อัปเดต fullName และ phoneNumber ใน User
         user.setFullName(req.getFullName());
         user.setPhoneNumber(req.getPhoneNumber());
+        // เลขบัตรประชาชนใช้ในใบสัญญาโอนลิขสิทธิ์และหน้า Verify Seller ของ Admin
+        // เดิม DTO ไม่มี field นี้ ทำให้ SellerVerifyResponse.nationalNo เป็น null เสมอ
+        if (req.getNationalNo() != null && !req.getNationalNo().isBlank()) {
+            user.setNationalNo(req.getNationalNo());
+        }
         user.setRole(Role.SELLER);  // เปลี่ยน role จาก BUYER → SELLER
         userRepository.save(user);
+
+        // ผู้ขายยังคงเป็นผู้ซื้อได้ตามเดิม — ถ้า record Buyer หายไป (เช่นข้อมูลเก่า) สร้างคืนให้
+        if (buyerRepository.findByUser_UserId(user.getUserId()).isEmpty()) {
+            buyerRepository.save(Buyer.builder().user(user).build());
+        }
 
         // บันทึก Seller (verified=false รอ Admin ตรวจสอบ)
         Seller seller = Seller.builder().user(user).verified(false).build();
@@ -158,7 +168,9 @@ public class AuthService {
                 .userId(admin.getUserId())
                 .username(admin.getUsername())
                 .email(null)
-                .role(null)
+                .role(null)          // enum Role ไม่มีค่า ADMIN — ใช้ roleName แทน
+                .roleName("ADMIN")
+                .fullName(admin.getUsername())
                 .build());
     }
 
@@ -169,12 +181,24 @@ public class AuthService {
     private AuthResponse buildAuthResponse(User user) {
         UserDetails userDetails = userDetailsService.loadUserByUsername(user.getUsername());
         String token = jwtUtil.generateToken(userDetails, user.getRole().name());
+
+        // อ่านสถานะการอนุมัติผู้ขายจาก DB ตรงๆ แทนการพึ่ง user.getSeller()
+        // เพราะใน transaction เดียวกับ registerSeller() ตัว user entity ที่ถืออยู่
+        // อาจยังไม่เห็น Seller ที่เพิ่ง save ไป (ความสัมพันธ์ฝั่ง inverse ยังไม่ refresh)
+        boolean sellerVerified = sellerRepository.findByUser_UserId(user.getUserId())
+                .map(Seller::isVerified)
+                .orElse(false);
+
         return AuthResponse.builder()
                 .token(token)
                 .userId(user.getUserId())
                 .username(user.getUsername())
                 .email(user.getEmail())
                 .role(user.getRole())
+                .roleName(user.getRole().name())
+                .fullName(user.getFullName())
+                .profileImage(user.getProfileImage())
+                .sellerVerified(sellerVerified)
                 .build();
     }
 }
