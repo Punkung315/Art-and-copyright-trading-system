@@ -77,6 +77,8 @@ export type OrderStatus =
   | "pending_availability"
   | "awaiting_payment"
   | "payment_review"
+  /** ผู้ดูแลระบบตรวจสลิปแล้วปฏิเสธ — ผู้ซื้อต้องอัปโหลดใหม่ */
+  | "payment_rejected"
   | "paid"
   | "shipped"
   | "delivered"
@@ -92,6 +94,11 @@ export interface OrderItem {
   artworkName: string;
   artworkImage: string;
   price: number;
+  /** ผู้ขายของชิ้นนี้ (userId) — คำสั่งซื้อใบเดียวมีงานจากหลายผู้ขายได้ */
+  sellerId?: string;
+  sellerName?: string;
+  /** ความพร้อมขายรายชิ้น ผู้ขายแต่ละคนยืนยันเฉพาะงานของตัวเอง */
+  availabilityStatus?: AvailabilityStatus;
 }
 
 export interface Order {
@@ -104,6 +111,13 @@ export interface Order {
   totalAmount: number;
   shippingCost: number;
   grandTotal: number;
+  /**
+   * ยอดที่ต้องจ่ายจริง — นับเฉพาะชิ้นที่ผู้ขายยืนยันว่าพร้อมขาย
+   * ต่างจาก grandTotal เมื่อมีผู้ขายบางรายแจ้งไม่พร้อมจำหน่าย
+   */
+  payableTotalAmount: number;
+  payableShippingCost: number;
+  payableGrandTotal: number;
   orderStatus: OrderStatus;
   availabilityStatus: AvailabilityStatus;
   shippingStatus: ShippingStatus;

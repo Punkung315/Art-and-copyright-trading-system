@@ -34,6 +34,17 @@ public class OrderDetailResponse {
     private Double shippingCost;
     private Double grandTotal;
 
+    /**
+     * ยอดที่ต้องชำระจริง — นับเฉพาะชิ้นที่ผู้ขายยืนยันว่าพร้อมขาย (AVAILABLE)
+     *
+     * แยกจาก totalAmount/grandTotal ที่เป็นยอดของทั้งคำสั่งซื้อ เพราะถ้าผู้ขายรายหนึ่ง
+     * แจ้งไม่พร้อมจำหน่าย ผู้ซื้อยังจ่ายเฉพาะชิ้นที่เหลือได้ แต่ต้องไม่ถูกเก็บเงินค่าชิ้นที่ไม่ได้ของ
+     * (ต้องเป็น backend ที่คำนวณ เพราะค่าจัดส่งรายชิ้นอยู่ที่ artwork ซึ่ง DTO ไม่ได้ส่งออกไป)
+     */
+    private Double payableTotalAmount;
+    private Double payableShippingCost;
+    private Double payableGrandTotal;
+
     private Integer buyerId;
     private String  buyerName;
     private Integer sellerId;
@@ -66,7 +77,18 @@ public class OrderDetailResponse {
         private AvailabilityStatus availabilityStatus;
         private ShippingStatus     shippingStatus;
 
+        /**
+         * ผู้ขายของ "ชิ้นนี้" — คำสั่งซื้อหนึ่งใบมีงานจากผู้ขายหลายคนได้
+         *
+         * ถ้าไม่ส่งมาระดับรายชิ้น หน้าเว็บจะแยกไม่ออกว่าชิ้นไหนเป็นของผู้ขายคนที่เปิดดูอยู่
+         * แล้วผู้ขายจะเห็นงานของผู้ขายรายอื่นที่บังเอิญอยู่ในตะกร้าเดียวกันไปด้วย
+         */
+        private Integer sellerId;
+        private Integer sellerUserId;
+        private String  sellerName;
+
         public static OrderItemDetail from(OrderItem item) {
+            var seller = item.getArtwork().getSeller();
             return OrderItemDetail.builder()
                     .orderItemId(item.getOrderItemId())
                     .artworkId(item.getArtwork().getArtworkId())
@@ -75,6 +97,9 @@ public class OrderDetailResponse {
                     .price(item.getPrice())
                     .availabilityStatus(item.getAvailabilityStatus())
                     .shippingStatus(item.getShippingStatus())
+                    .sellerId(seller != null ? seller.getSellerId() : null)
+                    .sellerUserId(seller != null ? seller.getUser().getUserId() : null)
+                    .sellerName(seller != null ? seller.getUser().getFullName() : null)
                     .build();
         }
     }
@@ -85,6 +110,20 @@ public class OrderDetailResponse {
                 .sum();
 
         double shipping = order.getOrderItems().stream()
+                .map(OrderItem::getArtwork)
+                .mapToDouble(a -> a.getShippingCost() != null ? a.getShippingCost() : 0.0)
+                .sum();
+
+        // ยอดที่ต้องจ่ายจริง = เฉพาะชิ้นที่ผู้ขายยืนยันว่าพร้อมขาย
+        var payableItems = order.getOrderItems().stream()
+                .filter(i -> i.getAvailabilityStatus() == AvailabilityStatus.AVAILABLE)
+                .toList();
+
+        double payableTotal = payableItems.stream()
+                .mapToDouble(OrderItem::getPrice)
+                .sum();
+
+        double payableShipping = payableItems.stream()
                 .map(OrderItem::getArtwork)
                 .mapToDouble(a -> a.getShippingCost() != null ? a.getShippingCost() : 0.0)
                 .sum();
@@ -109,6 +148,9 @@ public class OrderDetailResponse {
                 .totalAmount(total)
                 .shippingCost(shipping)
                 .grandTotal(total + shipping)
+                .payableTotalAmount(payableTotal)
+                .payableShippingCost(payableShipping)
+                .payableGrandTotal(payableTotal + payableShipping)
                 .buyerId(order.getBuyer().getBuyerId())
                 .buyerName(order.getBuyer().getUser().getFullName())
                 .buyerUserId(order.getBuyer().getUser().getUserId())

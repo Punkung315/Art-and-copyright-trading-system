@@ -9,6 +9,7 @@ import com.maejo.artmarket.entity.Buyer;
 import com.maejo.artmarket.entity.Orders;
 import com.maejo.artmarket.repository.BuyerRepository;
 import com.maejo.artmarket.repository.OrdersRepository;
+import com.maejo.artmarket.repository.SellerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +29,7 @@ public class OrderService {
 
     private final OrdersRepository ordersRepository;
     private final BuyerRepository  buyerRepository;
+    private final SellerRepository sellerRepository;
 
     // =========================================================================
     // ยูสเคส 3.1.13 View Order — ดูรายการคำสั่งซื้อทั้งหมดของตัวเอง
@@ -50,14 +52,19 @@ public class OrderService {
                 orders.stream().map(OrderDetailResponse::from).toList());
     }
 
-    /** ดูรายละเอียดคำสั่งซื้อเดียว — ใช้ตอนเปิดหน้า detail จากรายการ */
+    /**
+     * ดูรายละเอียดคำสั่งซื้อเดียว — ใช้ตอนเปิดหน้า detail จากรายการ
+     *
+     * เปิดให้ดูได้ 2 ฝ่าย:
+     *   1. ผู้ซื้อเจ้าของคำสั่งซื้อ
+     *   2. ผู้ขายที่มีผลงานอยู่ในคำสั่งซื้อนี้
+     *
+     * ⚠️ ของเดิมเช็คเฉพาะผู้ซื้อ ทำให้ผู้ขายกดเปิดคำสั่งซื้อจากหน้า "คำสั่งซื้อของร้านฉัน"
+     * แล้วเจอ "ไม่พบรายการคำสั่งซื้อ" ตลอด — ทั้งที่เป็นคำสั่งซื้อที่มีงานของเขาเองอยู่
+     * (frontend กลืน error แล้วแสดงเป็นหน้าว่าง จึงดูเหมือนไม่มีข้อมูล ไม่ใช่ไม่มีสิทธิ์)
+     */
     @Transactional(readOnly = true)
     public ApiResponse<OrderDetailResponse> getOrderDetail(String username, Integer orderId) {
-
-        Buyer buyer = buyerRepository.findByUser_Username(username).orElse(null);
-        if (buyer == null) {
-            return ApiResponse.error("ไม่พบข้อมูลผู้ซื้อ");
-        }
 
         Optional<Orders> orderOpt = ordersRepository.findById(orderId);
         if (orderOpt.isEmpty()) {
@@ -66,8 +73,15 @@ public class OrderService {
 
         Orders order = orderOpt.get();
 
-        // Security check — ต้องเป็นคำสั่งซื้อของ buyer คนนี้เท่านั้น
-        if (!order.getBuyer().getBuyerId().equals(buyer.getBuyerId())) {
+        Buyer buyer = buyerRepository.findByUser_Username(username).orElse(null);
+        boolean isOwnerBuyer = buyer != null
+                && order.getBuyer().getBuyerId().equals(buyer.getBuyerId());
+
+        Seller seller = sellerRepository.findByUser_Username(username).orElse(null);
+        boolean isSellerInOrder = seller != null && order.getOrderItems().stream()
+                .anyMatch(i -> i.getArtwork().getSeller().getSellerId().equals(seller.getSellerId()));
+
+        if (!isOwnerBuyer && !isSellerInOrder) {
             return ApiResponse.error("ไม่มีสิทธิ์ดูคำสั่งซื้อนี้");
         }
 

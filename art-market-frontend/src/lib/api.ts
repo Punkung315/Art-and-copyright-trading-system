@@ -234,6 +234,10 @@ interface BeOrderItem {
   price: number;
   availabilityStatus: "PENDING_CONFIRMATION" | "AVAILABLE" | "UNAVAILABLE";
   shippingStatus: "PREPARING" | "SHIPPED" | "DELIVERED" | null;
+  /** ผู้ขายรายชิ้น — มีเฉพาะ endpoint ที่ส่ง OrderDetailResponse */
+  sellerId?: number | null;
+  sellerUserId?: number | null;
+  sellerName?: string | null;
 }
 
 interface BeOrder {
@@ -244,6 +248,10 @@ interface BeOrder {
   totalAmount: number;
   shippingCost: number;
   grandTotal: number;
+  /** ยอดเฉพาะชิ้นที่ผู้ขายยืนยันว่าพร้อมขาย — ยอดที่ต้องจ่ายจริง */
+  payableTotalAmount?: number | null;
+  payableShippingCost?: number | null;
+  payableGrandTotal?: number | null;
   buyerId: number;
   buyerName: string | null;
   buyerUserId: number | null;
@@ -549,7 +557,12 @@ function rollupShipping(items: BeOrderItem[]): ShippingStatus {
 function deriveOrderStatus(o: BeOrder | BeSellerOrder): OrderStatus {
   const items = o.items ?? [];
   if (o.orderStatus === "CANCELLED") return "cancelled";
-  if (items.some((i) => i.availabilityStatus === "UNAVAILABLE")) return "cancelled";
+
+  // ยกเลิกก็ต่อเมื่อผู้ขายแจ้งไม่พร้อมจำหน่าย "ทุกชิ้น"
+  // ถ้ามีบางชิ้นที่ยังพร้อมขาย ผู้ซื้อยังจ่ายเฉพาะชิ้นที่เหลือได้ ไม่ใช่คำสั่งซื้อที่ตายแล้ว
+  if (items.length > 0 && items.every((i) => i.availabilityStatus === "UNAVAILABLE")) {
+    return "cancelled";
+  }
 
   const payment = mapPaymentStatus(o.paymentStatus);
   if (payment === "confirmed") {
@@ -559,9 +572,30 @@ function deriveOrderStatus(o: BeOrder | BeSellerOrder): OrderStatus {
     return "paid";
   }
   if (payment === "submitted") return "payment_review";
-  if (rollupAvailability(items) === "confirmed") return "awaiting_payment";
+  // สลิปถูกปฏิเสธต้องมีสถานะของตัวเอง ไม่ใช่ย้อนไปเป็น "รอชำระเงิน" เหมือนไม่เคยจ่าย
+  if (payment === "rejected") return "payment_rejected";
+  // จ่ายได้เมื่อผู้ขายตอบครบทุกชิ้นแล้ว และเหลืออย่างน้อยหนึ่งชิ้นที่พร้อมขาย
+  if (canPayItems(items)) return "awaiting_payment";
   return "pending_availability";
 }
+
+/**
+ * ผู้ขายตอบครบทุกชิ้นแล้วหรือยัง และยังมีของให้ซื้อไหม
+ * ใช้ตัดสินทั้งสถานะคำสั่งซื้อและการเปิดปุ่มชำระเงิน จะได้ไม่เพี้ยนกันคนละที่
+ */
+function canPayItems(items: BeOrderItem[]): boolean {
+  if (items.length === 0) return false;
+  const allAnswered = items.every((i) => i.availabilityStatus !== "PENDING_CONFIRMATION");
+  const hasPayable = items.some((i) => i.availabilityStatus === "AVAILABLE");
+  return allAnswered && hasPayable;
+}
+
+/** ความพร้อมขาย "รายชิ้น" — คนละอย่างกับ rollupAvailability ที่รวมทั้งคำสั่งซื้อ */
+const AVAILABILITY_LINE_MAP: Record<string, AvailabilityStatus> = {
+  PENDING_CONFIRMATION: "waiting",
+  AVAILABLE: "confirmed",
+  UNAVAILABLE: "rejected",
+};
 
 function mapOrderItem(i: BeOrderItem): OrderItem {
   return {
@@ -570,6 +604,10 @@ function mapOrderItem(i: BeOrderItem): OrderItem {
     artworkName: i.artworkName,
     artworkImage: imageOrPlaceholder(i.artworkImage, i.artworkId, i.artworkName),
     price: i.price,
+    // sellerUserId เท่านั้น ไม่ใช่ sellerId — หน้าเว็บเทียบกับ user.id ของคนที่ login อยู่
+    sellerId: i.sellerUserId != null ? String(i.sellerUserId) : undefined,
+    sellerName: i.sellerName ?? undefined,
+    availabilityStatus: AVAILABILITY_LINE_MAP[i.availabilityStatus] ?? "waiting",
   };
 }
 
@@ -585,6 +623,10 @@ function mapOrder(o: BeOrder): Order {
     totalAmount: o.totalAmount ?? 0,
     shippingCost: o.shippingCost ?? 0,
     grandTotal: o.grandTotal ?? (o.totalAmount ?? 0) + (o.shippingCost ?? 0),
+    // fallback ไปที่ยอดเต็ม เผื่อ backend เวอร์ชันเก่าที่ยังไม่ส่ง field เหล่านี้มา
+    payableTotalAmount: o.payableTotalAmount ?? o.totalAmount ?? 0,
+    payableShippingCost: o.payableShippingCost ?? o.shippingCost ?? 0,
+    payableGrandTotal: o.payableGrandTotal ?? o.grandTotal ?? 0,
     orderStatus: deriveOrderStatus(o),
     availabilityStatus: rollupAvailability(items),
     shippingStatus: rollupShipping(items),
@@ -608,6 +650,10 @@ function mapSellerOrder(o: BeSellerOrder, sellerName: string): Order {
     totalAmount,
     shippingCost: 0,
     grandTotal: totalAmount,
+    // รายการฝั่งผู้ขายไม่มียอดแยก payable — ผู้ขายเห็นเฉพาะงานของตัวเองอยู่แล้ว
+    payableTotalAmount: totalAmount,
+    payableShippingCost: 0,
+    payableGrandTotal: totalAmount,
     orderStatus: deriveOrderStatus(o),
     availabilityStatus: rollupAvailability(items),
     shippingStatus: rollupShipping(items),
@@ -659,12 +705,6 @@ export interface AdminPaymentDetail extends Payment {
     shippingStatus: ShippingStatus;
   }[];
 }
-
-const AVAILABILITY_LINE_MAP: Record<string, AvailabilityStatus> = {
-  PENDING_CONFIRMATION: "waiting",
-  AVAILABLE: "confirmed",
-  UNAVAILABLE: "rejected",
-};
 
 const SHIPPING_LINE_MAP: Record<string, ShippingStatus> = {
   PREPARING: "packed",

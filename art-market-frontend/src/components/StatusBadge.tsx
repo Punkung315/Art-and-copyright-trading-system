@@ -14,6 +14,7 @@ const MAPS: Record<Domain, Record<string, Entry>> = {
     pending_availability: { label: "รอผู้ขายยืนยัน", className: AMBER },
     awaiting_payment: { label: "รอชำระเงิน", className: SKY },
     payment_review: { label: "รอตรวจสอบการชำระเงิน", className: INDIGO },
+    payment_rejected: { label: "ถูกปฏิเสธการโอนเงิน", className: ROSE },
     paid: { label: "ชำระเงินแล้ว", className: GREEN },
     shipped: { label: "จัดส่งแล้ว", className: SKY },
     delivered: { label: "จัดส่งสำเร็จ", className: GREEN },

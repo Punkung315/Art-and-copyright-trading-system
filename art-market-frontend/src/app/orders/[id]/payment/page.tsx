@@ -61,20 +61,37 @@ function PaymentContent({ id }: { id: string }) {
           โอนเงินให้กับผู้ดูแลระบบตามยอดด้านล่าง แล้วแนบหลักฐานการโอนเงิน
         </p>
 
+        {/*
+          ต้องใช้ยอด payable ไม่ใช่ยอดเต็มของคำสั่งซื้อ
+          ถ้าผู้ขายบางรายแจ้งไม่พร้อมจำหน่าย ชิ้นนั้นถูกตัดออกจากยอดแล้ว
+          ถ้าโชว์ยอดเต็ม ผู้ซื้อจะโอนเกินและไม่ตรงกับยอดที่ backend บันทึกไว้
+        */}
         <div className="mt-6 flex flex-col gap-2 rounded-lg bg-stone-50 p-4 text-sm">
           <div className="flex justify-between">
             <span className="text-stone-500">ราคารวมชิ้นงาน</span>
-            <span>฿{order.totalAmount.toLocaleString()}</span>
+            <span>฿{order.payableTotalAmount.toLocaleString()}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-stone-500">ค่าจัดส่ง</span>
-            <span>฿{order.shippingCost.toLocaleString()}</span>
+            <span>฿{order.payableShippingCost.toLocaleString()}</span>
           </div>
           <div className="flex justify-between border-t border-stone-200 pt-2 text-base font-semibold">
             <span>ยอดที่ต้องชำระ</span>
-            <span>฿{order.grandTotal.toLocaleString()}</span>
+            <span>฿{order.payableGrandTotal.toLocaleString()}</span>
           </div>
+          {order.payableGrandTotal !== order.grandTotal && (
+            <p className="text-xs text-stone-500">
+              ไม่รวมผลงานที่ผู้ขายแจ้งว่าไม่พร้อมจำหน่าย (ยอดเต็มของคำสั่งซื้อคือ ฿
+              {order.grandTotal.toLocaleString()})
+            </p>
+          )}
         </div>
+
+        {order.paymentStatus === "rejected" && (
+          <p className="mt-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            สลิปที่ส่งมาก่อนหน้านี้ถูกผู้ดูแลระบบปฏิเสธ กรุณาตรวจสอบยอดแล้วอัปโหลดใหม่
+          </p>
+        )}
 
         <div className="mt-6">
           <p className="mb-2 text-sm font-medium text-stone-700">แนบหลักฐานการโอนเงิน (slip)</p>

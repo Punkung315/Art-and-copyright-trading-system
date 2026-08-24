@@ -8,6 +8,7 @@ import com.maejo.artmarket.entity.Buyer;
 import com.maejo.artmarket.entity.OrderItem;
 import com.maejo.artmarket.entity.Orders;
 import com.maejo.artmarket.entity.Payment;
+import com.maejo.artmarket.enums.AvailabilityStatus;
 import com.maejo.artmarket.enums.PaymentStatus;
 import com.maejo.artmarket.repository.BuyerRepository;
 import com.maejo.artmarket.repository.OrdersRepository;
@@ -57,7 +58,11 @@ public class PaymentService {
             return ApiResponse.error("ไม่มีสิทธิ์เข้าถึงคำสั่งซื้อนี้");
         }
 
-        if (paymentRepository.findByOrder_OrderId(orderId).isPresent()) {
+        // สลิปที่ถูกปฏิเสธไปแล้วต้องอัปโหลดใหม่ได้ หน้าชำระเงินจึงต้องเปิดยอดให้ดูอีกครั้ง
+        boolean paidAlready = paymentRepository.findByOrder_OrderId(orderId)
+                .filter(p -> p.getTransferStatus() != PaymentStatus.REJECTED)
+                .isPresent();
+        if (paidAlready) {
             return ApiResponse.error("คำสั่งซื้อนี้ชำระเงินไปแล้ว");
         }
 
@@ -92,8 +97,31 @@ public class PaymentService {
             return ApiResponse.error("ไม่มีสิทธิ์ชำระเงินสำหรับคำสั่งซื้อนี้");
         }
 
-        // ป้องกันจ่ายซ้ำ
-        if (paymentRepository.findByOrder_OrderId(req.getOrderId()).isPresent()) {
+        // ผู้ขายทุกคนต้อง "ตอบแล้ว" ก่อน — จะพร้อมขายหรือไม่พร้อมก็ได้ แต่ต้องไม่มีใครค้างอยู่
+        //
+        // ที่ต้องรอให้ครบเพราะยอดเงินขึ้นกับว่าชิ้นไหนได้ไปบ้าง
+        // ถ้าปล่อยให้จ่ายตอนยังมีคนไม่ตอบ ยอดที่จ่ายจะเปลี่ยนทีหลังเมื่อคนที่เหลือตอบมา
+        //
+        // หน้าเว็บซ่อนปุ่มชำระเงินไว้อยู่แล้ว แต่ endpoint ต้องกันเองด้วย
+        // ไม่งั้นยิงตรงมาที่ API ก็จ่ายได้ (หน้าเว็บไม่ใช่ที่บังคับกฎทางธุรกิจ)
+        boolean waitingSeller = order.getOrderItems().stream()
+                .anyMatch(i -> i.getAvailabilityStatus() == AvailabilityStatus.PENDING_CONFIRMATION);
+        if (waitingSeller) {
+            return ApiResponse.error("กรุณารอผู้ขายยืนยันความพร้อมในการขายให้ครบทุกชิ้นก่อนชำระเงิน");
+        }
+
+        // ต้องเหลืออย่างน้อยหนึ่งชิ้นที่พร้อมขาย ไม่งั้นไม่มีอะไรให้จ่าย
+        boolean hasPayableItem = order.getOrderItems().stream()
+                .anyMatch(i -> i.getAvailabilityStatus() == AvailabilityStatus.AVAILABLE);
+        if (!hasPayableItem) {
+            return ApiResponse.error("ผู้ขายแจ้งไม่พร้อมจำหน่ายทุกชิ้นในคำสั่งซื้อนี้ ไม่สามารถชำระเงินได้");
+        }
+
+        // ป้องกันจ่ายซ้ำ — ยกเว้นกรณีที่ผู้ดูแลระบบปฏิเสธสลิปไปแล้ว
+        // ตรงนั้นต้องให้ผู้ซื้ออัปโหลดใหม่ได้ ไม่งั้นคำสั่งซื้อจะค้างตายอยู่แบบนั้นตลอดไป
+        Optional<Payment> existingOpt = paymentRepository.findByOrder_OrderId(req.getOrderId());
+        if (existingOpt.isPresent()
+                && existingOpt.get().getTransferStatus() != PaymentStatus.REJECTED) {
             return ApiResponse.error("คำสั่งซื้อนี้ชำระเงินไปแล้ว");
         }
 
@@ -106,13 +134,13 @@ public class PaymentService {
             PaymentPreviewResponse preview = buildPreview(order);
 
             // Basic Flow ข้อ 7.1 — บันทึกข้อมูลการชำระเงิน
-            Payment payment = Payment.builder()
-                    .order(order)
-                    .grandTotal(preview.getGrandTotal())
-                    .shippingCost(preview.getShippingCost())
-                    .slipTransfer(req.getSlipTransfer())
-                    .transferStatus(PaymentStatus.PENDING_CONFIRMATION) // รอ Admin ตรวจสอบ (Confirm Payment)
-                    .build();
+            // ถ้าเคยถูกปฏิเสธมาก่อน ให้แก้แถวเดิมแทนสร้างใหม่
+            // (ตาราง payment มี UNIQUE ที่ order_id — สร้างซ้ำจะชนคีย์)
+            Payment payment = existingOpt.orElseGet(() -> Payment.builder().order(order).build());
+            payment.setGrandTotal(preview.getGrandTotal());
+            payment.setShippingCost(preview.getShippingCost());
+            payment.setSlipTransfer(req.getSlipTransfer());
+            payment.setTransferStatus(PaymentStatus.PENDING_CONFIRMATION); // รอ Admin ตรวจสอบ
 
             paymentRepository.save(payment);
             return ApiResponse.ok("อัปโหลดหลักฐานการชำระเงินสำเร็จ รอการตรวจสอบจากผู้ดูแลระบบ",
@@ -129,11 +157,19 @@ public class PaymentService {
     // =========================================================================
 
     private PaymentPreviewResponse buildPreview(Orders order) {
-        double totalPrice = order.getOrderItems().stream()
+        // คิดเงินเฉพาะชิ้นที่ผู้ขายยืนยันว่าพร้อมขายเท่านั้น
+        //
+        // คำสั่งซื้อใบเดียวมีงานจากหลายผู้ขายได้ ถ้าผู้ขายรายหนึ่งแจ้งไม่พร้อมจำหน่าย
+        // ผู้ซื้อยังซื้อชิ้นที่เหลือต่อได้ แต่ต้องไม่ถูกเก็บเงินค่าชิ้นที่ไม่ได้ของ
+        var payableItems = order.getOrderItems().stream()
+                .filter(i -> i.getAvailabilityStatus() == AvailabilityStatus.AVAILABLE)
+                .toList();
+
+        double totalPrice = payableItems.stream()
                 .mapToDouble(OrderItem::getPrice)
                 .sum();
 
-        double shippingCost = order.getOrderItems().stream()
+        double shippingCost = payableItems.stream()
                 .map(OrderItem::getArtwork)
                 .mapToDouble(a -> a.getShippingCost() != null ? a.getShippingCost() : 0.0)
                 .sum();
