@@ -384,4 +384,48 @@ public class ArtworkService {
             return ApiResponse.error("ไม่สามารถแก้ไขสถานะได้ กรุณาลองใหม่อีกครั้ง");
         }
     }
+
+    // =========================================================================
+    // ยกเลิกการเผยแพร่ — PUBLISHED → DRAFT (ตรงข้ามกับ Publish Art)
+    //
+    // ไม่มีในยูสเคสของ SRS แต่ผู้ขายจำเป็นต้องมี ไม่งั้นงานที่เผยแพร่พลาด
+    // หรืออยากถอนออกชั่วคราว (แก้ราคา, งานเสียหาย, ยังไม่พร้อมส่ง)
+    // จะเอาลงไม่ได้เลยตลอดไป
+    // =========================================================================
+
+    @Transactional
+    public ApiResponse<ArtworkDetailResponse> unpublishArt(String username, Integer artworkId) {
+
+        Seller seller = sellerRepository.findByUser_Username(username).orElse(null);
+        if (seller == null) return ApiResponse.error("ไม่พบข้อมูลผู้ขาย");
+
+        Artwork artwork = artworkRepository.findById(artworkId).orElse(null);
+        if (artwork == null) {
+            return ApiResponse.error("ข้อมูลงานศิลปะไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง");
+        }
+
+        if (!artwork.getSeller().getSellerId().equals(seller.getSellerId())) {
+            return ApiResponse.error("ไม่มีสิทธิ์แก้ไขงานศิลปะชิ้นนี้");
+        }
+
+        if (artwork.getPublishStatus() == PublishStatus.DRAFT) {
+            return ApiResponse.error("งานศิลปะนี้เป็นฉบับร่างอยู่แล้ว");
+        }
+
+        // กันไม่ให้ถอนงานที่มีคนสั่งซื้อไปแล้ว
+        // ผู้ซื้อยังต้องเปิดดูรายละเอียดงานจากหน้าคำสั่งซื้อและใบเสนอราคาได้
+        // ถ้าถอนออก งานจะหายจากทุกหน้าที่เป็นสาธารณะ แล้วคำสั่งซื้อจะอ้างของที่มองไม่เห็น
+        if (artwork.getArtworkStatus() != ArtworkStatus.AVAILABLE) {
+            return ApiResponse.error("ไม่สามารถยกเลิกการเผยแพร่ได้ เพราะงานชิ้นนี้อยู่ในคำสั่งซื้อแล้ว");
+        }
+
+        try {
+            artwork.setPublishStatus(PublishStatus.DRAFT);
+            artworkRepository.save(artwork);
+            return ApiResponse.ok("ยกเลิกการเผยแพร่สำเร็จ งานกลับไปเป็นฉบับร่าง",
+                    ArtworkDetailResponse.from(artwork));
+        } catch (Exception e) {
+            return ApiResponse.error("ไม่สามารถแก้ไขสถานะได้ กรุณาลองใหม่อีกครั้ง");
+        }
+    }
 }

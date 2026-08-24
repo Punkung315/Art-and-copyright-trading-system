@@ -39,6 +39,12 @@ export interface Admin {
 
 export type ArtworkStatus = "draft" | "published" | "sold";
 
+/**
+ * สถานะการขายของชิ้นงาน แยกจาก ArtworkStatus ที่รวมเรื่องการเผยแพร่ไว้ด้วย
+ * "reserved" = อยู่ในคำสั่งซื้อของใครบางคนแล้ว แต่ยังไม่ปิดการขาย
+ */
+export type ArtworkSalesStatus = "available" | "reserved" | "sold";
+
 export interface Artwork {
   id: string;
   sellerId: string;
@@ -54,6 +60,8 @@ export interface Artwork {
   price: number;
   publishDate: string;
   artworkStatus: ArtworkStatus;
+  /** สถานะการขายดิบจาก backend — ใช้ตัดสินว่าถอนงานออกจากการเผยแพร่ได้ไหม */
+  salesStatus?: ArtworkSalesStatus;
   copyrightAvailable: boolean;
   copyrightPrice?: number;
 }

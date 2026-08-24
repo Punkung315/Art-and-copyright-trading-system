@@ -4,12 +4,18 @@ import { FormEvent, use, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RequireSeller } from "@/components/RoleGuard";
 import { useToast } from "@/context/ToastContext";
-import { getArtwork, updateArtwork, publishArtwork, ApiError } from "@/lib/api";
+import {
+  getArtwork,
+  updateArtwork,
+  publishArtwork,
+  unpublishArtwork,
+  ApiError,
+} from "@/lib/api";
 import { Artwork } from "@/types";
 import { Button, Card, Container, Field, Input, Select, Spinner, Textarea } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
+import { ImageUploadField } from "@/components/ImageUploadField";
 import { validateNotEmpty } from "@/lib/validation";
-import { fileToDataUrl } from "@/lib/storage";
 
 function EditArtContent({ id }: { id: string }) {
   const { notify } = useToast();
@@ -36,11 +42,6 @@ function EditArtContent({ id }: { id: string }) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    set("artworkImage", await fileToDataUrl(file));
-  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -66,19 +67,41 @@ function EditArtContent({ id }: { id: string }) {
     }
   }
 
-  async function handlePublish() {
+  /** ใช้ร่วมกันทั้งเผยแพร่และยกเลิกเผยแพร่ เพราะขั้นตอนจัดการสถานะเหมือนกันทุกอย่าง */
+  async function changePublishState(
+    action: () => Promise<Artwork>,
+    successMessage: string
+  ) {
     setPublishing(true);
     try {
-      const updated = await publishArtwork(id);
+      const updated = await action();
       setArtwork(updated);
       setForm(updated);
-      notify("เผยแพร่ผลงานศิลปะสำเร็จ", "success");
+      notify(successMessage, "success");
     } catch (err) {
-      notify(err instanceof ApiError ? err.message : "ไม่สามารถแก้ไขสถานะได้ กรุณาลองใหม่อีกครั้ง", "error");
+      notify(
+        err instanceof ApiError ? err.message : "ไม่สามารถแก้ไขสถานะได้ กรุณาลองใหม่อีกครั้ง",
+        "error"
+      );
     } finally {
       setPublishing(false);
     }
   }
+
+  function handlePublish() {
+    return changePublishState(() => publishArtwork(id), "เผยแพร่ผลงานศิลปะสำเร็จ");
+  }
+
+  function handleUnpublish() {
+    return changePublishState(
+      () => unpublishArtwork(id),
+      "ยกเลิกการเผยแพร่แล้ว งานกลับไปเป็นฉบับร่าง"
+    );
+  }
+
+  // งานที่ RESERVED/SOLD ถอนออกไม่ได้ เพราะผู้ซื้อยังต้องเปิดดูจากคำสั่งซื้อของเขา
+  const canUnpublish =
+    artwork.artworkStatus === "published" && (artwork.salesStatus ?? "available") === "available";
 
   return (
     <Container className="flex justify-center py-10">
@@ -90,7 +113,7 @@ function EditArtContent({ id }: { id: string }) {
               <StatusBadge status={artwork.artworkStatus} domain="artwork" />
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
             <Button variant="secondary" onClick={() => router.push(`/seller/art/${id}/certificate`)}>
               ใบรับรองผลงาน
             </Button>
@@ -99,18 +122,41 @@ function EditArtContent({ id }: { id: string }) {
                 {publishing ? "กำลังเผยแพร่..." : "เผยแพร่ผลงาน"}
               </Button>
             )}
+            {/*
+              ถอนงานกลับเป็นฉบับร่างได้เฉพาะงานที่ยังไม่มีใครสั่งซื้อ
+              ถ้าไม่เช็ค salesStatus ตรงนี้ ปุ่มจะขึ้นให้กดแล้วโดน backend ปฏิเสธทุกครั้ง
+              — ปุ่มที่กดแล้วพังเสมอแย่กว่าปุ่มที่ไม่มี
+            */}
+            {canUnpublish && (
+              <Button variant="secondary" onClick={handleUnpublish} disabled={publishing}>
+                {publishing ? "กำลังยกเลิก..." : "ยกเลิกการเผยแพร่"}
+              </Button>
+            )}
           </div>
         </div>
 
+        {artwork.artworkStatus === "published" && !canUnpublish && (
+          <p className="mb-6 rounded-lg bg-stone-100 p-3 text-sm text-stone-600">
+            งานชิ้นนี้อยู่ในคำสั่งซื้อแล้ว จึงยกเลิกการเผยแพร่ไม่ได้ —
+            ผู้ซื้อยังต้องเปิดดูรายละเอียดงานจากคำสั่งซื้อของเขาได้
+          </p>
+        )}
+
+        {artwork.artworkStatus === "draft" && (
+          <p className="mb-6 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+            งานชิ้นนี้เป็นฉบับร่าง ยังไม่แสดงในหน้าค้นหาและผู้ซื้อยังสั่งซื้อไม่ได้ กด
+            &ldquo;เผยแพร่ผลงาน&rdquo; เมื่อพร้อมขาย
+          </p>
+        )}
+
         <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <Field label="รูปผลงาน (artworkImage)">
-              <input type="file" accept="image/png,image/jpeg" onChange={handleFile} />
-            </Field>
-            {form.artworkImage && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={form.artworkImage} alt="" className="mt-3 h-40 w-40 rounded-lg object-cover" />
-            )}
+            <ImageUploadField
+              label="รูปผลงาน (artworkImage)"
+              value={form.artworkImage}
+              onChange={(dataUrl) => set("artworkImage", dataUrl)}
+              onError={(message) => notify(message, "error")}
+            />
           </div>
 
           <Field label="ชื่อผลงาน (artworkName)" error={errors.artworkName}>

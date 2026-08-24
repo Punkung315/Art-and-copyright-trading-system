@@ -23,7 +23,8 @@ import java.util.List;
  *   GET  /api/artworks/my           List Art      (ยูสเคส 3.1.17)
  *   POST /api/artworks              Add Art       (ยูสเคส 3.1.16)
  *   PUT  /api/artworks/{id}         Edit Art      (ยูสเคส 3.1.18)
- *   PATCH /api/artworks/{id}/publish Publish Art  (ยูสเคส 3.1.19)
+ *   PATCH /api/artworks/{id}/publish   Publish Art  (ยูสเคส 3.1.19)
+ *   PATCH /api/artworks/{id}/unpublish ยกเลิกการเผยแพร่ (PUBLISHED → DRAFT)
  */
 @RestController
 @RequestMapping("/api/artworks")
@@ -145,6 +146,18 @@ public class ArtworkController {
             @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable Integer id) {
         return ResponseEntity.ok(artworkService.publishArt(userDetails.getUsername(), id));
+    }
+
+    /**
+     * ยกเลิกการเผยแพร่ — PATCH /api/artworks/{id}/unpublish
+     * ตรงข้ามกับ publish: PUBLISHED → DRAFT
+     * ทำได้เฉพาะงานที่ยังไม่มีใครสั่งซื้อ (artworkStatus = AVAILABLE)
+     */
+    @PatchMapping("/{id}/unpublish")
+    public ResponseEntity<ApiResponse<ArtworkDetailResponse>> unpublishArt(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable Integer id) {
+        return ResponseEntity.ok(artworkService.unpublishArt(userDetails.getUsername(), id));
     }
 
     /**

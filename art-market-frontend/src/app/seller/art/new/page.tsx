@@ -7,8 +7,8 @@ import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { addArtwork, ApiError } from "@/lib/api";
 import { Button, Card, Container, Field, Input, Select, Textarea } from "@/components/ui";
-import { validateImageFile, validateNotEmpty } from "@/lib/validation";
-import { fileToDataUrl } from "@/lib/storage";
+import { ImageUploadField } from "@/components/ImageUploadField";
+import { validateNotEmpty } from "@/lib/validation";
 
 function AddArtContent() {
   const { user } = useAuth();
@@ -28,17 +28,6 @@ function AddArtContent() {
   const [copyrightPrice, setCopyrightPrice] = useState("");
   const [errors, setErrors] = useState<Record<string, string | null>>({});
   const [submitting, setSubmitting] = useState(false);
-
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0] ?? null;
-    const err = validateImageFile(file);
-    if (err) {
-      setErrors((prev) => ({ ...prev, artworkImage: err }));
-      return;
-    }
-    setErrors((prev) => ({ ...prev, artworkImage: null }));
-    setArtworkImage(await fileToDataUrl(file!));
-  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -92,12 +81,17 @@ function AddArtContent() {
 
         <form onSubmit={handleSubmit} className="mt-6 grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
-            <Field label="รูปผลงาน (artworkImage)" error={errors.artworkImage}>
-              <input type="file" accept="image/png,image/jpeg" onChange={handleFile} />
-            </Field>
-            {artworkImage && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={artworkImage} alt="preview" className="mt-3 h-40 w-40 rounded-lg object-cover" />
+            <ImageUploadField
+              label="รูปผลงาน (artworkImage)"
+              value={artworkImage}
+              onChange={(dataUrl) => {
+                setArtworkImage(dataUrl);
+                setErrors((prev) => ({ ...prev, artworkImage: null }));
+              }}
+              onError={(message) => setErrors((prev) => ({ ...prev, artworkImage: message }))}
+            />
+            {errors.artworkImage && (
+              <p className="mt-1 text-xs text-rose-600">{errors.artworkImage}</p>
             )}
           </div>
 

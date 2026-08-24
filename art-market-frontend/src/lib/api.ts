@@ -486,6 +486,14 @@ function mapArtworkSummary(a: BeArtworkSummary): Artwork {
     price: a.price,
     publishDate: "",
     artworkStatus: mapArtworkStatus(a),
+    // artworkStatus ของหน้าเว็บรวมเรื่องเผยแพร่ไว้ด้วย (draft/published/sold)
+    // จึงแยกสถานะการขายดิบไว้ต่างหาก ไม่งั้นงานที่ RESERVED จะดูเหมือนงานปกติทุกประการ
+    salesStatus:
+      a.artworkStatus === "SOLD"
+        ? "sold"
+        : a.artworkStatus === "RESERVED"
+          ? "reserved"
+          : "available",
     copyrightAvailable: false,
   };
 }
@@ -1199,6 +1207,14 @@ export async function updateArtwork(
 
 export async function publishArtwork(id: string): Promise<Artwork> {
   const a = await request<BeArtworkDetail>(`/artworks/${id}/publish`, {
+    method: "PATCH",
+  });
+  return mapArtworkDetail(a);
+}
+
+/** ถอนงานที่เผยแพร่แล้วกลับไปเป็นฉบับร่าง (ทำได้เฉพาะงานที่ยังไม่มีคนสั่งซื้อ) */
+export async function unpublishArtwork(id: string): Promise<Artwork> {
+  const a = await request<BeArtworkDetail>(`/artworks/${id}/unpublish`, {
     method: "PATCH",
   });
   return mapArtworkDetail(a);
