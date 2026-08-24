@@ -22,7 +22,10 @@ export interface User {
   phoneNumber?: string;
   nationalNo?: string;
   profileImage?: string; // data URL for demo
+  /** ที่อยู่รายการแรก — ใช้เติมฟอร์มอัตโนมัติ (ผู้ใช้มีที่อยู่ได้หลายรายการ ดู addresses) */
   address?: Address;
+  /** ที่อยู่ทั้งหมดของผู้ใช้ */
+  addresses?: Address[];
   roles: Array<"buyer" | "seller">;
   sellerStatus: SellerStatus;
   createdAt: string;

@@ -1,5 +1,6 @@
 package com.maejo.artmarket.controller;
 
+import com.maejo.artmarket.dto.AddressRequest;
 import com.maejo.artmarket.dto.ApiResponse;
 import com.maejo.artmarket.dto.EditProfileRequest;
 import com.maejo.artmarket.dto.ProfileResponse;
@@ -85,5 +86,41 @@ public class UserController {
         ApiResponse<ProfileResponse> response = userService.editProfile(
                 userDetails.getUsername(), request);
         return ResponseEntity.ok(response);
+    }
+
+    // -----------------------------------------------------------------------
+    // สมุดที่อยู่ของตัวเอง — ผู้ใช้หนึ่งคนมีที่อยู่ได้หลายรายการ
+    //
+    // POST   /api/users/me/addresses        เพิ่มที่อยู่ใหม่
+    // PUT    /api/users/me/addresses/{id}   แก้ที่อยู่เดิม
+    // DELETE /api/users/me/addresses/{id}   ลบที่อยู่
+    //
+    // ใช้ /me ทุกอัน (ไม่ใช่ /users/{userId}/addresses) ด้วยเหตุผลเดียวกับ Edit Profile
+    // คือกันไม่ให้ใครแก้ที่อยู่ของคนอื่นด้วยการเปลี่ยน id ใน URL
+    // ทุก endpoint คืนโปรไฟล์ฉบับล่าสุดกลับไป frontend จะได้อัปเดตรายการในครั้งเดียว
+    // -----------------------------------------------------------------------
+
+    @PostMapping("/me/addresses")
+    public ResponseEntity<ApiResponse<ProfileResponse>> addAddress(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @Valid @RequestBody AddressRequest request) {
+        return ResponseEntity.ok(userService.addAddress(userDetails.getUsername(), request));
+    }
+
+    @PutMapping("/me/addresses/{addressId}")
+    public ResponseEntity<ApiResponse<ProfileResponse>> updateAddress(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable Integer addressId,
+            @Valid @RequestBody AddressRequest request) {
+        return ResponseEntity.ok(
+                userService.updateAddress(userDetails.getUsername(), addressId, request));
+    }
+
+    @DeleteMapping("/me/addresses/{addressId}")
+    public ResponseEntity<ApiResponse<ProfileResponse>> deleteAddress(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable Integer addressId) {
+        return ResponseEntity.ok(
+                userService.deleteAddress(userDetails.getUsername(), addressId));
     }
 }

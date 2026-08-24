@@ -1,6 +1,7 @@
 package com.maejo.artmarket.service;
 
 import com.maejo.artmarket.dto.*;
+import com.maejo.artmarket.entity.Address;
 import com.maejo.artmarket.entity.Artwork;
 import com.maejo.artmarket.entity.User;
 import com.maejo.artmarket.enums.PublishStatus;
@@ -120,6 +121,7 @@ public class UserService {
         if (StringUtils.hasText(req.getFullName()))    user.setFullName(req.getFullName());
         if (StringUtils.hasText(req.getEmail()))       user.setEmail(req.getEmail());
         if (StringUtils.hasText(req.getPhoneNumber())) user.setPhoneNumber(req.getPhoneNumber());
+        if (StringUtils.hasText(req.getNationalNo()))  user.setNationalNo(req.getNationalNo());
         if (StringUtils.hasText(req.getProfileImage())) user.setProfileImage(req.getProfileImage());
 
         try {
@@ -132,5 +134,96 @@ public class UserService {
         // คืนโปรไฟล์ที่อัปเดตแล้ว (isSelf=true เพราะแก้ข้อมูลตัวเอง)
         return ApiResponse.ok("แก้ไขข้อมูลสำเร็จ",
                 ProfileResponse.from(user, List.of(), true));
+    }
+
+    // =========================================================================
+    // สมุดที่อยู่ของผู้ใช้ — เพิ่ม / แก้ไข / ลบ ได้หลายรายการ
+    //
+    // แยกออกมาจาก Edit Profile เพราะผู้ใช้หนึ่งคนมีที่อยู่ได้หลายแห่ง
+    // (ที่อยู่จัดส่ง, ที่อยู่ตามบัตรประชาชน ฯลฯ) ถ้ารวมอยู่ในฟอร์มโปรไฟล์
+    // จะแก้ได้แค่รายการเดียวและไม่มีทางลบรายการอื่นเลย
+    //
+    // ทุกเมธอดคืน ProfileResponse ฉบับล่าสุดกลับไป เพื่อให้ frontend
+    // อัปเดตรายการที่อยู่ได้ในครั้งเดียว ไม่ต้องยิงถามใหม่แล้วเสี่ยงเห็นข้อมูลค้าง
+    // =========================================================================
+
+    @Transactional
+    public ApiResponse<ProfileResponse> addAddress(String username, AddressRequest req) {
+        User user = userRepository.findByUsername(username).orElse(null);
+        if (user == null) return ApiResponse.error("ไม่พบข้อมูลผู้ใช้งาน");
+
+        Address address = new Address();
+        address.setUser(user);
+        applyAddress(address, req);
+        // User.addresses ตั้ง cascade = ALL ไว้ การ add เข้า list แล้ว save(user) จึงบันทึกให้เอง
+        user.getAddresses().add(address);
+
+        try {
+            userRepository.save(user);
+        } catch (Exception e) {
+            return ApiResponse.error("ไม่สามารถบันทึกที่อยู่ได้ กรุณาลองอีกครั้ง");
+        }
+        return ApiResponse.ok("เพิ่มที่อยู่สำเร็จ", ProfileResponse.from(user, List.of(), true));
+    }
+
+    @Transactional
+    public ApiResponse<ProfileResponse> updateAddress(String username, Integer addressId, AddressRequest req) {
+        User user = userRepository.findByUsername(username).orElse(null);
+        if (user == null) return ApiResponse.error("ไม่พบข้อมูลผู้ใช้งาน");
+
+        // ต้องหาจากรายการของ "ผู้ใช้คนนี้" เท่านั้น
+        // ถ้าไปหาจาก addressRepository.findById ตรงๆ ใครก็แก้ที่อยู่คนอื่นได้ด้วยการเดา id
+        Address target = user.getAddresses().stream()
+                .filter(a -> a.getAddressId().equals(addressId))
+                .findFirst().orElse(null);
+        if (target == null) return ApiResponse.error("ไม่พบที่อยู่ที่ต้องการแก้ไข");
+
+        applyAddress(target, req);
+
+        try {
+            userRepository.save(user);
+        } catch (Exception e) {
+            return ApiResponse.error("ไม่สามารถบันทึกที่อยู่ได้ กรุณาลองอีกครั้ง");
+        }
+        return ApiResponse.ok("แก้ไขที่อยู่สำเร็จ", ProfileResponse.from(user, List.of(), true));
+    }
+
+    @Transactional
+    public ApiResponse<ProfileResponse> deleteAddress(String username, Integer addressId) {
+        User user = userRepository.findByUsername(username).orElse(null);
+        if (user == null) return ApiResponse.error("ไม่พบข้อมูลผู้ใช้งาน");
+
+        Address target = user.getAddresses().stream()
+                .filter(a -> a.getAddressId().equals(addressId))
+                .findFirst().orElse(null);
+        if (target == null) return ApiResponse.error("ไม่พบที่อยู่ที่ต้องการลบ");
+
+        // ลบด้วยการเอาออกจาก list ให้ orphanRemoval จัดการ
+        // ถ้าไปเรียก addressRepository.delete() ตรงๆ ตัวที่ค้างอยู่ใน list ของ user
+        // จะถูก merge กลับเข้ามาตอน flush แล้วพังแบบเดียวกับบั๊กปฏิเสธผู้ขาย
+        user.getAddresses().remove(target);
+        target.setUser(null);
+
+        try {
+            userRepository.saveAndFlush(user);
+        } catch (Exception e) {
+            return ApiResponse.error("ไม่สามารถลบที่อยู่ได้ กรุณาลองอีกครั้ง");
+        }
+        return ApiResponse.ok("ลบที่อยู่สำเร็จ", ProfileResponse.from(user, List.of(), true));
+    }
+
+    private static void applyAddress(Address address, AddressRequest req) {
+        address.setHouseNo(trimToNull(req.getHouseNo()));
+        address.setVillageNo(trimToNull(req.getVillageNo()));
+        address.setThoroughfare(trimToNull(req.getThoroughfare()));
+        address.setSubdistrict(req.getSubdistrict().trim());
+        address.setDistrict(req.getDistrict().trim());
+        address.setProvince(req.getProvince().trim());
+        address.setPostalCode(req.getPostalCode().trim());
+    }
+
+    /** ช่องที่อยู่ที่ไม่บังคับ ถ้าเว้นว่างให้เก็บเป็น null ไม่ใช่สตริงว่าง จะได้แสดงผลเป็น "—" ได้ถูก */
+    private static String trimToNull(String s) {
+        return (s == null || s.isBlank()) ? null : s.trim();
     }
 }

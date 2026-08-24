@@ -9,6 +9,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { listArtworksBySeller } from "@/lib/api";
 import { Artwork } from "@/types";
 import { ArtCard } from "@/components/ArtCard";
+import { formatAddress } from "@/components/AddressBook";
 
 function ProfileContent() {
   const { user } = useAuth();
@@ -61,12 +62,28 @@ function ProfileContent() {
           <p className="text-sm font-medium text-stone-800">{user.phoneNumber || "—"}</p>
         </Card>
         <Card className="p-4">
-          <p className="text-xs text-stone-500">สมาชิกตั้งแต่</p>
-          <p className="text-sm font-medium text-stone-800">
-            {new Date(user.createdAt).toLocaleDateString("th-TH")}
-          </p>
+          <p className="text-xs text-stone-500">เลขบัตรประชาชน</p>
+          <p className="text-sm font-medium text-stone-800">{user.nationalNo || "—"}</p>
         </Card>
       </div>
+
+      {/* ที่อยู่ — มีได้หลายรายการ แสดงทั้งหมดให้เห็นว่ากรอกครบหรือยัง */}
+      <Card className="mt-4 p-4">
+        <p className="text-xs text-stone-500">ที่อยู่ ({user.addresses?.length ?? 0})</p>
+        {user.addresses?.length ? (
+          <ul className="mt-1 flex flex-col gap-1">
+            {user.addresses.map((a) => (
+              <li key={a.id} className="text-sm font-medium text-stone-800">
+                {formatAddress(a)}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-stone-400">
+            ยังไม่ได้บันทึกที่อยู่ — เพิ่มได้ที่หน้าแก้ไขโปรไฟล์
+          </p>
+        )}
+      </Card>
 
       {user.roles.includes("seller") && artworks.length > 0 && (
         <div className="mt-10">

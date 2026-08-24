@@ -9,10 +9,13 @@ import lombok.Data;
  * ทุก field เป็น optional — ถ้าส่งมาเฉพาะบางฟิลด์จะอัปเดตแค่ฟิลด์นั้น (partial update)
  * SRS ไม่ได้บังคับให้กรอกทุกอันพร้อมกัน แค่ฟิลด์ที่ส่งมาต้องถูก validation rules
  *
+ * ⚠️ ทุก @Pattern ในไฟล์นี้ต้องขึ้นต้นด้วย ^$| เสมอ
+ * เพราะ @Pattern ข้ามการตรวจให้เฉพาะค่า null — สตริงว่างยังถูกตรวจตามปกติ
+ * และฟอร์มแก้ไขโปรไฟล์ส่งทุกช่องมาเสมอ ช่องที่ไม่ได้กรอกจึงมาเป็น "" ไม่ใช่ null
+ * ถ้าลืมข้อนี้ ผู้ใช้จะกดบันทึกไม่ได้เลยเพียงเพราะเว้นช่องที่ไม่บังคับไว้
+ *
  * หมายเหตุ: profileImage ใน SRS ระบุว่าต้องเป็น .png หรือ .jpg
  * การตรวจสอบประเภทไฟล์ทำใน Service ตอนรับ MultipartFile จริง
- * ใน DTO นี้ profileImagePath ใช้รับ path หลังจากบันทึกไฟล์แล้ว
- * (flow อัปโหลดไฟล์จะใช้ endpoint แยกต่างหาก หรือส่งมาพร้อมกันเป็น multipart/form-data)
  */
 @Data
 public class EditProfileRequest {
@@ -24,7 +27,7 @@ public class EditProfileRequest {
      * 3. ไม่มีช่องว่าง
      * 4. ไม่ว่าง (ถ้าส่งมา)
      */
-    @Pattern(regexp = "^[a-zA-Z0-9]{8,20}$",
+    @Pattern(regexp = "^$|^[a-zA-Z0-9]{8,20}$",
              message = "ชื่อผู้ใช้ต้องเป็นภาษาอังกฤษหรือตัวเลข ความยาว 8-20 ตัวอักษร ไม่มีช่องว่าง")
     private String username;
 
@@ -34,7 +37,7 @@ public class EditProfileRequest {
      * 2. ต้องมีช่องว่างระหว่างชื่อ-นามสกุล
      * 3. ไม่ว่าง (ถ้าส่งมา)
      */
-    @Pattern(regexp = "^[a-zA-Z]+ [a-zA-Z]+.*$",
+    @Pattern(regexp = "^$|^[a-zA-Z]+ [a-zA-Z]+.*$",
              message = "ชื่อ-นามสกุลต้องเป็นภาษาอังกฤษและมีช่องว่างระหว่างชื่อกับนามสกุล")
     private String fullName;
 
@@ -48,22 +51,34 @@ public class EditProfileRequest {
     private String email;
 
     /**
-     * phoneNumber — SRS กำหนด:
-     * 1. ตัวเลข
-     * 2. ยาวพอดี 10 หลัก
-     * 3. ไม่มีช่องว่าง, ไม่ว่าง (ถ้าส่งมา)
+     * phoneNumber — SRS กำหนด: ตัวเลข 10 หลัก ไม่มีช่องว่าง
+     * ไม่บังคับกรอก เว้นว่างไว้แล้วบันทึกได้
      */
-    @Pattern(regexp = "^[0-9]{10}$",
+    @Pattern(regexp = "^$|^[0-9]{10}$",
              message = "เบอร์โทรศัพท์ต้องเป็นตัวเลข 10 หลัก ไม่มีช่องว่าง")
     private String phoneNumber;
 
     /**
-     * profileImage — path รูปที่อัปโหลดแล้ว
-     * SRS กำหนดว่าต้องเป็น .png หรือ .jpg เท่านั้น
-     * ตรวจสอบนามสกุลไฟล์ด้วย @Pattern ป้องกัน path traversal เบื้องต้น
+     * เลขบัตรประชาชน 13 หลัก — ไม่บังคับ
+     * แต่ถ้ากรอกไว้ล่วงหน้า ฟอร์มสัญญาโอนลิขสิทธิ์จะเติมให้อัตโนมัติ ไม่ต้องพิมพ์ซ้ำ
      */
-    // รับได้ทั้งชื่อไฟล์และ data URL (frontend อัปโหลดรูปแล้วแปลงเป็น base64)
-    @Pattern(regexp = "^(data:image/(png|jpe?g);base64,.+|.+\\.(png|jpg|jpeg|PNG|JPG|JPEG))$",
+    @Pattern(regexp = "^$|^[0-9]{13}$",
+             message = "เลขบัตรประชาชนต้องเป็นตัวเลข 13 หลัก ไม่มีช่องว่าง")
+    private String nationalNo;
+
+    /**
+     * profileImage — path รูปที่อัปโหลดแล้ว
+     * รับได้ทั้งชื่อไฟล์และ data URL (frontend อัปโหลดรูปแล้วแปลงเป็น base64)
+     */
+    @Pattern(regexp = "^$|^(data:image/(png|jpe?g);base64,.+|.+\\.(png|jpg|jpeg|PNG|JPG|JPEG))$",
              message = "รูปภาพต้องเป็นไฟล์ .png หรือ .jpg เท่านั้น")
     private String profileImage;
+
+    /*
+     * ไม่มี field address ที่นี่โดยตั้งใจ
+     *
+     * ผู้ใช้หนึ่งคนมีที่อยู่ได้หลายรายการ การยัดที่อยู่มาในฟอร์มแก้โปรไฟล์
+     * จะแก้ได้แค่รายการเดียวและไม่มีทางลบรายการอื่นได้เลย
+     * จึงแยกไปเป็น endpoint ของตัวเองที่ /api/users/me/addresses (เพิ่ม/แก้/ลบ)
+     */
 }

@@ -434,6 +434,9 @@ function mapProfile(p: BeProfile): User {
     phoneNumber: p.phoneNumber ?? undefined,
     nationalNo: p.nationalNo ?? undefined,
     profileImage: avatarOrPlaceholder(p.profileImage, p.userId, p.fullName || p.username),
+    // addresses = รายการทั้งหมด, address = รายการแรกไว้ใช้เติมฟอร์มอัตโนมัติ
+    // (คงไว้เพื่อไม่ให้หน้าที่อ้าง user.address อยู่เดิมพัง)
+    addresses: (p.addresses ?? []).map(mapAddress),
     address: p.addresses?.length ? mapAddress(p.addresses[0]) : undefined,
     roles,
     sellerStatus: p.sellerStatus ?? "none",
@@ -855,12 +858,60 @@ export async function getMe(): Promise<User | undefined> {
 export async function updateProfile(
   _userId: string,
   patch: Partial<
-    Pick<User, "username" | "fullName" | "email" | "phoneNumber" | "profileImage">
+    Pick<
+      User,
+      "username" | "fullName" | "email" | "phoneNumber" | "nationalNo" | "profileImage"
+    >
   >
 ): Promise<User> {
   const p = await request<BeProfile>("/users/me", {
     method: "PUT",
     body: JSON.stringify(patch),
+  });
+  return mapProfile(p);
+}
+
+/* ------------------------------ สมุดที่อยู่ ------------------------------ */
+
+/**
+ * backend ใช้ชื่อ subdistrict (ตัวเล็กติดกัน) ส่วน frontend ใช้ subDistrict
+ * แปลงชื่อไว้ที่เดียวตรงนี้ ถ้าไปแปลงกระจายตามหน้า พลาดที่ไหนที่อยู่จะหายเงียบๆ
+ */
+function toAddressBody(a: Omit<Address, "id">) {
+  return {
+    houseNo: a.houseNo ?? "",
+    villageNo: a.villageNo ?? "",
+    thoroughfare: a.thoroughfare ?? "",
+    subdistrict: a.subDistrict,
+    district: a.district,
+    province: a.province,
+    postalCode: a.postalCode,
+  };
+}
+
+/** ทุก endpoint ของสมุดที่อยู่คืนโปรไฟล์ฉบับล่าสุด จึงอัปเดตรายการได้ในครั้งเดียว */
+export async function addAddress(address: Omit<Address, "id">): Promise<User> {
+  const p = await request<BeProfile>("/users/me/addresses", {
+    method: "POST",
+    body: JSON.stringify(toAddressBody(address)),
+  });
+  return mapProfile(p);
+}
+
+export async function updateAddress(
+  addressId: string,
+  address: Omit<Address, "id">
+): Promise<User> {
+  const p = await request<BeProfile>(`/users/me/addresses/${addressId}`, {
+    method: "PUT",
+    body: JSON.stringify(toAddressBody(address)),
+  });
+  return mapProfile(p);
+}
+
+export async function deleteAddress(addressId: string): Promise<User> {
+  const p = await request<BeProfile>(`/users/me/addresses/${addressId}`, {
+    method: "DELETE",
   });
   return mapProfile(p);
 }

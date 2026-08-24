@@ -71,6 +71,10 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/users/me").authenticated()
                 .requestMatchers(HttpMethod.PUT, "/api/users/me").authenticated()
 
+                // สมุดที่อยู่ของตัวเอง — ต้องอยู่เหนือ permitAll ของ GET /api/users/** เช่นกัน
+                // ไม่งั้น GET /api/users/me/addresses จะกลายเป็น public แล้วใครก็อ่านได้
+                .requestMatchers("/api/users/me/addresses", "/api/users/me/addresses/**").authenticated()
+
                 // Public endpoints
                 .requestMatchers(HttpMethod.GET, "/api/artworks", "/api/artworks/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/users/**").permitAll()   // View Profile — ดูของใครก็ได้

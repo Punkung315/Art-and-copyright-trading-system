@@ -31,12 +31,20 @@ export function Field({
   htmlFor?: string;
   children: React.ReactNode;
 }) {
+  /*
+   * ให้ <label> ครอบตัวช่องกรอกไว้เลย
+   *
+   * ของเดิม label กับ input เป็นพี่น้องกันและไม่มี htmlFor ผูกไว้ จึงไม่มีความสัมพันธ์กัน
+   * ทางความหมายเลย — คลิกที่ข้อความไม่โฟกัสช่อง โปรแกรมอ่านหน้าจอไม่รู้ว่าช่องนี้คืออะไร
+   * และเทสอัตโนมัติต้องอ้างช่องด้วยลำดับ (.nth(3)) ซึ่งพังทันทีที่มีการเพิ่มช่องใหม่
+   * การให้ label ครอบไว้ผูกให้อัตโนมัติโดยไม่ต้องแจก id ทีละช่อง
+   */
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={htmlFor} className="text-sm font-medium text-stone-700">
-        {label}
+      <label htmlFor={htmlFor} className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-stone-700">{label}</span>
+        {children}
       </label>
-      {children}
       {error && <p className="text-xs text-rose-600">{error}</p>}
     </div>
   );
