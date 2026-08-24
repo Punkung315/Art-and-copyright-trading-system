@@ -9,6 +9,7 @@ import com.maejo.artmarket.enums.PaymentStatus;
 import com.maejo.artmarket.enums.Role;
 import com.maejo.artmarket.repository.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +24,7 @@ import java.util.Optional;
  *   3.1.28 Confirm Payment
  */
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class AdminService {
 
@@ -41,6 +43,20 @@ public class AdminService {
         return ApiResponse.ok(
                 users.isEmpty() ? "ไม่พบข้อมูลผู้ใช้งาน" : "พบผู้ใช้งาน " + users.size() + " ราย",
                 users.stream().map(UserSummaryResponse::from).toList());
+    }
+
+    /**
+     * ดูข้อมูลผู้ใช้รายคนแบบเต็ม — ใช้กับหน้า "ดูข้อมูลผู้ใช้งาน" ของ Admin
+     *
+     * ส่งทุกอย่างยกเว้นรหัสผ่าน (ดูหมายเหตุใน UserDetailResponse)
+     * ต้องอยู่ใน transaction เพราะ DTO ไล่อ่าน addresses / orders / artworks
+     * ซึ่งเป็น lazy collection ถ้าอ่านนอก transaction จะเจอ LazyInitializationException
+     */
+    @Transactional(readOnly = true)
+    public ApiResponse<UserDetailResponse> getUserDetail(Integer userId) {
+        return userRepository.findById(userId)
+                .map(u -> ApiResponse.ok("ดึงข้อมูลผู้ใช้งานสำเร็จ", UserDetailResponse.from(u)))
+                .orElse(ApiResponse.error("ไม่พบข้อมูลผู้ใช้งาน"));
     }
 
     // =========================================================================
@@ -80,21 +96,55 @@ public class AdminService {
         Seller seller = sellerOpt.get();
         if (seller.isVerified()) return ApiResponse.error("ผู้ขายรายนี้ได้รับการอนุมัติแล้ว");
 
+        // กันข้อมูลหายแบบเงียบๆ: Seller.artworks และ Seller.copyrightTransfers ตั้ง
+        // cascade = ALL + orphanRemoval = true ไว้ ถ้าลบ Seller ทิ้งทั้งที่ยังมีผลงานหรือสัญญาอยู่
+        // ข้อมูลพวกนั้นจะถูกลบตามไปหมด (ปกติไม่เกิด เพราะผู้ขายที่ยังไม่อนุมัติสร้างผลงานไม่ได้)
+        if (!req.getApproved()
+                && (!seller.getArtworks().isEmpty() || !seller.getCopyrightTransfers().isEmpty())) {
+            return ApiResponse.error(
+                    "ไม่สามารถปฏิเสธได้ เพราะผู้สมัครรายนี้มีผลงานหรือสัญญาลิขสิทธิ์อยู่ในระบบแล้ว");
+        }
+
         try {
             if (req.getApproved()) {
                 // อนุมัติ — Basic Flow ข้อ 6.1
                 seller.setVerified(true);
-                sellerRepository.save(seller);
+                sellerRepository.saveAndFlush(seller);
                 return ApiResponse.ok("อนุมัติผู้ขายสำเร็จ", SellerVerifyResponse.from(seller));
-            } else {
-                // ปฏิเสธ — ลบ Seller + คืน role เป็น BUYER
-                User user = seller.getUser();
-                sellerRepository.delete(seller);
-                user.setRole(Role.BUYER);
-                userRepository.save(user);
-                return ApiResponse.ok("ปฏิเสธผู้สมัครขายสำเร็จ", null);
             }
+
+            // ---------------------------- ปฏิเสธ ----------------------------
+            // คืน role เป็น BUYER แล้วเอาแถว Seller ออก
+            //
+            // ⚠️ ลำดับตรงนี้สำคัญ — ของเดิมเขียนว่า delete(seller) ก่อน แล้วค่อย save(user)
+            // ซึ่งพังเสมอ เพราะ User.seller เป็น
+            //     @OneToOne(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+            // การเรียก save(user) = em.merge(user) จะ cascade merge ลงไปที่ user.seller
+            // ซึ่งตอนนั้นเป็น entity ที่ถูก remove ไปแล้ว → Hibernate โยน exception ตอน flush/commit
+            // ซึ่งเกิด "หลัง" เมธอดนี้ return ไปแล้ว catch ข้างล่างจึงจับไม่ทัน
+            // หลุดไปที่ GlobalExceptionHandler กลายเป็น HTTP 500 "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง"
+            //
+            // วิธีที่ถูกคือตัดความสัมพันธ์ฝั่ง User ก่อน แล้วให้ orphanRemoval ลบแถว Seller ให้เอง
+            User user = seller.getUser();
+            user.setSeller(null);
+            user.setRole(Role.BUYER);
+            // flush ในนี้ เพื่อให้ error ที่เกิดจริง (เช่น FK) ถูก catch ด้านล่างจับ ไม่ใช่หลุดเป็น 500
+            userRepository.saveAndFlush(user);
+
+            // เผื่อกรณี orphanRemoval ไม่ทำงาน (เช่น mapping ถูกแก้ทีหลัง) — ลบซ้ำให้ชัวร์
+            // ต้องเช็คก่อนลบ ห้ามเรียก delete(seller) ตรงๆ เพราะถ้าถูก remove ไปแล้ว
+            // Spring Data จะพยายาม merge entity ที่ลบแล้วและโยน exception ซ้ำรอยเดิม
+            if (sellerRepository.existsById(sellerId)) {
+                sellerRepository.deleteById(sellerId);
+                sellerRepository.flush();
+            }
+
+            return ApiResponse.ok("ปฏิเสธผู้สมัครขายสำเร็จ", null);
+
         } catch (Exception e) {
+            // log ไว้ด้วย ไม่งั้นเวลาพังจริงจะไม่มีร่องรอยว่าเพราะอะไร
+            log.error("verifySeller failed (sellerId={}, approved={}): {}",
+                    sellerId, req.getApproved(), e.getMessage(), e);
             return ApiResponse.error("ไม่สามารถแก้ไขสถานะได้ กรุณาลองใหม่อีกครั้ง");
         }
     }

@@ -4,45 +4,151 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { RequireAdmin } from "@/components/RoleGuard";
 import { listUsers, listPayments } from "@/lib/api";
-import { Card, Container } from "@/components/ui";
+import { Payment, User } from "@/types";
+import { Card, Container, Spinner } from "@/components/ui";
+import { PendingBadge } from "@/components/PendingBadge";
+
+function Tile({
+  label,
+  value,
+  href,
+  highlight,
+}: {
+  label: string;
+  value: number;
+  href: string;
+  highlight?: boolean;
+}) {
+  return (
+    <Link href={href}>
+      <Card
+        className={`p-5 transition hover:shadow-md ${
+          highlight && value > 0 ? "border-amber-300 bg-amber-50" : ""
+        }`}
+      >
+        <p
+          className={`text-3xl font-bold ${
+            highlight && value > 0 ? "text-amber-700" : "text-stone-900"
+          }`}
+        >
+          {value}
+        </p>
+        <p className="mt-1 text-sm text-stone-500">{label}</p>
+      </Card>
+    </Link>
+  );
+}
+
+function Section({
+  title,
+  description,
+  href,
+  linkLabel,
+  pending,
+  children,
+}: {
+  title: string;
+  description: string;
+  href: string;
+  linkLabel: string;
+  pending: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="mb-10">
+      <div className="mb-3 flex flex-wrap items-center gap-3">
+        <h2 className="font-serif text-xl font-bold text-stone-900">{title}</h2>
+        {/* badge บอกจำนวนที่รอดำเนินการ — ซ่อนเองเมื่อเป็น 0 */}
+        <PendingBadge count={pending} />
+        <Link href={href} className="ml-auto text-sm text-stone-600 underline hover:text-stone-900">
+          {linkLabel}
+        </Link>
+      </div>
+      <p className="mb-4 text-sm text-stone-500">{description}</p>
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">{children}</div>
+    </section>
+  );
+}
 
 function AdminDashboardContent() {
-  const [userCount, setUserCount] = useState(0);
-  const [pendingSellers, setPendingSellers] = useState(0);
-  const [paymentCount, setPaymentCount] = useState(0);
-  const [pendingPayments, setPendingPayments] = useState(0);
+  const [users, setUsers] = useState<User[] | null>(null);
+  const [payments, setPayments] = useState<Payment[] | null>(null);
 
   useEffect(() => {
-    listUsers().then((users) => {
-      setUserCount(users.length);
-      setPendingSellers(users.filter((u) => u.sellerStatus === "pending").length);
-    });
-    listPayments().then((payments) => {
-      setPaymentCount(payments.length);
-      setPendingPayments(payments.filter((p) => p.status === "submitted").length);
-    });
+    listUsers().then(setUsers);
+    listPayments().then(setPayments);
   }, []);
 
-  const tiles = [
-    { label: "ผู้ใช้งานทั้งหมด", value: userCount, href: "/admin/users" },
-    { label: "รออนุมัติผู้ขาย", value: pendingSellers, href: "/admin/users" },
-    { label: "รายการโอนเงินทั้งหมด", value: paymentCount, href: "/admin/payments" },
-    { label: "รอตรวจสอบการโอนเงิน", value: pendingPayments, href: "/admin/payments" },
-  ];
+  if (users === null || payments === null) {
+    return (
+      <Container className="py-10">
+        <h1 className="mb-6 font-serif text-2xl font-bold text-stone-900">แดชบอร์ดผู้ดูแลระบบ</h1>
+        <Spinner />
+      </Container>
+    );
+  }
+
+  const pendingSellers = users.filter((u) => u.sellerStatus === "pending").length;
+  const approvedSellers = users.filter((u) => u.sellerStatus === "approved").length;
+  const buyersOnly = users.filter((u) => u.sellerStatus === "none").length;
+
+  const pendingPayments = payments.filter((p) => p.status === "submitted");
+  const confirmedPayments = payments.filter((p) => p.status === "confirmed");
+  const rejectedPayments = payments.filter((p) => p.status === "rejected");
+  const confirmedAmount = confirmedPayments.reduce((s, p) => s + p.grandTotal, 0);
 
   return (
     <Container className="py-10">
-      <h1 className="mb-6 font-serif text-2xl font-bold text-stone-900">แดชบอร์ดผู้ดูแลระบบ</h1>
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {tiles.map((tile) => (
-          <Link key={tile.label} href={tile.href}>
-            <Card className="p-5 transition hover:shadow-md">
-              <p className="text-3xl font-bold text-stone-900">{tile.value}</p>
-              <p className="mt-1 text-sm text-stone-500">{tile.label}</p>
-            </Card>
-          </Link>
-        ))}
-      </div>
+      <h1 className="mb-8 font-serif text-2xl font-bold text-stone-900">แดชบอร์ดผู้ดูแลระบบ</h1>
+
+      <Section
+        title="ผู้ใช้งาน"
+        description="ดูข้อมูลผู้ใช้ทั้งหมดและพิจารณาคำร้องขอเป็นผู้ขาย"
+        href="/admin/users"
+        linkLabel="ไปที่รายการผู้ใช้งาน →"
+        pending={pendingSellers}
+      >
+        <Tile label="ผู้ใช้งานทั้งหมด" value={users.length} href="/admin/users" />
+        <Tile
+          label="คำร้องขอเป็นผู้ขาย (รออนุมัติ)"
+          value={pendingSellers}
+          href="/admin/users"
+          highlight
+        />
+        <Tile label="ผู้ขายที่อนุมัติแล้ว" value={approvedSellers} href="/admin/users" />
+        <Tile label="ผู้ซื้อ (ไม่ได้สมัครขาย)" value={buyersOnly} href="/admin/users" />
+      </Section>
+
+      <Section
+        title="การโอนเงิน"
+        description="ตรวจสอบหลักฐานการโอนเงินของผู้ซื้อก่อนยืนยันให้ผู้ขาย"
+        href="/admin/payments"
+        linkLabel="ไปที่รายการการโอนเงิน →"
+        pending={pendingPayments.length}
+      >
+        <Tile label="รายการโอนเงินทั้งหมด" value={payments.length} href="/admin/payments" />
+        <Tile
+          label="รอตรวจสอบการโอนเงิน"
+          value={pendingPayments.length}
+          href="/admin/payments"
+          highlight
+        />
+        <Tile label="ยืนยันแล้ว" value={confirmedPayments.length} href="/admin/payments" />
+        <Tile label="ปฏิเสธ" value={rejectedPayments.length} href="/admin/payments" />
+      </Section>
+
+      <p className="text-sm text-stone-500">
+        ยอดเงินที่ยืนยันแล้วทั้งหมด{" "}
+        <span className="font-semibold text-stone-900">฿{confirmedAmount.toLocaleString()}</span>
+        {pendingPayments.length > 0 && (
+          <>
+            {" · "}รอตรวจสอบอีก{" "}
+            <span className="font-semibold text-amber-700">
+              ฿{pendingPayments.reduce((s, p) => s + p.grandTotal, 0).toLocaleString()}
+            </span>
+          </>
+        )}
+      </p>
     </Container>
   );
 }

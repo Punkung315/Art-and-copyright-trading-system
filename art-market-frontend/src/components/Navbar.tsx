@@ -5,19 +5,31 @@ import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
+import { useAdminPendingCounts } from "@/hooks/useAdminPendingCounts";
+import { PendingBadge } from "./PendingBadge";
 import { Container, Button } from "./ui";
 
-function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+function NavLink({
+  href,
+  children,
+  badge,
+}: {
+  href: string;
+  children: React.ReactNode;
+  /** จำนวนที่รอดำเนินการ — ใส่ 0 หรือไม่ใส่เลย badge จะไม่ขึ้น */
+  badge?: number;
+}) {
   const pathname = usePathname();
   const active = pathname === href;
   return (
     <Link
       href={href}
-      className={`rounded-md px-3 py-2 text-sm font-medium transition ${
+      className={`flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition ${
         active ? "bg-stone-900 text-white" : "text-stone-600 hover:bg-stone-100"
       }`}
     >
       {children}
+      {badge !== undefined && <PendingBadge count={badge} />}
     </Link>
   );
 }
@@ -25,6 +37,7 @@ function NavLink({ href, children }: { href: string; children: React.ReactNode }
 export function Navbar() {
   const { user, admin, logout } = useAuth();
   const { count } = useCart();
+  const pending = useAdminPendingCounts();
   const router = useRouter();
   const [open, setOpen] = useState(false);
 
@@ -48,7 +61,17 @@ export function Navbar() {
           {user && <NavLink href="/orders">คำสั่งซื้อของฉัน</NavLink>}
           {user && <NavLink href="/copyright">การโอนลิขสิทธิ์</NavLink>}
           {isSeller && <NavLink href="/seller">พื้นที่ผู้ขาย</NavLink>}
-          {admin && <NavLink href="/admin">ผู้ดูแลระบบ</NavLink>}
+          {admin && (
+            <>
+              <NavLink href="/admin">ผู้ดูแลระบบ</NavLink>
+              <NavLink href="/admin/users" badge={pending.sellers}>
+                ผู้ใช้งาน
+              </NavLink>
+              <NavLink href="/admin/payments" badge={pending.payments}>
+                การโอนเงิน
+              </NavLink>
+            </>
+          )}
         </nav>
 
         <div className="flex items-center gap-2">
@@ -123,7 +146,17 @@ export function Navbar() {
             {user && <NavLink href="/orders">คำสั่งซื้อของฉัน</NavLink>}
             {user && <NavLink href="/copyright">การโอนลิขสิทธิ์</NavLink>}
             {isSeller && <NavLink href="/seller">พื้นที่ผู้ขาย</NavLink>}
-            {admin && <NavLink href="/admin">ผู้ดูแลระบบ</NavLink>}
+            {admin && (
+              <>
+                <NavLink href="/admin">ผู้ดูแลระบบ</NavLink>
+                <NavLink href="/admin/users" badge={pending.sellers}>
+                  ผู้ใช้งาน
+                </NavLink>
+                <NavLink href="/admin/payments" badge={pending.payments}>
+                  การโอนเงิน
+                </NavLink>
+              </>
+            )}
             {user && <NavLink href="/profile">โปรไฟล์ของฉัน</NavLink>}
             {(user || admin) && (
               <button

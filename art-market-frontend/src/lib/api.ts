@@ -283,11 +283,28 @@ interface BePayment {
   sellerName: string | null;
   sellerId: number | null;
   sellerUserId: number | null;
+  buyerEmail?: string | null;
+  buyerPhone?: string | null;
+  totalPrice?: number | null;
   grandTotal: number;
   shippingCost: number;
   slipTransfer?: string | null;
   transferStatus: BePaymentStatus;
+  orderDate?: string | null;
+  confirmDateTime?: string | null;
+  orderStatus?: "PENDING" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | null;
+  itemCount?: number | null;
   artworks?: BeArtworkSummary[];
+  items?: BePaymentItemLine[];
+}
+
+interface BePaymentItemLine {
+  orderItemId: number;
+  artworkId: number;
+  artworkName: string;
+  price: number | null;
+  availabilityStatus: BeOrderItem["availabilityStatus"] | null;
+  shippingStatus: BeOrderItem["shippingStatus"];
 }
 
 interface BeCartItem {
@@ -340,6 +357,21 @@ interface BeUserSummary {
   fullName: string | null;
   phoneNumber: string | null;
   role: BeRole;
+  /** null = ไม่ได้สมัครเป็นผู้ขาย */
+  sellerId: number | null;
+  sellerVerified: boolean | null;
+  createdAt: string | null;
+}
+
+interface BeUserDetail extends BeUserSummary {
+  nationalNo: string | null;
+  profileImage: string | null;
+  buyerId: number | null;
+  addresses: BeAddress[] | null;
+  orderCount: number | null;
+  artworkCount: number | null;
+  copyrightSentCount: number | null;
+  copyrightReceivedCount: number | null;
 }
 
 interface BeSellerVerify {
@@ -575,7 +607,9 @@ function mapSellerOrder(o: BeSellerOrder, sellerName: string): Order {
 }
 
 function mapPayment(p: BePayment): Payment {
-  const totalPrice = (p.grandTotal ?? 0) - (p.shippingCost ?? 0);
+  // backend ส่ง totalPrice (ผลรวมราคาใน order_item) มาแล้ว ใช้ค่านั้นก่อน
+  // ที่ต้องมี fallback ไว้เพราะ endpoint เก่าบางตัวยังไม่ส่ง field นี้
+  const totalPrice = p.totalPrice ?? (p.grandTotal ?? 0) - (p.shippingCost ?? 0);
   return {
     id: String(p.paymentId),
     orderId: String(p.orderId),
@@ -592,7 +626,58 @@ function mapPayment(p: BePayment): Payment {
     grandTotal: p.grandTotal ?? 0,
     slipTransfer: p.slipTransfer ?? undefined,
     status: mapPaymentStatus(p.transferStatus),
-    createdAt: new Date().toISOString(),
+    // ใช้วันที่สั่งซื้อจริงจาก backend ถ้ามี (เดิมยัด "เวลาปัจจุบัน" ทำให้เรียงตามเวลาไม่ได้)
+    createdAt: p.orderDate ?? new Date().toISOString(),
+  };
+}
+
+/* ---- ชนิดข้อมูลเฉพาะหน้า Admin (ข้อมูลเต็มกว่าที่หน้าอื่นต้องใช้) ---- */
+
+export interface AdminPaymentDetail extends Payment {
+  buyerEmail?: string;
+  buyerPhone?: string;
+  orderDate?: string;
+  confirmDateTime?: string;
+  orderStatusRaw?: string;
+  items: {
+    id: string;
+    artworkId: string;
+    artworkName: string;
+    price: number;
+    availabilityStatus: AvailabilityStatus;
+    shippingStatus: ShippingStatus;
+  }[];
+}
+
+const AVAILABILITY_LINE_MAP: Record<string, AvailabilityStatus> = {
+  PENDING_CONFIRMATION: "waiting",
+  AVAILABLE: "confirmed",
+  UNAVAILABLE: "rejected",
+};
+
+const SHIPPING_LINE_MAP: Record<string, ShippingStatus> = {
+  PREPARING: "packed",
+  SHIPPED: "shipped",
+  DELIVERED: "delivered",
+};
+
+function mapPaymentDetail(p: BePayment): AdminPaymentDetail {
+  return {
+    ...mapPayment(p),
+    buyerEmail: p.buyerEmail ?? undefined,
+    buyerPhone: p.buyerPhone ?? undefined,
+    orderDate: p.orderDate ?? undefined,
+    confirmDateTime: p.confirmDateTime ?? undefined,
+    orderStatusRaw: p.orderStatus ?? undefined,
+    items: (p.items ?? []).map((i) => ({
+      id: String(i.orderItemId),
+      artworkId: String(i.artworkId),
+      artworkName: i.artworkName,
+      price: i.price ?? 0,
+      availabilityStatus:
+        AVAILABILITY_LINE_MAP[i.availabilityStatus ?? "PENDING_CONFIRMATION"] ?? "waiting",
+      shippingStatus: SHIPPING_LINE_MAP[i.shippingStatus ?? ""] ?? "not_shipped",
+    })),
   };
 }
 
@@ -780,26 +865,68 @@ export async function updateProfile(
   return mapProfile(p);
 }
 
-export async function listUsers(): Promise<User[]> {
-  const [users, pending] = await Promise.all([
-    requestOr<BeUserSummary[]>("/admin/users", []),
-    requestOr<BeSellerVerify[]>("/admin/sellers/pending", []),
-  ]);
-  const pendingUserIds = new Set(pending.map((s) => s.userId));
+/**
+ * แปลง sellerVerified (true/false/null) ที่ backend ส่งมาเป็นสถานะที่หน้าเว็บใช้
+ * null = ไม่ได้สมัครเป็นผู้ขาย, false = ยื่นแล้วรออนุมัติ, true = อนุมัติแล้ว
+ */
+function toSellerStatus(u: BeUserSummary): User["sellerStatus"] {
+  if (u.sellerVerified == null) return "none";
+  return u.sellerVerified ? "approved" : "pending";
+}
 
-  return users.map((u) => ({
+function mapUserSummary(u: BeUserSummary): User {
+  return {
     id: String(u.userId),
     username: u.username,
     password: "",
     email: u.email ?? "",
     fullName: u.fullName ?? undefined,
     phoneNumber: u.phoneNumber ?? undefined,
-    roles: u.role === "SELLER" ? ["buyer", "seller"] : ["buyer"],
-    // role=SELLER แต่ยังอยู่ในรายการรออนุมัติ → pending, ไม่งั้นถือว่าอนุมัติแล้ว
-    sellerStatus:
-      u.role === "SELLER" ? (pendingUserIds.has(u.userId) ? "pending" : "approved") : "none",
-    createdAt: new Date().toISOString(),
-  }));
+    roles: u.sellerId != null || u.role === "SELLER" ? ["buyer", "seller"] : ["buyer"],
+    sellerStatus: toSellerStatus(u),
+    createdAt: u.createdAt ?? new Date().toISOString(),
+    // รายการรวมไม่ส่งรูปโปรไฟล์มา (หนักเกินไป) จึงใช้รูปแทนที่สร้างจากชื่อ
+    // ถ้าปล่อยว่างไว้ <img> จะไม่มี src แล้วขึ้นไอคอนรูปเสียในตาราง
+    profileImage: avatarOrPlaceholder(null, u.userId, u.fullName ?? u.username),
+  };
+}
+
+export async function listUsers(): Promise<User[]> {
+  // เดิมต้องยิง /admin/sellers/pending อีกรอบเพื่อเดาว่าใครรออนุมัติ
+  // ตอนนี้ backend ส่ง sellerVerified มาในรายการเลย จึงเหลือ request เดียว
+  const users = await requestOr<BeUserSummary[]>("/admin/users", []);
+  return users.map(mapUserSummary);
+}
+
+/** ข้อมูลผู้ใช้แบบเต็มสำหรับหน้า Admin — ทุกอย่างยกเว้นรหัสผ่าน */
+export interface AdminUserDetail extends User {
+  addresses: Address[];
+  sellerId?: string;
+  buyerId?: string;
+  orderCount: number;
+  artworkCount: number;
+  copyrightSentCount: number;
+  copyrightReceivedCount: number;
+}
+
+export async function getUserDetail(userId: string): Promise<AdminUserDetail | undefined> {
+  try {
+    const u = await request<BeUserDetail>(`/admin/users/${userId}`);
+    return {
+      ...mapUserSummary(u),
+      nationalNo: u.nationalNo ?? undefined,
+      profileImage: avatarOrPlaceholder(u.profileImage, u.userId, u.fullName ?? u.username),
+      addresses: (u.addresses ?? []).map(mapAddress),
+      sellerId: u.sellerId != null ? String(u.sellerId) : undefined,
+      buyerId: u.buyerId != null ? String(u.buyerId) : undefined,
+      orderCount: u.orderCount ?? 0,
+      artworkCount: u.artworkCount ?? 0,
+      copyrightSentCount: u.copyrightSentCount ?? 0,
+      copyrightReceivedCount: u.copyrightReceivedCount ?? 0,
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -1206,10 +1333,10 @@ export async function listPayments(): Promise<Payment[]> {
   return list.map(mapPayment);
 }
 
-export async function getPayment(id: string): Promise<Payment | undefined> {
+export async function getPayment(id: string): Promise<AdminPaymentDetail | undefined> {
   try {
     const p = await request<BePayment>(`/admin/payments/${id}`);
-    return mapPayment(p);
+    return mapPaymentDetail(p);
   } catch {
     return undefined;
   }

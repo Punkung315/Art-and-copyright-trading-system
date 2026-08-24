@@ -15,6 +15,7 @@ import java.util.List;
  *
  * POST /api/admin/login               Admin login (แยกจาก User login)
  * GET  /api/admin/users               List User       (ยูสเคส 3.1.25)
+ * GET  /api/admin/users/{id}          ดูข้อมูลผู้ใช้รายคน (ทุก field ยกเว้นรหัสผ่าน)
  * GET  /api/admin/sellers/pending     รายการรออนุมัติ
  * GET  /api/admin/sellers/{id}        ดูรายละเอียด Seller
  * PATCH /api/admin/sellers/{id}/verify Verify Seller  (ยูสเคส 3.1.26)
@@ -62,6 +63,17 @@ public class AdminController {
     @GetMapping("/users")
     public ResponseEntity<ApiResponse<List<UserSummaryResponse>>> listUsers() {
         return ResponseEntity.ok(adminService.listUsers());
+    }
+
+    /**
+     * GET /api/admin/users/{id}
+     * ดูข้อมูลผู้ใช้รายคนแบบเต็ม (ทุก field ยกเว้นรหัสผ่าน) + ที่อยู่ + ตัวเลขสรุปกิจกรรม
+     * Response: { userId, username, email, ..., addresses: [...], orderCount, artworkCount, ... }
+     */
+    @GetMapping("/users/{id}")
+    public ResponseEntity<ApiResponse<UserDetailResponse>> getUserDetail(
+            @PathVariable Integer id) {
+        return ResponseEntity.ok(adminService.getUserDetail(id));
     }
 
     // -----------------------------------------------------------------------
