@@ -1,6 +1,7 @@
 package com.maejo.artmarket.service;
 
 import com.maejo.artmarket.dto.*;
+import com.maejo.artmarket.entity.Address;
 import com.maejo.artmarket.entity.Artwork;
 import com.maejo.artmarket.entity.Seller;
 import com.maejo.artmarket.enums.ArtworkStatus;
@@ -10,6 +11,7 @@ import com.maejo.artmarket.repository.CartItemRepository;
 import com.maejo.artmarket.repository.OrderItemRepository;
 import com.maejo.artmarket.repository.SellerRepository;
 import com.maejo.artmarket.repository.UserRepository;
+import com.maejo.artmarket.shipping.ShippingRateService;
 import org.springframework.data.domain.Sort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -36,9 +38,27 @@ public class ArtworkService {
     private final OrderItemRepository orderItemRepository;
     private final CartItemRepository  cartItemRepository;
     private final UserRepository      userRepository;
+    private final ShippingRateService shippingRateService;
 
     /** ค่าที่ไม่มีทางตรงกับข้อมูลจริง ใช้กันไม่ให้ IN () กลายเป็น list ว่างซึ่งทำให้ SQL พัง */
     private static final String NO_MATCH = "__NO_MATCH__";
+
+    /**
+     * คำนวณค่าส่ง "ประเมิน" ใหม่ทุกครั้งที่น้ำหนัก/ขนาด/ขนส่งเปลี่ยน
+     * เก็บลง artwork.shippingCost ไว้เป็น cache สำหรับโชว์บนหน้ารายละเอียดงาน
+     * ค่าส่งที่คิดเงินจริงคำนวณแยกตอนยืนยันคำสั่งซื้อ เมื่อรู้ที่อยู่ปลายทางแล้ว
+     */
+    private void refreshShippingEstimate(Artwork artwork) {
+        artwork.setShippingCost(
+                shippingRateService.estimate(
+                        artwork.getShippingCompany(),
+                        artwork.getWeight(),
+                        artwork.getWidth(),
+                        artwork.getLength(),
+                        artwork.getHeight()
+                ).getCost()
+        );
+    }
 
     // =========================================================================
     // ยูสเคส 3.1.1 Search Art
@@ -259,7 +279,7 @@ public class ArtworkService {
                     .price(req.getPrice())
                     .publishDate(req.getPublishDate())
                     .copyrightPrice(req.getCopyrightPrice())
-                    .shippingCost(req.getShippingCost())
+                    .shippingCompany(req.getShippingCompany())
                     .weight(req.getWeight())
                     .width(req.getWidth())
                     .length(req.getLength())
@@ -269,6 +289,7 @@ public class ArtworkService {
                     .seller(seller)
                     .build();
 
+            refreshShippingEstimate(artwork);
             artworkRepository.save(artwork);
             return ApiResponse.ok("บันทึกงานศิลปะสำเร็จ", ArtworkDetailResponse.from(artwork));
 
@@ -331,12 +352,15 @@ public class ArtworkService {
         if (StringUtils.hasText(req.getDescription()))      artwork.setDescription(req.getDescription());
         if (req.getPrice()          != null) artwork.setPrice(req.getPrice());
         if (req.getCopyrightPrice() != null) artwork.setCopyrightPrice(req.getCopyrightPrice());
-        if (req.getShippingCost()   != null) artwork.setShippingCost(req.getShippingCost());
         if (StringUtils.hasText(req.getPublishDate()))      artwork.setPublishDate(req.getPublishDate());
+        if (req.getShippingCompany() != null) artwork.setShippingCompany(req.getShippingCompany());
         if (req.getWeight() != null) artwork.setWeight(req.getWeight());
         if (req.getWidth()  != null) artwork.setWidth(req.getWidth());
         if (req.getLength() != null) artwork.setLength(req.getLength());
         if (req.getHeight() != null) artwork.setHeight(req.getHeight());
+
+        // ค่าส่งประเมินต้องขยับตามทุกครั้ง ไม่งั้นผู้ขายแก้น้ำหนักแล้วราคายังค้างของเดิม
+        refreshShippingEstimate(artwork);
 
         try {
             artworkRepository.save(artwork);
@@ -372,6 +396,22 @@ public class ArtworkService {
 
         if (artwork.getPublishStatus() == PublishStatus.PUBLISHED) {
             return ApiResponse.error("งานศิลปะนี้ถูกเผยแพร่แล้ว");
+        }
+
+        /*
+         * ต้องมีที่อยู่ต้นทางก่อน ไม่งั้นคิดค่าจัดส่งไม่ได้
+         *
+         * ฝั่งผู้ซื้อบังคับให้เลือกที่อยู่ปลายทางก่อนยืนยันคำสั่งซื้ออยู่แล้ว
+         * ฝั่งผู้ขายก็ต้องบังคับเหมือนกัน เพราะค่าส่งใช้ "ทั้งสองปลาย" ในการคำนวณ
+         * ถ้าปล่อยผ่าน ระบบจะเงียบๆ ใช้เรทข้ามจังหวัดแทน แล้วผู้ขายไม่มีทางรู้เลย
+         * ว่าค่าส่งที่ลูกค้าเห็นสูงกว่าความเป็นจริงเพราะตัวเองยังไม่ได้กรอกที่อยู่
+         */
+        boolean hasPickupAddress = seller.getUser().getAddresses().stream()
+                .anyMatch(Address::isPickupAddress);
+        if (!hasPickupAddress) {
+            return ApiResponse.error(
+                    "กรุณาตั้งที่อยู่ต้นทางสำหรับจัดส่งในหน้าโปรไฟล์ก่อนเผยแพร่ผลงาน "
+                            + "ระบบใช้จังหวัดต้นทางคำนวณค่าจัดส่ง");
         }
 
         try {

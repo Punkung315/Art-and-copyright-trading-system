@@ -111,7 +111,36 @@ export default function ArtDetailPage({ params }: { params: Promise<{ id: string
             <p className="text-stone-500">ขนาดงานศิลปะ (กว้าง x ยาว)</p>
             <p className="font-medium text-stone-800">{formatArtworkSize(artwork)}</p>
           </div>
+          {artwork.weight != null && (
+            <div>
+              <p className="text-stone-500">น้ำหนัก</p>
+              <p className="font-medium text-stone-800">{artwork.weight} กก.</p>
+            </div>
+          )}
         </Card>
+
+        {/*
+          ค่าจัดส่งที่โชว์ตรงนี้เป็น "ค่าประเมิน" เส้นทางข้ามจังหวัด
+          ค่าจริงคำนวณตอนยืนยันคำสั่งซื้อ เมื่อผู้ซื้อเลือกที่อยู่ปลายทางแล้ว
+          จึงต้องเขียนกำกับให้ชัด ไม่ใช่โชว์ตัวเลขลอยๆ ให้เข้าใจว่าเป็นราคาสุดท้าย
+        */}
+        {artwork.shippingCompanyName && (
+          <div className="rounded-lg bg-stone-100 px-3 py-2 text-sm text-stone-600">
+            จัดส่งโดย{" "}
+            <span className="font-medium text-stone-800">{artwork.shippingCompanyName}</span>
+            {artwork.shippingCost != null && (
+              <>
+                {" "}· ค่าจัดส่งประมาณ{" "}
+                <span className="font-medium text-stone-800">
+                  ฿{artwork.shippingCost.toLocaleString()}
+                </span>
+              </>
+            )}
+            <span className="mt-0.5 block text-xs text-stone-500">
+              ค่าจัดส่งจริงคำนวณจากจังหวัดปลายทาง จะแสดงตอนยืนยันคำสั่งซื้อ
+            </span>
+          </div>
+        )}
 
         <div>
           <p className="mb-1 text-sm font-medium text-stone-700">คำอธิบายผลงาน</p>

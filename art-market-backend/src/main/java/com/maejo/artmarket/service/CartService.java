@@ -7,6 +7,8 @@ import com.maejo.artmarket.enums.AvailabilityStatus;
 import com.maejo.artmarket.enums.OrderStatus;
 import com.maejo.artmarket.enums.PublishStatus;
 import com.maejo.artmarket.repository.*;
+import com.maejo.artmarket.shipping.ShippingQuote;
+import com.maejo.artmarket.shipping.ShippingRateService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +32,8 @@ public class CartService {
     private final BuyerRepository    buyerRepository;
     private final OrdersRepository   ordersRepository;
     private final OrderItemRepository orderItemRepository;
+    private final AddressRepository  addressRepository;
+    private final ShippingRateService shippingRateService;
 
     // =========================================================================
     // ยูสเคส 3.1.8 Add Cart
@@ -139,6 +143,38 @@ public class CartService {
         }
     }
 
+    /**
+     * คำนวณค่าจัดส่งจริงของชิ้นงาน 1 ชิ้น ไปยังที่อยู่ปลายทางที่ผู้ซื้อเลือก
+     *
+     * จังหวัดต้นทางเอาจาก "ที่อยู่ต้นทางส่งของ" ที่ผู้ขายตั้งไว้ (Address.pickupAddress)
+     * ไม่ใช่ที่อยู่แรกในสมุด เพราะผู้ขายเรียงหรือลบที่อยู่ได้ ถ้าอิงลำดับ
+     * ค่าส่งของทุกชิ้นงานจะเปลี่ยนตามการจัดสมุดที่อยู่โดยไม่มีใครตั้งใจ
+     *
+     * ตามปกติผู้ขายต้องมีที่อยู่ต้นทางก่อนถึงจะเผยแพร่งานได้ (ดู ArtworkService.publishArt)
+     * ที่ยัง fallback ไว้เผื่องานเก่าที่เผยแพร่ไปก่อนมีกฎนี้ — ถือเป็นเส้นทางข้ามโซน
+     * ซึ่งเป็นเรทแพงกว่า ประเมินสูงดีกว่าประเมินต่ำแล้วผู้ขายต้องจ่ายส่วนต่างเอง
+     */
+    private ShippingQuote quoteFor(Artwork artwork, Address destination) {
+
+        List<Address> sellerAddresses = artwork.getSeller().getUser().getAddresses();
+        String originProvince = sellerAddresses.stream()
+                .filter(Address::isPickupAddress)
+                .findFirst()
+                .or(() -> sellerAddresses.stream().findFirst())
+                .map(Address::getProvince)
+                .orElse(null);
+
+        return shippingRateService.quote(
+                artwork.getShippingCompany(),
+                artwork.getWeight(),
+                artwork.getWidth(),
+                artwork.getLength(),
+                artwork.getHeight(),
+                originProvince,
+                destination.getProvince()
+        );
+    }
+
     // =========================================================================
     // ยูสเคส 3.1.11 Confirm Order
     // Basic Flow: ยืนยันคำสั่งซื้อทั้งตะกร้า → สร้าง Order + OrderItem จาก CartItem ทั้งหมด
@@ -148,7 +184,7 @@ public class CartService {
     // =========================================================================
 
     @Transactional
-    public ApiResponse<OrderDetailResponse> confirmOrder(String username) {
+    public ApiResponse<OrderDetailResponse> confirmOrder(String username, ConfirmOrderRequest req) {
 
         Buyer buyer = buyerRepository.findByUser_Username(username).orElse(null);
         if (buyer == null) {
@@ -162,22 +198,46 @@ public class CartService {
             return ApiResponse.error("คำสั่งซื้อไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง");
         }
 
+        // ต้องมีที่อยู่ปลายทางก่อน ไม่งั้นคำนวณค่าจัดส่งไม่ได้
+        if (req == null || req.getAddressId() == null) {
+            return ApiResponse.error("กรุณาเลือกที่อยู่สำหรับจัดส่งก่อนยืนยันคำสั่งซื้อ");
+        }
+
+        Address destination = addressRepository.findById(req.getAddressId()).orElse(null);
+        if (destination == null) {
+            return ApiResponse.error("ไม่พบที่อยู่ที่เลือก กรุณาเลือกใหม่อีกครั้ง");
+        }
+
+        // ที่อยู่ต้องเป็นของผู้ซื้อเอง กันไม่ให้ส่งของไปที่อยู่ของคนอื่นด้วยการเดา id
+        if (!destination.getUser().getUserId().equals(buyer.getUser().getUserId())) {
+            return ApiResponse.error("ไม่พบที่อยู่ที่เลือก กรุณาเลือกใหม่อีกครั้ง");
+        }
+
         try {
-            // Basic Flow ข้อ 5.1 — สร้าง Order
+            // Basic Flow ข้อ 5.1 — สร้าง Order พร้อมสำเนาที่อยู่ปลายทาง
             Orders order = Orders.builder()
                     .buyer(buyer)
                     .orderStatus(OrderStatus.PENDING)
                     .confirmDateTime(java.time.LocalDateTime.now())
+                    .shippingAddress(ShippingAddress.from(destination))
                     .build();
             ordersRepository.save(order);
 
             // สร้าง OrderItem จากแต่ละ CartItem — ระบบถามความพร้อมไปยังผู้ขาย
             // (ตั้ง availabilityStatus = PENDING_CONFIRMATION รอผู้ขาย Confirm Availability)
             for (CartItem cartItem : cartItems) {
+
+                // ล็อกค่าจัดส่ง ณ ตอนนี้ ด้วยตารางราคาเวอร์ชันปัจจุบัน
+                // ต้องเป็นค่าคงที่ตลอดอายุออเดอร์ ไม่งั้นยอดที่ผู้ซื้อโอนมาแล้วจะไม่ตรง
+                ShippingQuote quote = quoteFor(cartItem.getArtwork(), destination);
+
                 OrderItem orderItem = OrderItem.builder()
                         .artwork(cartItem.getArtwork())
                         .order(order)
                         .price(cartItem.getPriceAtAdd())
+                        .shippingCost(quote.getCost())
+                        .shippingCompany(quote.getCompany())
+                        .shippingRateVersion(quote.getRateVersion())
                         .availabilityStatus(AvailabilityStatus.PENDING_CONFIRMATION)
                         .build();
                 orderItemRepository.save(orderItem);

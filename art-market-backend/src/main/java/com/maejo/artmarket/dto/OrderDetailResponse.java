@@ -59,6 +59,12 @@ public class OrderDetailResponse {
     private Integer buyerUserId;
     private Integer sellerUserId;
 
+    /** ที่อยู่ปลายทางแบบบรรทัดเดียว ไว้โชว์บนหน้าคำสั่งซื้อของทั้งผู้ซื้อและผู้ขาย */
+    private String shippingAddress;
+
+    /** จังหวัดปลายทาง — เป็นตัวกำหนดโซนค่าจัดส่ง จึงแยกออกมาให้เห็นชัด */
+    private String shippingProvince;
+
     /** null ถ้ายังไม่ได้ชำระเงิน */
     private Integer       paymentId;
     private PaymentStatus paymentStatus;
@@ -87,9 +93,18 @@ public class OrderDetailResponse {
         private Integer sellerUserId;
         private String  sellerName;
 
+        /** ค่าจัดส่งของชิ้นนี้ ล็อกไว้ตอนยืนยันคำสั่งซื้อ */
+        private Double  shippingCost;
+        private String  shippingCompanyName;
+
         public static OrderItemDetail from(OrderItem item) {
             var seller = item.getArtwork().getSeller();
+            var company = item.getShippingCompany() != null
+                    ? item.getShippingCompany()
+                    : item.getArtwork().getShippingCompany();
             return OrderItemDetail.builder()
+                    .shippingCost(shippingOf(item))
+                    .shippingCompanyName(company != null ? company.getDisplayName() : null)
                     .orderItemId(item.getOrderItemId())
                     .artworkId(item.getArtwork().getArtworkId())
                     .artworkName(item.getArtwork().getArtworkName())
@@ -104,14 +119,27 @@ public class OrderDetailResponse {
         }
     }
 
+    /**
+     * ค่าจัดส่งของ 1 ชิ้น อ่านจาก order_item ที่ล็อกไว้ตอนยืนยันคำสั่งซื้อ
+     *
+     * ห้ามอ่านจาก artwork.shippingCost — นั่นเป็นราคาประเมินที่ผู้ขายแก้ได้ตลอด
+     * ถ้าอ่านสด ยอดของคำสั่งซื้อที่ผู้ซื้อโอนเงินไปแล้วจะเปลี่ยนตามผู้ขายไปด้วย
+     *
+     * fallback ไปที่ artwork ให้เฉพาะออเดอร์เก่าที่สร้างก่อนมีคอลัมน์นี้เท่านั้น
+     */
+    private static double shippingOf(OrderItem item) {
+        if (item.getShippingCost() != null) return item.getShippingCost();
+        var artwork = item.getArtwork();
+        return artwork != null && artwork.getShippingCost() != null ? artwork.getShippingCost() : 0.0;
+    }
+
     public static OrderDetailResponse from(Orders order) {
         double total = order.getOrderItems().stream()
                 .mapToDouble(OrderItem::getPrice)
                 .sum();
 
         double shipping = order.getOrderItems().stream()
-                .map(OrderItem::getArtwork)
-                .mapToDouble(a -> a.getShippingCost() != null ? a.getShippingCost() : 0.0)
+                .mapToDouble(OrderDetailResponse::shippingOf)
                 .sum();
 
         // ยอดที่ต้องจ่ายจริง = เฉพาะชิ้นที่ผู้ขายยืนยันว่าพร้อมขาย
@@ -124,8 +152,7 @@ public class OrderDetailResponse {
                 .sum();
 
         double payableShipping = payableItems.stream()
-                .map(OrderItem::getArtwork)
-                .mapToDouble(a -> a.getShippingCost() != null ? a.getShippingCost() : 0.0)
+                .mapToDouble(OrderDetailResponse::shippingOf)
                 .sum();
 
         List<OrderItemDetail> items = order.getOrderItems().stream()
@@ -151,6 +178,10 @@ public class OrderDetailResponse {
                 .payableTotalAmount(payableTotal)
                 .payableShippingCost(payableShipping)
                 .payableGrandTotal(payableTotal + payableShipping)
+                .shippingAddress(order.getShippingAddress() != null
+                        ? order.getShippingAddress().toDisplayString() : null)
+                .shippingProvince(order.getShippingAddress() != null
+                        ? order.getShippingAddress().getProvince() : null)
                 .buyerId(order.getBuyer().getBuyerId())
                 .buyerName(order.getBuyer().getUser().getFullName())
                 .buyerUserId(order.getBuyer().getUser().getUserId())

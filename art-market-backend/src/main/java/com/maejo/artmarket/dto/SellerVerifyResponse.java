@@ -37,6 +37,8 @@ public class SellerVerifyResponse {
         private String district;
         private String province;
         private String postalCode;
+        /** true = ที่อยู่ต้นทางที่ใช้คิดค่าจัดส่ง (ผู้ขายมีได้รายการเดียว) */
+        private boolean pickupAddress;
 
         public static AddressResponse from(Address a) {
             return AddressResponse.builder()
@@ -48,6 +50,7 @@ public class SellerVerifyResponse {
                     .district(a.getDistrict())
                     .province(a.getProvince())
                     .postalCode(a.getPostalCode())
+                    .pickupAddress(a.isPickupAddress())
                     .build();
         }
     }

@@ -63,12 +63,14 @@ public class CartController {
     /**
      * ยูสเคส 3.1.11 Confirm Order
      * POST /api/cart/confirm
-     * ไม่มี body — ยืนยันสินค้าทั้งหมดที่อยู่ในตะกร้าตอนนี้เป็น Order เดียว
+     * ยืนยันสินค้าทั้งหมดที่อยู่ในตะกร้าตอนนี้เป็น Order เดียว
+     * ต้องส่ง addressId มาด้วยเสมอ เพราะค่าจัดส่งคำนวณจากจังหวัดปลายทาง
      * หลังยืนยันแล้วตะกร้าจะว่าง และงานแต่ละชิ้นจะเปลี่ยนเป็น RESERVED รอผู้ขาย Confirm Availability
      */
     @PostMapping("/confirm")
     public ResponseEntity<ApiResponse<OrderDetailResponse>> confirmOrder(
-            @AuthenticationPrincipal UserDetails userDetails) {
-        return ResponseEntity.ok(cartService.confirmOrder(userDetails.getUsername()));
+            @AuthenticationPrincipal UserDetails userDetails,
+            @Valid @RequestBody ConfirmOrderRequest request) {
+        return ResponseEntity.ok(cartService.confirmOrder(userDetails.getUsername(), request));
     }
 }

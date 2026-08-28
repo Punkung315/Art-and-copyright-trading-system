@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, use, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { RequireSeller } from "@/components/RoleGuard";
 import { useToast } from "@/context/ToastContext";
@@ -12,13 +13,16 @@ import {
   ApiError,
 } from "@/lib/api";
 import { Artwork } from "@/types";
+import { useAuth } from "@/context/AuthContext";
 import { Button, Card, Container, Field, Input, Select, Spinner, Textarea } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ImageUploadField } from "@/components/ImageUploadField";
+import { ShippingPicker } from "@/components/ShippingPicker";
 import { validateNotEmpty } from "@/lib/validation";
 
 function EditArtContent({ id }: { id: string }) {
   const { notify } = useToast();
+  const { user } = useAuth();
   const router = useRouter();
   const [artwork, setArtwork] = useState<Artwork | null | undefined>(undefined);
   const [form, setForm] = useState<Partial<Artwork>>({});
@@ -51,6 +55,9 @@ function EditArtContent({ id }: { id: string }) {
       price: !form.price || form.price <= 0 ? "กรุณากรอกราคาที่ถูกต้อง" : null,
       width: !form.width || form.width <= 0 ? "กรุณากรอกความกว้างเป็นตัวเลขมากกว่า 0" : null,
       height: !form.height || form.height <= 0 ? "กรุณากรอกความยาวเป็นตัวเลขมากกว่า 0" : null,
+      length: !form.length || form.length <= 0 ? "กรุณากรอกความหนาเป็นตัวเลขมากกว่า 0" : null,
+      weight: !form.weight || form.weight <= 0 ? "กรุณากรอกน้ำหนักเป็นตัวเลขมากกว่า 0" : null,
+      shippingCompany: form.shippingCompany ? null : "กรุณาเลือกบริษัทขนส่ง",
     };
     setErrors(nextErrors);
     if (Object.values(nextErrors).some(Boolean)) {
@@ -101,6 +108,12 @@ function EditArtContent({ id }: { id: string }) {
     );
   }
 
+  /*
+   * ค่าจัดส่งคิดจากจังหวัดต้นทาง ผู้ขายจึงต้องตั้งที่อยู่ต้นทางก่อนเผยแพร่
+   * backend ปฏิเสธอยู่แล้ว แต่ต้องบอกล่วงหน้าตรงนี้ด้วย ไม่ใช่ปล่อยให้กดแล้วเด้ง error
+   */
+  const hasPickupAddress = (user?.addresses ?? []).some((a) => a.pickupAddress);
+
   // งานที่ RESERVED/SOLD ถอนออกไม่ได้ เพราะผู้ซื้อยังต้องเปิดดูจากคำสั่งซื้อของเขา
   const canUnpublish =
     artwork.artworkStatus === "published" && (artwork.salesStatus ?? "available") === "available";
@@ -120,7 +133,7 @@ function EditArtContent({ id }: { id: string }) {
               ใบรับรองผลงาน
             </Button>
             {artwork.artworkStatus === "draft" && (
-              <Button onClick={handlePublish} disabled={publishing}>
+              <Button onClick={handlePublish} disabled={publishing || !hasPickupAddress}>
                 {publishing ? "กำลังเผยแพร่..." : "เผยแพร่ผลงาน"}
               </Button>
             )}
@@ -141,6 +154,17 @@ function EditArtContent({ id }: { id: string }) {
           <p className="mb-6 rounded-lg bg-stone-100 p-3 text-sm text-stone-600">
             งานชิ้นนี้อยู่ในคำสั่งซื้อแล้ว จึงยกเลิกการเผยแพร่ไม่ได้ —
             ผู้ซื้อยังต้องเปิดดูรายละเอียดงานจากคำสั่งซื้อของเขาได้
+          </p>
+        )}
+
+        {/* บอกเหตุผลที่ปุ่มเผยแพร่กดไม่ได้ พร้อมลิงก์ไปแก้ให้เลย */}
+        {artwork.artworkStatus === "draft" && !hasPickupAddress && (
+          <p className="mb-6 rounded-lg bg-rose-50 p-3 text-sm text-rose-800">
+            ยังเผยแพร่ไม่ได้ — คุณยังไม่ได้ตั้งที่อยู่ต้นทางสำหรับจัดส่ง
+            ระบบใช้จังหวัดต้นทางคำนวณค่าจัดส่งให้ผู้ซื้อ{" "}
+            <Link href="/profile/edit" className="font-medium underline">
+              ไปตั้งที่อยู่ต้นทาง
+            </Link>
           </p>
         )}
 
@@ -199,6 +223,25 @@ function EditArtContent({ id }: { id: string }) {
               onChange={(e) => set("height", e.target.value === "" ? undefined : Number(e.target.value))}
             />
           </Field>
+          {/* ขนส่งคิดราคาจากผลบวกสามด้าน (ก+ย+ส) จึงต้องมีความหนาด้วย */}
+          <Field label="ความหนา (ซม.)" error={errors.length}>
+            <Input
+              type="number"
+              min={0}
+              step="0.1"
+              value={form.length ?? ""}
+              onChange={(e) => set("length", e.target.value === "" ? undefined : Number(e.target.value))}
+            />
+          </Field>
+          <Field label="น้ำหนักพร้อมแพ็ค (กก.)" error={errors.weight}>
+            <Input
+              type="number"
+              min={0}
+              step="0.1"
+              value={form.weight ?? ""}
+              onChange={(e) => set("weight", e.target.value === "" ? undefined : Number(e.target.value))}
+            />
+          </Field>
           <Field label="ราคา (price)" error={errors.price}>
             <Input
               type="number"
@@ -207,6 +250,16 @@ function EditArtContent({ id }: { id: string }) {
               onChange={(e) => set("price", Number(e.target.value))}
             />
           </Field>
+
+          <ShippingPicker
+            value={form.shippingCompany}
+            onChange={(c) => set("shippingCompany", c)}
+            weight={form.weight}
+            width={form.width}
+            length={form.length}
+            height={form.height}
+            error={errors.shippingCompany}
+          />
 
           <div className="flex items-center gap-2 pt-6">
             <input

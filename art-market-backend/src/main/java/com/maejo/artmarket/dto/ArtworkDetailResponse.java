@@ -3,6 +3,7 @@ package com.maejo.artmarket.dto;
 import com.maejo.artmarket.entity.Artwork;
 import com.maejo.artmarket.enums.ArtworkStatus;
 import com.maejo.artmarket.enums.PublishStatus;
+import com.maejo.artmarket.enums.ShippingCompany;
 import lombok.Builder;
 import lombok.Data;
 
@@ -27,7 +28,15 @@ public class ArtworkDetailResponse {
     private String description;
     private Double price;
     private Double copyrightPrice;
+
+    /** ค่าจัดส่ง "ประเมิน" ยังไม่รู้ปลายทาง ค่าจริงคิดตอนยืนยันคำสั่งซื้อ */
     private Double shippingCost;
+
+    private ShippingCompany shippingCompany;
+
+    /** ชื่อขนส่งแบบอ่านได้ เช่น "ไปรษณีย์ไทย (EMS)" ไว้โชว์ตรงๆ ไม่ต้องแปลฝั่ง frontend */
+    private String shippingCompanyName;
+
     private Double weight;
     private Double width;
     private Double length;
@@ -63,6 +72,9 @@ public class ArtworkDetailResponse {
                 .price(artwork.getPrice())
                 .copyrightPrice(artwork.getCopyrightPrice())
                 .shippingCost(artwork.getShippingCost())
+                .shippingCompany(artwork.getShippingCompany())
+                .shippingCompanyName(artwork.getShippingCompany() != null
+                        ? artwork.getShippingCompany().getDisplayName() : null)
                 .weight(artwork.getWeight())
                 .width(artwork.getWidth())
                 .length(artwork.getLength())

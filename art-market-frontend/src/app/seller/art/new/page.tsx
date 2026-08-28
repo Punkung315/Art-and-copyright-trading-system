@@ -6,8 +6,10 @@ import { RequireSeller } from "@/components/RoleGuard";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { addArtwork, ApiError } from "@/lib/api";
+import { ShippingCompanyCode } from "@/types";
 import { Button, Card, Container, Field, Input, Select, Textarea } from "@/components/ui";
 import { ImageUploadField } from "@/components/ImageUploadField";
+import { ShippingPicker } from "@/components/ShippingPicker";
 import { validateNotEmpty } from "@/lib/validation";
 
 function AddArtContent() {
@@ -24,6 +26,9 @@ function AddArtContent() {
   // เก็บเป็น string เพราะช่องว่างต้องแยกจาก 0 ได้ (backend บังคับ artworkSize > 0)
   const [width, setWidth] = useState("");
   const [height, setHeight] = useState("");
+  const [length, setLength] = useState("");
+  const [weight, setWeight] = useState("");
+  const [shippingCompany, setShippingCompany] = useState<ShippingCompanyCode | undefined>(undefined);
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [copyrightAvailable, setCopyrightAvailable] = useState(true);
@@ -44,6 +49,9 @@ function AddArtContent() {
       price: !price || Number(price) <= 0 ? "กรุณากรอกราคาที่ถูกต้อง" : null,
       width: !width || Number(width) <= 0 ? "กรุณากรอกความกว้างเป็นตัวเลขมากกว่า 0" : null,
       height: !height || Number(height) <= 0 ? "กรุณากรอกความยาวเป็นตัวเลขมากกว่า 0" : null,
+      length: !length || Number(length) <= 0 ? "กรุณากรอกความหนาเป็นตัวเลขมากกว่า 0" : null,
+      weight: !weight || Number(weight) <= 0 ? "กรุณากรอกน้ำหนักเป็นตัวเลขมากกว่า 0" : null,
+      shippingCompany: shippingCompany ? null : "กรุณาเลือกบริษัทขนส่ง",
     };
     setErrors(nextErrors);
     if (Object.values(nextErrors).some(Boolean)) {
@@ -63,6 +71,9 @@ function AddArtContent() {
         artworkSize: width,
         width: Number(width),
         height: Number(height),
+        length: Number(length),
+        weight: Number(weight),
+        shippingCompany,
         description,
         price: Number(price),
         copyrightAvailable,
@@ -141,9 +152,40 @@ function AddArtContent() {
               placeholder="เช่น 80"
             />
           </Field>
+          {/* ขนส่งคิดราคาจากผลบวกสามด้าน (ก+ย+ส) จึงต้องมีความหนาด้วย */}
+          <Field label="ความหนา (ซม.)" error={errors.length}>
+            <Input
+              type="number"
+              min={0}
+              step="0.1"
+              value={length}
+              onChange={(e) => setLength(e.target.value)}
+              placeholder="เช่น 5"
+            />
+          </Field>
+          <Field label="น้ำหนักพร้อมแพ็ค (กก.)" error={errors.weight}>
+            <Input
+              type="number"
+              min={0}
+              step="0.1"
+              value={weight}
+              onChange={(e) => setWeight(e.target.value)}
+              placeholder="เช่น 2.5"
+            />
+          </Field>
           <Field label="ราคา (price)" error={errors.price}>
             <Input type="number" min={0} value={price} onChange={(e) => setPrice(e.target.value)} />
           </Field>
+
+          <ShippingPicker
+            value={shippingCompany}
+            onChange={setShippingCompany}
+            weight={Number(weight) || undefined}
+            width={Number(width) || undefined}
+            length={Number(length) || undefined}
+            height={Number(height) || undefined}
+            error={errors.shippingCompany}
+          />
 
           <div className="flex items-center gap-2 pt-6">
             <input

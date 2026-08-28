@@ -11,6 +11,11 @@ export interface Address {
   district: string;
   province: string;
   postalCode: string;
+  /**
+   * true = ที่อยู่ต้นทางส่งของ (ผู้ขายมีได้รายการเดียว)
+   * จังหวัดของที่อยู่นี้เป็นตัวคิดค่าจัดส่ง ผู้ขายต้องตั้งก่อนถึงจะเผยแพร่ผลงานได้
+   */
+  pickupAddress?: boolean;
 }
 
 export interface User {
@@ -45,6 +50,22 @@ export type ArtworkStatus = "draft" | "published" | "sold";
  */
 export type ArtworkSalesStatus = "available" | "reserved" | "sold";
 
+/** ขนส่งที่ระบบรองรับ ต้องตรงกับ enum ShippingCompany ฝั่ง backend */
+export type ShippingCompanyCode = "FLASH" | "KERRY" | "THAILAND_POST" | "JT";
+
+/** ราคาประเมินของขนส่งหนึ่งเจ้า สำหรับชิ้นงานขนาด/น้ำหนักหนึ่งๆ */
+export interface ShippingOption {
+  company: ShippingCompanyCode;
+  companyName: string;
+  cost: number;
+  rateVersion: string;
+  billableWeightKg: number;
+  dimensionSumCm: number;
+  /** false = ชิ้นงานเกินพิกัดที่ขนส่งเจ้านี้รับได้ */
+  available: boolean;
+  note?: string | null;
+}
+
 export interface Artwork {
   id: string;
   sellerId: string;
@@ -64,6 +85,16 @@ export interface Artwork {
   width?: number;
   length?: number;
   height?: number;
+  /** น้ำหนักพร้อมแพ็ค หน่วยกิโลกรัม ใช้คำนวณค่าจัดส่ง */
+  weight?: number;
+  /** ขนส่งที่ผู้ขายเลือก — ผู้ขายเลือกได้เจ้าเดียวต่อชิ้นงาน */
+  shippingCompany?: ShippingCompanyCode;
+  shippingCompanyName?: string;
+  /**
+   * ค่าจัดส่ง "ประเมิน" ที่ระบบคำนวณจากน้ำหนัก/ขนาด/ขนส่ง
+   * ค่าจริงคิดอีกครั้งตอนยืนยันคำสั่งซื้อเมื่อรู้จังหวัดปลายทาง
+   */
+  shippingCost?: number;
   description: string;
   price: number;
   publishDate: string;
@@ -107,6 +138,9 @@ export interface OrderItem {
   sellerName?: string;
   /** ความพร้อมขายรายชิ้น ผู้ขายแต่ละคนยืนยันเฉพาะงานของตัวเอง */
   availabilityStatus?: AvailabilityStatus;
+  /** ค่าจัดส่งของชิ้นนี้ ล็อกไว้ตอนยืนยันคำสั่งซื้อ */
+  shippingCost?: number;
+  shippingCompanyName?: string;
 }
 
 export interface Order {
@@ -133,6 +167,10 @@ export interface Order {
   slipTransfer?: string; // data URL
   orderDate: string;
   confirmDateTime?: string;
+  /** ที่อยู่ปลายทางแบบบรรทัดเดียว บันทึกเป็นสำเนาตอนยืนยันคำสั่งซื้อ */
+  shippingAddress?: string;
+  /** จังหวัดปลายทาง — เป็นตัวกำหนดโซนค่าจัดส่ง */
+  shippingProvince?: string;
 }
 
 export type TransferStatus =

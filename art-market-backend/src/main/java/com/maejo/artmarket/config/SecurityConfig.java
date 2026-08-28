@@ -81,6 +81,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
                 .requestMatchers("/api/health").permitAll()
                 .requestMatchers("/api/admin/login").permitAll()
+                // ประเมินค่าจัดส่ง — เป็นแค่การคำนวณจากตัวเลขที่ส่งมา ไม่แตะข้อมูลใคร
+                .requestMatchers(HttpMethod.GET, "/api/shipping/**").permitAll()
 
                 // Admin endpoints — ต้อง login เป็น ADMIN
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")

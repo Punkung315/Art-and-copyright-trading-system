@@ -1,5 +1,6 @@
 package com.maejo.artmarket.dto;
 
+import com.maejo.artmarket.enums.ShippingCompany;
 import jakarta.validation.constraints.Positive;
 import lombok.Data;
 
@@ -33,12 +34,22 @@ public class EditArtRequest {
     @Positive(message = "ราคาลิขสิทธิ์ต้องมากกว่า 0")
     private Double copyrightPrice;
 
-    @Positive(message = "ค่าขนส่งต้องมากกว่า 0")
-    private Double shippingCost;
+    /* shippingCost ไม่รับจาก frontend — ระบบคำนวณให้ (ดูหมายเหตุใน AddArtRequest) */
+
+    /** ขนส่งที่ผู้ขายเลือกใช้: FLASH / KERRY / THAILAND_POST / JT */
+    private ShippingCompany shippingCompany;
 
     private String publishDate;
+
+    @Positive(message = "น้ำหนักต้องมากกว่า 0")
     private Double weight;
+
+    @Positive(message = "ความกว้างต้องมากกว่า 0")
     private Double width;
+
+    @Positive(message = "ความหนาต้องมากกว่า 0")
     private Double length;
+
+    @Positive(message = "ความยาวต้องมากกว่า 0")
     private Double height;
 }

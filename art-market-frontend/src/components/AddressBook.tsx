@@ -31,8 +31,11 @@ export function formatAddress(a: Address | AddressDraft) {
     .join(" ");
 }
 
-/** ฟอร์มกรอกที่อยู่หนึ่งรายการ ใช้ทั้งตอนเพิ่มใหม่และตอนแก้ของเดิม */
-function AddressForm({
+/**
+ * ฟอร์มกรอกที่อยู่หนึ่งรายการ ใช้ทั้งตอนเพิ่มใหม่ ตอนแก้ของเดิม
+ * และตอนบังคับให้ผู้ซื้อกรอกที่อยู่ก่อนยืนยันคำสั่งซื้อ (หน้า checkout)
+ */
+export function AddressForm({
   initial,
   submitLabel,
   busy,
@@ -123,12 +126,21 @@ export function AddressBook({
   onAdd,
   onUpdate,
   onDelete,
+  onSetPickup,
+  showPickup = false,
 }: {
   addresses: Address[];
   busy: boolean;
   onAdd: (value: AddressDraft) => Promise<void>;
   onUpdate: (id: string, value: AddressDraft) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  /** ตั้งที่อยู่ต้นทางส่งของ — ส่งมาเฉพาะตอน showPickup */
+  onSetPickup?: (id: string) => Promise<void>;
+  /**
+   * แสดงตัวเลือก "ที่อยู่ต้นทางส่งของ" — เปิดเฉพาะผู้ขาย
+   * ผู้ซื้อไม่ต้องเห็น เพราะไม่ได้เป็นคนส่งของ
+   */
+  showPickup?: boolean;
 }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -164,6 +176,11 @@ export function AddressBook({
                   {i === 0 && " · ใช้เติมฟอร์มอัตโนมัติ"}
                 </p>
                 <p className="text-sm text-stone-800">{formatAddress(a)}</p>
+                {showPickup && a.pickupAddress && (
+                  <span className="mt-1 inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800">
+                    ที่อยู่ต้นทางส่งของ · ใช้คิดค่าจัดส่ง
+                  </span>
+                )}
               </div>
               <div className="flex gap-2">
                 {confirmDeleteId === a.id ? (
@@ -202,6 +219,20 @@ export function AddressBook({
                     >
                       แก้ไข
                     </Button>
+                    {/*
+                      ค่าจัดส่งคิดจากจังหวัดของที่อยู่ต้นทาง ผู้ขายจึงต้องเลือกเองได้
+                      ว่าจะส่งของจากที่ไหน — บ้านกับสตูดิโออาจอยู่คนละจังหวัดกัน
+                    */}
+                    {showPickup && !a.pickupAddress && onSetPickup && (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={busy}
+                        onClick={() => onSetPickup(a.id)}
+                      >
+                        ตั้งเป็นที่อยู่ต้นทาง
+                      </Button>
+                    )}
                     {/* ถามยืนยันก่อนลบ เพราะลบแล้วเรียกคืนไม่ได้ */}
                     <Button
                       type="button"

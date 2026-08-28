@@ -2,6 +2,7 @@ package com.maejo.artmarket.entity;
 
 import com.maejo.artmarket.enums.ArtworkStatus;
 import com.maejo.artmarket.enums.PublishStatus;
+import com.maejo.artmarket.enums.ShippingCompany;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -34,7 +35,22 @@ public class Artwork {
     @Column(nullable = false)
     private Double price;
     private Double copyrightPrice;
+
+    /**
+     * ค่าจัดส่ง "ประเมิน" เท่านั้น — ระบบคำนวณให้จากน้ำหนัก/ขนาด/ขนส่งที่ผู้ขายเลือก
+     * ไว้โชว์บนหน้ารายละเอียดงานตอนที่ยังไม่รู้ที่อยู่ปลายทางของผู้ซื้อ
+     *
+     * ห้ามใช้ตัวนี้คิดเงิน — ค่าส่งจริงอยู่ที่ order_item.shipping_cost ซึ่งล็อกไว้
+     * ตอนยืนยันคำสั่งซื้อเมื่อรู้ปลายทางแล้ว เหตุผลเดียวกับที่ order_item.price
+     * แยกจาก artwork.price คือผู้ขายแก้ค่านี้ทีหลังได้ ออเดอร์เก่าต้องไม่กระทบ
+     */
     private Double shippingCost;
+
+    /** ขนส่งที่ผู้ขายเลือกใช้ส่งชิ้นงานนี้ เลือกได้เจ้าเดียว */
+    @Enumerated(EnumType.STRING)
+    private ShippingCompany shippingCompany;
+
+    /** น้ำหนักชิ้นงานพร้อมแพ็ค หน่วยกิโลกรัม — ใช้คำนวณค่าส่ง */
     private Double weight;
     private Double width;
     private Double length;

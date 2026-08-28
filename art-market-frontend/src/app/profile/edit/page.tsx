@@ -17,6 +17,7 @@ import {
 import {
   updateProfile,
   addAddress,
+  setPickupAddress,
   updateAddress,
   deleteAddress,
   ApiError,
@@ -38,6 +39,10 @@ function EditProfileContent() {
   const [errors, setErrors] = useState<Record<string, string | null>>({});
   const [submitting, setSubmitting] = useState(false);
   const [addressBusy, setAddressBusy] = useState(false);
+
+  // เฉพาะผู้ขายที่ต้องระบุที่อยู่ต้นทาง ผู้ซื้อไม่ได้เป็นคนส่งของ
+  const isSeller = user?.roles.includes("seller") ?? false;
+  const hasPickupAddress = (user?.addresses ?? []).some((a) => a.pickupAddress);
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -175,7 +180,22 @@ function EditProfileContent() {
             ที่อยู่บันทึกทันทีเมื่อกดปุ่มในส่วนนี้
           </p>
 
+          {/*
+            ผู้ขายต้องระบุว่าจะส่งของจากที่อยู่ไหน เพราะค่าจัดส่งคิดจากจังหวัดต้นทาง
+            เตือนให้ชัดถ้ายังไม่ได้ตั้ง ไม่งั้นจะไปเจอตอนกดเผยแพร่ผลงานแล้วงง
+          */}
+          {isSeller && !hasPickupAddress && (
+            <p className="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              คุณยังไม่ได้ตั้ง <span className="font-medium">ที่อยู่ต้นทางส่งของ</span> —
+              ระบบใช้จังหวัดของที่อยู่นี้คำนวณค่าจัดส่ง และต้องตั้งก่อนถึงจะเผยแพร่ผลงานได้
+            </p>
+          )}
+
           <AddressBook
+            showPickup={isSeller}
+            onSetPickup={(id) =>
+              runAddressAction(() => setPickupAddress(id), "ตั้งที่อยู่ต้นทางสำเร็จ")
+            }
             addresses={user.addresses ?? []}
             busy={addressBusy}
             onAdd={(value: AddressDraft) =>

@@ -31,6 +31,13 @@ public class Orders {
     @JoinColumn(name = "buyer_id", nullable = false)
     private Buyer buyer;
 
+    /**
+     * ที่อยู่ปลายทาง บันทึกเป็นสำเนาตอนยืนยันคำสั่งซื้อ (ดูเหตุผลใน ShippingAddress)
+     * ต้องมีค่าเสมอ ไม่งั้นคำนวณค่าจัดส่งไม่ได้ — CartService บังคับไว้แล้ว
+     */
+    @Embedded
+    private ShippingAddress shippingAddress;
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<OrderItem> orderItems = new ArrayList<>();

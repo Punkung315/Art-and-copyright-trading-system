@@ -94,6 +94,7 @@ public class UserController {
     // POST   /api/users/me/addresses        เพิ่มที่อยู่ใหม่
     // PUT    /api/users/me/addresses/{id}   แก้ที่อยู่เดิม
     // DELETE /api/users/me/addresses/{id}   ลบที่อยู่
+    // PATCH  /api/users/me/addresses/{id}/pickup  ตั้งเป็นที่อยู่ต้นทางส่งของ
     //
     // ใช้ /me ทุกอัน (ไม่ใช่ /users/{userId}/addresses) ด้วยเหตุผลเดียวกับ Edit Profile
     // คือกันไม่ให้ใครแก้ที่อยู่ของคนอื่นด้วยการเปลี่ยน id ใน URL
@@ -122,5 +123,17 @@ public class UserController {
             @PathVariable Integer addressId) {
         return ResponseEntity.ok(
                 userService.deleteAddress(userDetails.getUsername(), addressId));
+    }
+
+    /**
+     * ตั้งที่อยู่นี้เป็น "ที่อยู่ต้นทางส่งของ" — จังหวัดของมันเป็นตัวคิดค่าจัดส่ง
+     * ผู้ขายมีได้รายการเดียว เลือกใหม่แล้วของเดิมถูกยกเลิกให้อัตโนมัติ
+     */
+    @PatchMapping("/me/addresses/{addressId}/pickup")
+    public ResponseEntity<ApiResponse<ProfileResponse>> setPickupAddress(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable Integer addressId) {
+        return ResponseEntity.ok(
+                userService.setPickupAddress(userDetails.getUsername(), addressId));
     }
 }

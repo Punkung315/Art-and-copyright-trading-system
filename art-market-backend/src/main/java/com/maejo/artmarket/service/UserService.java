@@ -155,6 +155,12 @@ public class UserService {
         Address address = new Address();
         address.setUser(user);
         applyAddress(address, req);
+        // ที่อยู่แรกของผู้ใช้ให้เป็นที่อยู่ต้นทางไปเลย ผู้ขายส่วนใหญ่มีที่เดียว
+        // จะได้ไม่ต้องไปกดเลือกซ้ำ และไม่มีช่วงที่ระบบไม่รู้ว่าจะคิดค่าส่งจากไหน
+        if (user.getAddresses().isEmpty()) {
+            address.setPickupAddress(true);
+        }
+
         // User.addresses ตั้ง cascade = ALL ไว้ การ add เข้า list แล้ว save(user) จึงบันทึกให้เอง
         user.getAddresses().add(address);
 
@@ -201,8 +207,15 @@ public class UserService {
         // ลบด้วยการเอาออกจาก list ให้ orphanRemoval จัดการ
         // ถ้าไปเรียก addressRepository.delete() ตรงๆ ตัวที่ค้างอยู่ใน list ของ user
         // จะถูก merge กลับเข้ามาตอน flush แล้วพังแบบเดียวกับบั๊กปฏิเสธผู้ขาย
+        boolean wasPickup = target.isPickupAddress();
         user.getAddresses().remove(target);
         target.setUser(null);
+
+        // ถ้าเพิ่งลบที่อยู่ต้นทางทิ้ง ต้องยกให้รายการที่เหลือแทนทันที
+        // ไม่งั้นผู้ขายจะเหลือที่อยู่อยู่แต่ระบบคิดค่าส่งไม่ได้ โดยไม่มีอะไรบอก
+        if (wasPickup && !user.getAddresses().isEmpty()) {
+            user.getAddresses().get(0).setPickupAddress(true);
+        }
 
         try {
             userRepository.saveAndFlush(user);
@@ -210,6 +223,32 @@ public class UserService {
             return ApiResponse.error("ไม่สามารถลบที่อยู่ได้ กรุณาลองอีกครั้ง");
         }
         return ApiResponse.ok("ลบที่อยู่สำเร็จ", ProfileResponse.from(user, List.of(), true));
+    }
+
+    /**
+     * ตั้งที่อยู่ต้นทางสำหรับส่งของ — มีได้ทีละ 1 รายการเท่านั้น
+     * เคลียร์ของเดิมก่อนเสมอ ไม่งั้นจะมีหลายรายการที่ติด flag แล้วไม่รู้ว่าอันไหนจริง
+     */
+    @Transactional
+    public ApiResponse<ProfileResponse> setPickupAddress(String username, Integer addressId) {
+        User user = userRepository.findByUsername(username).orElse(null);
+        if (user == null) return ApiResponse.error("ไม่พบข้อมูลผู้ใช้งาน");
+
+        // ต้องเป็นที่อยู่ของผู้ใช้คนนี้เท่านั้น กันการเดา id ไปตั้งของคนอื่น
+        Address target = user.getAddresses().stream()
+                .filter(a -> a.getAddressId().equals(addressId))
+                .findFirst().orElse(null);
+        if (target == null) return ApiResponse.error("ไม่พบที่อยู่ที่ต้องการตั้งเป็นที่อยู่ต้นทาง");
+
+        user.getAddresses().forEach(a -> a.setPickupAddress(false));
+        target.setPickupAddress(true);
+
+        try {
+            userRepository.save(user);
+        } catch (Exception e) {
+            return ApiResponse.error("ไม่สามารถบันทึกที่อยู่ต้นทางได้ กรุณาลองอีกครั้ง");
+        }
+        return ApiResponse.ok("ตั้งที่อยู่ต้นทางสำเร็จ", ProfileResponse.from(user, List.of(), true));
     }
 
     private static void applyAddress(Address address, AddressRequest req) {

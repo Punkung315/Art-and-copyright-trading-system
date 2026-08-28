@@ -156,6 +156,13 @@ public class PaymentService {
     // Helper — คำนวณยอดเงิน: totalPrice (ราคารวมชิ้นงาน) + shippingCost (รวมค่าส่งทุกชิ้น)
     // =========================================================================
 
+    /** fallback ไป artwork ให้เฉพาะออเดอร์เก่าที่สร้างก่อนมีคอลัมน์ order_item.shipping_cost */
+    private static double shippingOf(OrderItem item) {
+        if (item.getShippingCost() != null) return item.getShippingCost();
+        var artwork = item.getArtwork();
+        return artwork != null && artwork.getShippingCost() != null ? artwork.getShippingCost() : 0.0;
+    }
+
     private PaymentPreviewResponse buildPreview(Orders order) {
         // คิดเงินเฉพาะชิ้นที่ผู้ขายยืนยันว่าพร้อมขายเท่านั้น
         //
@@ -169,9 +176,11 @@ public class PaymentService {
                 .mapToDouble(OrderItem::getPrice)
                 .sum();
 
+        // ค่าจัดส่งอ่านจาก order_item ที่ล็อกไว้ตอนยืนยันคำสั่งซื้อ ไม่ใช่จาก artwork
+        // artwork.shippingCost เป็นราคาประเมินที่ผู้ขายแก้ได้ตลอด — ถ้าอ่านสด
+        // ยอดที่ต้องโอนจะขยับได้หลังผู้ซื้อเห็นตัวเลขไปแล้ว
         double shippingCost = payableItems.stream()
-                .map(OrderItem::getArtwork)
-                .mapToDouble(a -> a.getShippingCost() != null ? a.getShippingCost() : 0.0)
+                .mapToDouble(PaymentService::shippingOf)
                 .sum();
 
         return PaymentPreviewResponse.builder()

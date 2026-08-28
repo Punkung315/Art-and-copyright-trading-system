@@ -34,6 +34,8 @@ import {
   OrderStatus,
   Payment,
   PaymentStatus,
+  ShippingCompanyCode,
+  ShippingOption,
   ShippingStatus,
   TransferStatus,
   User,
@@ -179,6 +181,7 @@ interface BeAddress {
   district: string;
   province: string;
   postalCode: string;
+  pickupAddress?: boolean;
 }
 
 interface BeProfile {
@@ -218,6 +221,8 @@ interface BeArtworkDetail extends BeArtworkSummary {
   description: string | null;
   copyrightPrice: number | null;
   shippingCost: number | null;
+  shippingCompany: ShippingCompanyCode | null;
+  shippingCompanyName: string | null;
   weight: number | null;
   width: number | null;
   length: number | null;
@@ -238,6 +243,9 @@ interface BeOrderItem {
   sellerId?: number | null;
   sellerUserId?: number | null;
   sellerName?: string | null;
+  /** ค่าจัดส่งรายชิ้น ล็อกไว้ตอนยืนยันคำสั่งซื้อ */
+  shippingCost?: number | null;
+  shippingCompanyName?: string | null;
 }
 
 interface BeOrder {
@@ -261,6 +269,9 @@ interface BeOrder {
   paymentId: number | null;
   paymentStatus: BePaymentStatus | null;
   slipTransfer: string | null;
+  /** ที่อยู่ปลายทาง บันทึกเป็นสำเนาตอนยืนยันคำสั่งซื้อ */
+  shippingAddress?: string | null;
+  shippingProvince?: string | null;
   items: BeOrderItem[];
 }
 
@@ -428,6 +439,7 @@ function mapAddress(a: BeAddress): Address {
     district: a.district,
     province: a.province,
     postalCode: a.postalCode,
+    pickupAddress: a.pickupAddress ?? false,
   };
 }
 
@@ -515,6 +527,10 @@ function mapArtworkDetail(a: BeArtworkDetail): Artwork {
     width: a.width ?? undefined,
     length: a.length ?? undefined,
     height: a.height ?? undefined,
+    weight: a.weight ?? undefined,
+    shippingCompany: a.shippingCompany ?? undefined,
+    shippingCompanyName: a.shippingCompanyName ?? undefined,
+    shippingCost: a.shippingCost ?? undefined,
     description: a.description ?? "",
     publishDate: a.publishDate ?? "",
     copyrightAvailable: (a.copyrightPrice ?? 0) > 0,
@@ -611,6 +627,8 @@ function mapOrderItem(i: BeOrderItem): OrderItem {
     sellerId: i.sellerUserId != null ? String(i.sellerUserId) : undefined,
     sellerName: i.sellerName ?? undefined,
     availabilityStatus: AVAILABILITY_LINE_MAP[i.availabilityStatus] ?? "waiting",
+    shippingCost: i.shippingCost ?? undefined,
+    shippingCompanyName: i.shippingCompanyName ?? undefined,
   };
 }
 
@@ -637,6 +655,8 @@ function mapOrder(o: BeOrder): Order {
     slipTransfer: o.slipTransfer ?? undefined,
     orderDate: o.orderDate,
     confirmDateTime: o.confirmDateTime ?? undefined,
+    shippingAddress: o.shippingAddress ?? undefined,
+    shippingProvince: o.shippingProvince ?? undefined,
   };
 }
 
@@ -966,6 +986,17 @@ export async function addAddress(address: Omit<Address, "id">): Promise<User> {
   return mapProfile(p);
 }
 
+/**
+ * ตั้งที่อยู่นี้เป็นที่อยู่ต้นทางส่งของ — จังหวัดของมันเป็นตัวคิดค่าจัดส่ง
+ * ผู้ขายมีได้รายการเดียว ตั้งใหม่แล้วของเดิมถูกยกเลิกให้อัตโนมัติ
+ */
+export async function setPickupAddress(addressId: string): Promise<User> {
+  const p = await request<BeProfile>(`/users/me/addresses/${addressId}/pickup`, {
+    method: "PATCH",
+  });
+  return mapProfile(p);
+}
+
 export async function updateAddress(
   addressId: string,
   address: Omit<Address, "id">
@@ -1222,6 +1253,8 @@ export async function addArtwork(
       width: input.width ?? null,
       height: input.height ?? null,
       length: input.length ?? null,
+      weight: input.weight ?? null,
+      shippingCompany: input.shippingCompany ?? null,
       description: input.description,
       price: input.price,
       publishDate: new Date().toISOString().slice(0, 10),
@@ -1263,6 +1296,8 @@ export async function updateArtwork(
   }
   if (patch.height !== undefined) body.height = patch.height;
   if (patch.length !== undefined) body.length = patch.length;
+  if (patch.weight !== undefined) body.weight = patch.weight;
+  if (patch.shippingCompany !== undefined) body.shippingCompany = patch.shippingCompany;
   if (patch.artworkSize !== undefined && patch.width === undefined) {
     body.artworkSize = parseSize(patch.artworkSize);
   }
@@ -1350,9 +1385,37 @@ export async function removeFromCart(
 
 /* ------------------------------- Orders -------------------------------- */
 
-export async function confirmOrder(_buyer: User): Promise<Order[]> {
-  const o = await request<BeOrder>("/cart/confirm", { method: "POST" });
+/**
+ * ยืนยันคำสั่งซื้อ ต้องระบุที่อยู่ปลายทางเสมอ
+ * เพราะค่าจัดส่งคำนวณจากจังหวัดปลายทาง (ดู ShippingRateService ฝั่ง backend)
+ */
+export async function confirmOrder(_buyer: User, addressId: string): Promise<Order[]> {
+  const o = await request<BeOrder>("/cart/confirm", {
+    method: "POST",
+    body: JSON.stringify({ addressId: Number(addressId) }),
+  });
   return [mapOrder(o)];
+}
+
+/**
+ * ประเมินค่าจัดส่งของขนส่งทุกเจ้าจากน้ำหนักและขนาด
+ * ใช้ในหน้าเพิ่ม/แก้ไขงานศิลปะ ให้ผู้ขายเทียบราคาก่อนเลือก
+ */
+export async function getShippingQuotes(dims: {
+  weight?: number;
+  width?: number;
+  length?: number;
+  height?: number;
+}): Promise<ShippingOption[]> {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(dims)) {
+    if (v != null && Number.isFinite(v) && v > 0) params.set(k, String(v));
+  }
+  const res = await requestOr<{ options: ShippingOption[] } | null>(
+    `/shipping/quote?${params.toString()}`,
+    null
+  );
+  return res?.options ?? [];
 }
 
 export async function listOrdersByBuyer(_buyerId: string): Promise<Order[]> {

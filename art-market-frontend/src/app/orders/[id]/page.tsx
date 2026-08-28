@@ -149,6 +149,14 @@ function OrderDetailContent({ id }: { id: string }) {
                         )}
                       </p>
                     )}
+                    {/* ค่าจัดส่งรายชิ้น — คนละเจ้าคนละราคา ผู้ซื้อควรเห็นว่ายอดมาจากไหน */}
+                    {item.shippingCompanyName && (
+                      <p className="mt-0.5 text-xs text-stone-500">
+                        จัดส่งโดย {item.shippingCompanyName}
+                        {item.shippingCost != null &&
+                          ` · ค่าส่ง ฿${item.shippingCost.toLocaleString()}`}
+                      </p>
+                    )}
                   </div>
                   <p className="text-sm font-medium text-stone-900">
                     ฿{item.price.toLocaleString()}
@@ -157,6 +165,14 @@ function OrderDetailContent({ id }: { id: string }) {
               ))}
             </div>
           </Card>
+
+          {/* ผู้ขายต้องเห็นที่อยู่เพื่อจัดส่ง ผู้ซื้อต้องเห็นเพื่อตรวจว่าส่งถูกที่ */}
+          {order.shippingAddress && (
+            <Card className="p-5 text-sm">
+              <p className="text-stone-500">ที่อยู่จัดส่ง</p>
+              <p className="mt-1 font-medium text-stone-800">{order.shippingAddress}</p>
+            </Card>
+          )}
 
           <Card className="grid grid-cols-2 gap-4 p-5 text-sm sm:grid-cols-3">
             <div>
