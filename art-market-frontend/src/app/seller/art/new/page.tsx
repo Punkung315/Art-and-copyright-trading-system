@@ -21,7 +21,9 @@ function AddArtContent() {
   const [artworkStyle, setArtworkStyle] = useState("");
   const [artworkMediums, setArtworkMediums] = useState("");
   const [artworkMaterial, setArtworkMaterial] = useState("");
-  const [artworkSize, setArtworkSize] = useState("");
+  // เก็บเป็น string เพราะช่องว่างต้องแยกจาก 0 ได้ (backend บังคับ artworkSize > 0)
+  const [width, setWidth] = useState("");
+  const [height, setHeight] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [copyrightAvailable, setCopyrightAvailable] = useState(true);
@@ -40,6 +42,8 @@ function AddArtContent() {
       artworkMediums: validateNotEmpty(artworkMediums, "เทคนิคงานศิลปะ"),
       description: validateNotEmpty(description, "คำอธิบายงานศิลปะ"),
       price: !price || Number(price) <= 0 ? "กรุณากรอกราคาที่ถูกต้อง" : null,
+      width: !width || Number(width) <= 0 ? "กรุณากรอกความกว้างเป็นตัวเลขมากกว่า 0" : null,
+      height: !height || Number(height) <= 0 ? "กรุณากรอกความยาวเป็นตัวเลขมากกว่า 0" : null,
     };
     setErrors(nextErrors);
     if (Object.values(nextErrors).some(Boolean)) {
@@ -56,7 +60,9 @@ function AddArtContent() {
         artworkStyle,
         artworkMediums,
         artworkMaterial,
-        artworkSize,
+        artworkSize: width,
+        width: Number(width),
+        height: Number(height),
         description,
         price: Number(price),
         copyrightAvailable,
@@ -115,8 +121,25 @@ function AddArtContent() {
           <Field label="วัสดุงานศิลปะ (artworkMaterial)">
             <Input value={artworkMaterial} onChange={(e) => setArtworkMaterial(e.target.value)} placeholder="เช่น Canvas" />
           </Field>
-          <Field label="ขนาดงานศิลปะ (artworkSize)">
-            <Input value={artworkSize} onChange={(e) => setArtworkSize(e.target.value)} placeholder="เช่น 60x80 cm" />
+          <Field label="ความกว้าง (ซม.)" error={errors.width}>
+            <Input
+              type="number"
+              min={0}
+              step="0.1"
+              value={width}
+              onChange={(e) => setWidth(e.target.value)}
+              placeholder="เช่น 60"
+            />
+          </Field>
+          <Field label="ความยาว (ซม.)" error={errors.height}>
+            <Input
+              type="number"
+              min={0}
+              step="0.1"
+              value={height}
+              onChange={(e) => setHeight(e.target.value)}
+              placeholder="เช่น 80"
+            />
           </Field>
           <Field label="ราคา (price)" error={errors.price}>
             <Input type="number" min={0} value={price} onChange={(e) => setPrice(e.target.value)} />

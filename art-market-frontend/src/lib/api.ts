@@ -512,6 +512,9 @@ function mapArtworkDetail(a: BeArtworkDetail): Artwork {
     artworkMediums: a.artworkMediums ?? "",
     artworkMaterial: a.artworkMaterial ?? "",
     artworkSize: a.artworkSize != null ? String(a.artworkSize) : "",
+    width: a.width ?? undefined,
+    length: a.length ?? undefined,
+    height: a.height ?? undefined,
     description: a.description ?? "",
     publishDate: a.publishDate ?? "",
     copyrightAvailable: (a.copyrightPrice ?? 0) > 0,
@@ -893,6 +896,23 @@ export async function getUser(userId: string): Promise<User | undefined> {
   }
 }
 
+/**
+ * โปรไฟล์สาธารณะของผู้ใช้คนอื่น (ยูสเคส 3.1.6 View Profile)
+ *
+ * backend ซ่อนอีเมล/เบอร์โทรให้เองเมื่อไม่ใช่เจ้าของโปรไฟล์ และส่งเฉพาะผลงานที่เผยแพร่แล้ว
+ * จึงเรียก endpoint เดียวกับ getUser ได้เลย ไม่ต้องมีตัวกรองเพิ่มฝั่งหน้าเว็บ
+ */
+export async function getPublicProfile(
+  userId: string
+): Promise<{ user: User; artworks: Artwork[] } | undefined> {
+  const p = await requestOr<BeProfile | null>(`/users/${userId}`, null);
+  if (!p) return undefined;
+  return {
+    user: mapProfile(p),
+    artworks: (p.artworks ?? []).map(mapArtworkSummary),
+  };
+}
+
 /** โปรไฟล์ของคนที่ login อยู่ — ใช้คืนสถานะ session ตอน refresh หน้า */
 export async function getMe(): Promise<User | undefined> {
   try {
@@ -1196,9 +1216,12 @@ export async function addArtwork(
       artworkStyle: input.artworkStyle,
       artworkMediums: input.artworkMediums,
       artworkMaterial: input.artworkMaterial,
-      // backend เก็บขนาดเป็นตัวเลข ส่วน frontend เก็บเป็นข้อความ เช่น "40x60 ซม."
-      // จึงดึงเฉพาะตัวเลขตัวแรกออกมา และกันไม่ให้เป็น 0 เพราะ backend บังคับ @Positive
-      artworkSize: parseSize(input.artworkSize),
+      // artworkSize เป็นคอลัมน์ตัวเลขตัวเดียวที่ backend บังคับให้ > 0 (@Positive)
+      // จึงใช้ด้านกว้างเป็นค่าตัวแทน แล้วเก็บมิติจริงลง width/height ต่างหาก
+      artworkSize: input.width ?? parseSize(input.artworkSize),
+      width: input.width ?? null,
+      height: input.height ?? null,
+      length: input.length ?? null,
       description: input.description,
       price: input.price,
       publishDate: new Date().toISOString().slice(0, 10),
@@ -1233,7 +1256,16 @@ export async function updateArtwork(
   if (patch.artworkStyle !== undefined) body.artworkStyle = patch.artworkStyle;
   if (patch.artworkMediums !== undefined) body.artworkMediums = patch.artworkMediums;
   if (patch.artworkMaterial !== undefined) body.artworkMaterial = patch.artworkMaterial;
-  if (patch.artworkSize !== undefined) body.artworkSize = parseSize(patch.artworkSize);
+  if (patch.width !== undefined) {
+    body.width = patch.width;
+    // artworkSize ต้องขยับตามด้านกว้างเสมอ ไม่งั้นตัวกรองช่วงขนาดจะอ้างอิงค่าเก่า
+    if (patch.width) body.artworkSize = patch.width;
+  }
+  if (patch.height !== undefined) body.height = patch.height;
+  if (patch.length !== undefined) body.length = patch.length;
+  if (patch.artworkSize !== undefined && patch.width === undefined) {
+    body.artworkSize = parseSize(patch.artworkSize);
+  }
   if (patch.description !== undefined) body.description = patch.description;
   if (patch.price !== undefined) body.price = patch.price;
   if (patch.copyrightPrice !== undefined) body.copyrightPrice = patch.copyrightPrice;

@@ -1,4 +1,13 @@
-type Domain = "order" | "availability" | "shipping" | "payment" | "seller" | "artwork" | "transfer";
+type Domain =
+  | "order"
+  | "availability"
+  | "shipping"
+  | "payment"
+  | "seller"
+  | "artwork"
+  /** สถานะการขายของชิ้นงาน — แยกจาก "artwork" ที่รวมเรื่องการเผยแพร่ไว้ด้วย */
+  | "sales"
+  | "transfer";
 
 type Entry = { label: string; className: string };
 
@@ -46,6 +55,11 @@ const MAPS: Record<Domain, Record<string, Entry>> = {
   artwork: {
     draft: { label: "ฉบับร่าง", className: STONE },
     published: { label: "เผยแพร่แล้ว", className: GREEN },
+    sold: { label: "ขายแล้ว", className: STONE },
+  },
+  sales: {
+    available: { label: "พร้อมจำหน่าย", className: GREEN },
+    reserved: { label: "อยู่ในคำสั่งซื้อแล้ว", className: AMBER },
     sold: { label: "ขายแล้ว", className: STONE },
   },
   transfer: {

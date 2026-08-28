@@ -3,6 +3,7 @@
 import { use, useEffect, useState } from "react";
 import { RequireSeller } from "@/components/RoleGuard";
 import { getArtwork } from "@/lib/api";
+import { formatArtworkSize } from "@/lib/format";
 import { Artwork } from "@/types";
 import { Button, Card, Container, Spinner } from "@/components/ui";
 
@@ -45,8 +46,8 @@ function CertificateContent({ id }: { id: string }) {
           <p className="text-stone-800">{artwork.artworkMediums}</p>
           <p className="text-stone-500">วัสดุ</p>
           <p className="text-stone-800">{artwork.artworkMaterial}</p>
-          <p className="text-stone-500">ขนาด</p>
-          <p className="text-stone-800">{artwork.artworkSize}</p>
+          <p className="text-stone-500">ขนาด (กว้าง x ยาว)</p>
+          <p className="text-stone-800">{formatArtworkSize(artwork)}</p>
           <p className="text-stone-500">วันที่ลงขาย</p>
           <p className="text-stone-800">{new Date(artwork.publishDate).toLocaleDateString("th-TH")}</p>
         </div>

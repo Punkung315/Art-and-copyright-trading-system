@@ -49,6 +49,8 @@ function EditArtContent({ id }: { id: string }) {
       artworkName: validateNotEmpty(form.artworkName ?? "", "ชื่อผลงาน"),
       description: validateNotEmpty(form.description ?? "", "คำอธิบายงานศิลปะ"),
       price: !form.price || form.price <= 0 ? "กรุณากรอกราคาที่ถูกต้อง" : null,
+      width: !form.width || form.width <= 0 ? "กรุณากรอกความกว้างเป็นตัวเลขมากกว่า 0" : null,
+      height: !form.height || form.height <= 0 ? "กรุณากรอกความยาวเป็นตัวเลขมากกว่า 0" : null,
     };
     setErrors(nextErrors);
     if (Object.values(nextErrors).some(Boolean)) {
@@ -179,8 +181,23 @@ function EditArtContent({ id }: { id: string }) {
           <Field label="วัสดุงานศิลปะ (artworkMaterial)">
             <Input value={form.artworkMaterial ?? ""} onChange={(e) => set("artworkMaterial", e.target.value)} />
           </Field>
-          <Field label="ขนาดงานศิลปะ (artworkSize)">
-            <Input value={form.artworkSize ?? ""} onChange={(e) => set("artworkSize", e.target.value)} />
+          <Field label="ความกว้าง (ซม.)" error={errors.width}>
+            <Input
+              type="number"
+              min={0}
+              step="0.1"
+              value={form.width ?? ""}
+              onChange={(e) => set("width", e.target.value === "" ? undefined : Number(e.target.value))}
+            />
+          </Field>
+          <Field label="ความยาว (ซม.)" error={errors.height}>
+            <Input
+              type="number"
+              min={0}
+              step="0.1"
+              value={form.height ?? ""}
+              onChange={(e) => set("height", e.target.value === "" ? undefined : Number(e.target.value))}
+            />
           </Field>
           <Field label="ราคา (price)" error={errors.price}>
             <Input

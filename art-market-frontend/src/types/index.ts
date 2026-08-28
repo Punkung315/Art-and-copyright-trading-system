@@ -56,6 +56,14 @@ export interface Artwork {
   artworkMediums: string;
   artworkMaterial: string;
   artworkSize: string;
+  /**
+   * มิติจริงของชิ้นงาน หน่วยเซนติเมตร แยกตามคอลัมน์ใน DB
+   * หน้าชิ้นงานที่ผู้ใช้เรียกว่า "กว้าง x ยาว" คือ width x height
+   * ส่วน length คือความหนา/ความลึก (ตาม SRS: Size = Height x Width x Depth)
+   */
+  width?: number;
+  length?: number;
+  height?: number;
   description: string;
   price: number;
   publishDate: string;
