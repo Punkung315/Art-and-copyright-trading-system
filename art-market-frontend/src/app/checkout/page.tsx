@@ -27,6 +27,11 @@ function CheckoutContent() {
   const { notify } = useToast();
   const router = useRouter();
 
+  /*
+   * รายการที่เลือกจะสั่งซื้อรอบนี้ — ค่าเริ่มต้นคือเลือกทั้งหมด
+   * null = ยังไม่เคยแตะ ให้ถือว่าเลือกครบ (ผู้ซื้อส่วนใหญ่สั่งทั้งตะกร้า)
+   */
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string> | null>(null);
   const [addresses, setAddresses] = useState<Address[] | undefined>(undefined);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [addingAddress, setAddingAddress] = useState(false);
@@ -60,13 +65,44 @@ function CheckoutContent() {
     }
   }
 
+  function toggleItem(id: string) {
+    setSelectedItemIds((prev) => {
+      const next = new Set(prev ?? items.map((i) => i.id));
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   async function handleConfirm() {
-    if (!user || !selectedId) return;
+    if (!user || !selectedId || chosenItems.length === 0) return;
     setSubmitting(true);
     try {
-      const orders = await confirmOrder(user, selectedId);
+      const orders = await confirmOrder(
+        user,
+        selectedId,
+        chosenItems.map((i) => i.id)
+      );
       await refresh();
-      notify("ยืนยันคำสั่งซื้อสำเร็จ ระบบได้ส่งคำขอไปยังผู้ขายเพื่อยืนยันความพร้อม", "success");
+
+      /*
+       * ตรวจว่า backend สั่งซื้อตามที่เลือกจริงไหม
+       *
+       * backend ตีความ "ไม่ได้ส่ง cartItemIds มา" ว่าสั่งทั้งตะกร้า ถ้าเซิร์ฟเวอร์
+       * ยังรันโค้ดเวอร์ชันเก่าที่ยังไม่รู้จัก field นี้ มันจะสั่งซื้อทุกชิ้นเงียบๆ
+       * ผู้ซื้อจะเพิ่งมารู้ตอนเห็นบิล — ต้องฟ้องทันทีตรงนี้ ไม่ใช่ปล่อยผ่าน
+       */
+      const ordered = orders[0]?.items.length ?? 0;
+      if (ordered > chosenItems.length) {
+        notify(
+          `ระบบสร้างคำสั่งซื้อ ${ordered} ชิ้น ทั้งที่เลือกไว้ ${chosenItems.length} ชิ้น ` +
+            "เซิร์ฟเวอร์อาจยังไม่ได้อัปเดต กรุณาตรวจสอบคำสั่งซื้อนี้",
+          "error"
+        );
+      } else {
+        notify("ยืนยันคำสั่งซื้อสำเร็จ ระบบได้ส่งคำขอไปยังผู้ขายเพื่อยืนยันความพร้อม", "success");
+      }
+
       router.push(orders.length === 1 ? `/orders/${orders[0].id}` : "/orders");
     } catch (err) {
       notify(err instanceof ApiError ? err.message : "คำสั่งซื้อไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง", "error");
@@ -88,7 +124,9 @@ function CheckoutContent() {
 
   if (addresses === undefined) return <Spinner />;
 
-  const sellers = Array.from(new Set(items.map((i) => i.artwork?.sellerName)));
+  const chosenItems = items.filter((i) => selectedItemIds === null || selectedItemIds.has(i.id));
+  const chosenTotal = chosenItems.reduce((sum, i) => sum + i.priceAtAdd, 0);
+  const sellers = Array.from(new Set(chosenItems.map((i) => i.artwork?.sellerName)));
   const hasAddress = addresses.length > 0;
 
   return (
@@ -99,22 +137,66 @@ function CheckoutContent() {
           ตรวจสอบรายการก่อนยืนยัน ระบบจะแยกคำสั่งซื้อตามผู้ขายโดยอัตโนมัติ ({sellers.join(", ")})
         </p>
 
-        <div className="mt-6 flex flex-col gap-3">
-          {items.map((item) => (
-            <div key={item.id} className="flex items-center justify-between text-sm">
-              <span className="text-stone-700">
-                {item.artwork?.artworkName}{" "}
-                <span className="text-stone-400">({item.artwork?.sellerName})</span>
-              </span>
-              <span className="font-medium text-stone-900">฿{item.priceAtAdd.toLocaleString()}</span>
-            </div>
-          ))}
+        {/*
+          เลือกได้ว่ารอบนี้จะสั่งชิ้นไหนบ้าง ที่ไม่ได้เลือกยังอยู่ในตะกร้าให้สั่งทีหลัง
+          ค่าเริ่มต้นติ๊กครบทุกชิ้น เพราะกรณีปกติคือสั่งทั้งตะกร้า
+        */}
+        <div className="mt-6">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-sm font-medium text-stone-700">
+              เลือกผลงานที่ต้องการสั่งซื้อ ({chosenItems.length}/{items.length})
+            </p>
+            <button
+              type="button"
+              className="text-sm text-amber-700 underline"
+              onClick={() =>
+                setSelectedItemIds(
+                  chosenItems.length === items.length ? new Set() : new Set(items.map((i) => i.id))
+                )
+              }
+            >
+              {chosenItems.length === items.length ? "ล้างการเลือก" : "เลือกทั้งหมด"}
+            </button>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            {items.map((item) => {
+              const checked = selectedItemIds === null || selectedItemIds.has(item.id);
+              return (
+                <label
+                  key={item.id}
+                  className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 text-sm ${
+                    checked ? "border-amber-500 bg-amber-50" : "border-stone-200 hover:bg-stone-50"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleItem(item.id)}
+                  />
+                  <span className="flex-1 text-stone-700">
+                    {item.artwork?.artworkName}{" "}
+                    <span className="text-stone-400">({item.artwork?.sellerName})</span>
+                  </span>
+                  <span className="font-medium text-stone-900">
+                    ฿{item.priceAtAdd.toLocaleString()}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
         </div>
 
         <div className="mt-6 flex items-center justify-between border-t border-stone-200 pt-4 text-base font-semibold text-stone-900">
-          <span>ยอดรวมทั้งหมด</span>
-          <span>฿{total.toLocaleString()}</span>
+          <span>ยอดรวมที่เลือก</span>
+          <span>฿{chosenTotal.toLocaleString()}</span>
         </div>
+        {chosenItems.length < items.length && (
+          <p className="mt-1 text-xs text-stone-500">
+            อีก {items.length - chosenItems.length} ชิ้นที่ไม่ได้เลือกจะยังอยู่ในตะกร้า
+            (ยอดรวมทั้งตะกร้า ฿{total.toLocaleString()})
+          </p>
+        )}
 
         {/*
           ที่อยู่จัดส่งต้องเลือกก่อนยืนยันเสมอ
@@ -189,11 +271,20 @@ function CheckoutContent() {
           และจังหวัดปลายทางที่คุณเลือก — ดูยอดสุทธิได้ในหน้าคำสั่งซื้อ
         </p>
 
-        <Button onClick={handleConfirm} disabled={submitting || !selectedId} className="mt-4 w-full">
+        <Button
+          onClick={handleConfirm}
+          disabled={submitting || !selectedId || chosenItems.length === 0}
+          className="mt-4 w-full"
+        >
           {submitting ? "กำลังยืนยันคำสั่งซื้อ..." : "ยืนยันคำสั่งซื้อ"}
         </Button>
 
-        {!selectedId && (
+        {chosenItems.length === 0 && (
+          <p className="mt-2 text-center text-xs text-stone-500">
+            กรุณาเลือกผลงานที่ต้องการสั่งซื้ออย่างน้อย 1 ชิ้น
+          </p>
+        )}
+        {chosenItems.length > 0 && !selectedId && (
           <p className="mt-2 text-center text-xs text-stone-500">
             กรุณาเลือกที่อยู่สำหรับจัดส่งก่อนยืนยันคำสั่งซื้อ
           </p>

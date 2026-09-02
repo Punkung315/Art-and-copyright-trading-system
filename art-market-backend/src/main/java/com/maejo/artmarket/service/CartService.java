@@ -198,6 +198,23 @@ public class CartService {
             return ApiResponse.error("คำสั่งซื้อไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง");
         }
 
+        /*
+         * ผู้ซื้อเลือกได้ว่าจะสั่งซื้อชิ้นไหนบ้างในรอบนี้ ที่ไม่ได้เลือกยังค้างในตะกร้าต่อ
+         *
+         * กรองจาก "ตะกร้าของผู้ซื้อคนนี้" เท่านั้น ไม่ได้ query ตาม id ที่ส่งมาตรงๆ
+         * ไม่งั้นเดา cartItemId ของคนอื่นแล้วสั่งซื้อของเขาได้
+         */
+        List<Integer> selectedIds = req != null ? req.getCartItemIds() : null;
+        if (selectedIds != null && !selectedIds.isEmpty()) {
+            cartItems = cartItems.stream()
+                    .filter(c -> selectedIds.contains(c.getCartItemId()))
+                    .toList();
+
+            if (cartItems.isEmpty()) {
+                return ApiResponse.error("กรุณาเลือกผลงานที่ต้องการสั่งซื้ออย่างน้อย 1 ชิ้น");
+            }
+        }
+
         // ต้องมีที่อยู่ปลายทางก่อน ไม่งั้นคำนวณค่าจัดส่งไม่ได้
         if (req == null || req.getAddressId() == null) {
             return ApiResponse.error("กรุณาเลือกที่อยู่สำหรับจัดส่งก่อนยืนยันคำสั่งซื้อ");
@@ -248,7 +265,8 @@ public class CartService {
                 artworkRepository.save(artwork);
             }
 
-            // ล้างตะกร้าหลังยืนยันคำสั่งซื้อสำเร็จ
+            // ล้างเฉพาะรายการที่สั่งซื้อไปในรอบนี้ (cartItems ถูกกรองตามที่ผู้ซื้อเลือกแล้ว)
+            // ของที่ไม่ได้เลือกต้องค้างอยู่ในตะกร้าต่อ ไม่ใช่หายไปทั้งกระเช้า
             cartItemRepository.deleteAll(cartItems);
 
             // ต้องดึง order ใหม่อีกครั้งเพื่อให้ orderItems ใน entity โหลดครบ (lazy loading)

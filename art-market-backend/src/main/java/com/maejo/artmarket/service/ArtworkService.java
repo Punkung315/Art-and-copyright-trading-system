@@ -44,6 +44,43 @@ public class ArtworkService {
     private static final String NO_MATCH = "__NO_MATCH__";
 
     /**
+     * ตัวคูณราคาลิขสิทธิ์ — ราคาลิขสิทธิ์ = ราคาขาย x ตัวนี้
+     *
+     * ลิขสิทธิ์แพงกว่าตัวชิ้นงานเพราะผู้ซื้อเอาไปทำซ้ำ/ใช้เชิงพาณิชย์ต่อได้
+     * ขณะที่ซื้อชิ้นงานเฉยๆ ได้แค่ตัววัตถุ
+     */
+    private static final double COPYRIGHT_PRICE_MULTIPLIER = 3.0;
+
+    /**
+     * ตัดสินราคาลิขสิทธิ์ตามสถานะล่าสุดของชิ้นงาน — เรียกหลัง set ราคาขายเสร็จแล้วเสมอ
+     *
+     * @param enabled  เปิดให้ซื้อลิขสิทธิ์ไหม
+     * @param manualPrice ราคาที่ผู้ขายกรอกเอง (ใช้เฉพาะตอนปิดโหมดคำนวณอัตโนมัติ)
+     */
+    private void applyCopyrightPrice(Artwork artwork, boolean enabled, Double manualPrice) {
+        if (!enabled) {
+            artwork.setCopyrightPrice(null);
+            return;
+        }
+
+        if (artwork.isCopyrightAutoPrice()) {
+            artwork.setCopyrightPrice(artwork.getPrice() * COPYRIGHT_PRICE_MULTIPLIER);
+            return;
+        }
+
+        if (manualPrice != null && manualPrice > 0) {
+            artwork.setCopyrightPrice(manualPrice);
+            return;
+        }
+
+        // ปิดโหมดอัตโนมัติแต่ไม่ได้กรอกราคามา และยังไม่เคยมีราคาเดิม
+        // ปล่อยเป็น null จะกลายเป็น "ปิดลิขสิทธิ์" ทั้งที่ผู้ขายสั่งให้เปิด — คำนวณให้ไปก่อน
+        if (artwork.getCopyrightPrice() == null || artwork.getCopyrightPrice() <= 0) {
+            artwork.setCopyrightPrice(artwork.getPrice() * COPYRIGHT_PRICE_MULTIPLIER);
+        }
+    }
+
+    /**
      * คำนวณค่าส่ง "ประเมิน" ใหม่ทุกครั้งที่น้ำหนัก/ขนาด/ขนส่งเปลี่ยน
      * เก็บลง artwork.shippingCost ไว้เป็น cache สำหรับโชว์บนหน้ารายละเอียดงาน
      * ค่าส่งที่คิดเงินจริงคำนวณแยกตอนยืนยันคำสั่งซื้อ เมื่อรู้ที่อยู่ปลายทางแล้ว
@@ -278,7 +315,8 @@ public class ArtworkService {
                     .description(req.getDescription())
                     .price(req.getPrice())
                     .publishDate(req.getPublishDate())
-                    .copyrightPrice(req.getCopyrightPrice())
+                    .copyrightAutoPrice(req.getCopyrightAutoPrice() == null
+                            || req.getCopyrightAutoPrice())
                     .shippingCompany(req.getShippingCompany())
                     .weight(req.getWeight())
                     .width(req.getWidth())
@@ -288,6 +326,11 @@ public class ArtworkService {
                     .artworkStatus(ArtworkStatus.AVAILABLE)  // พร้อมขายจากวันแรก
                     .seller(seller)
                     .build();
+
+            // เปิดให้ซื้อลิขสิทธิ์เป็นค่าเริ่มต้น ถ้า frontend ไม่ได้ระบุมา
+            boolean copyrightEnabled = req.getCopyrightAvailable() == null
+                    || req.getCopyrightAvailable();
+            applyCopyrightPrice(artwork, copyrightEnabled, req.getCopyrightPrice());
 
             refreshShippingEstimate(artwork);
             artworkRepository.save(artwork);
@@ -351,13 +394,25 @@ public class ArtworkService {
         if (req.getArtworkSize()    != null) artwork.setArtworkSize(req.getArtworkSize());
         if (StringUtils.hasText(req.getDescription()))      artwork.setDescription(req.getDescription());
         if (req.getPrice()          != null) artwork.setPrice(req.getPrice());
-        if (req.getCopyrightPrice() != null) artwork.setCopyrightPrice(req.getCopyrightPrice());
         if (StringUtils.hasText(req.getPublishDate()))      artwork.setPublishDate(req.getPublishDate());
         if (req.getShippingCompany() != null) artwork.setShippingCompany(req.getShippingCompany());
         if (req.getWeight() != null) artwork.setWeight(req.getWeight());
         if (req.getWidth()  != null) artwork.setWidth(req.getWidth());
         if (req.getLength() != null) artwork.setLength(req.getLength());
         if (req.getHeight() != null) artwork.setHeight(req.getHeight());
+
+        /*
+         * ราคาลิขสิทธิ์ต้องคิดใหม่ "หลัง" set ราคาขายเสมอ
+         * ไม่งั้นตอนผู้ขายแก้ราคาขายในโหมดคำนวณอัตโนมัติ ราคาลิขสิทธิ์จะค้างค่าเดิม
+         */
+        if (req.getCopyrightAutoPrice() != null) {
+            artwork.setCopyrightAutoPrice(req.getCopyrightAutoPrice());
+        }
+        // ไม่ได้ส่ง copyrightAvailable มา = ไม่ได้ตั้งใจเปลี่ยน ให้ยึดสถานะเดิมของชิ้นงาน
+        boolean copyrightEnabled = req.getCopyrightAvailable() != null
+                ? req.getCopyrightAvailable()
+                : artwork.getCopyrightPrice() != null;
+        applyCopyrightPrice(artwork, copyrightEnabled, req.getCopyrightPrice());
 
         // ค่าส่งประเมินต้องขยับตามทุกครั้ง ไม่งั้นผู้ขายแก้น้ำหนักแล้วราคายังค้างของเดิม
         refreshShippingEstimate(artwork);

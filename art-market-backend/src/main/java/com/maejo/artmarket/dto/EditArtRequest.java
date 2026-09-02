@@ -31,6 +31,18 @@ public class EditArtRequest {
     @Positive(message = "ราคาต้องมากกว่า 0")
     private Double price;
 
+    /**
+     * เปิด/ปิดการขายลิขสิทธิ์ — ไม่ส่งมา = ไม่ได้ตั้งใจเปลี่ยน ยึดสถานะเดิมของชิ้นงาน
+     *
+     * ของเดิมไม่มี field นี้ ทำให้ปิดการขายลิขสิทธิ์ไม่ได้เลย เพราะ backend เช็ค
+     * copyrightPrice != null อย่างเดียว จึงไม่มีทางเซ็ตกลับเป็น null ได้
+     */
+    private Boolean copyrightAvailable;
+
+    /** สลับโหมดคำนวณอัตโนมัติ — ไม่ส่งมา = คงโหมดเดิมไว้ */
+    private Boolean copyrightAutoPrice;
+
+    /** ใช้เฉพาะตอนโหมดคำนวณอัตโนมัติปิดอยู่ */
     @Positive(message = "ราคาลิขสิทธิ์ต้องมากกว่า 0")
     private Double copyrightPrice;
 

@@ -3,6 +3,8 @@ package com.maejo.artmarket.dto;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.util.List;
+
 /**
  * DTO รับข้อมูลยืนยันคำสั่งซื้อ (ยูสเคส 3.1.11 Confirm Order)
  *
@@ -15,4 +17,12 @@ public class ConfirmOrderRequest {
 
     @NotNull(message = "กรุณาเลือกที่อยู่สำหรับจัดส่ง")
     private Integer addressId;
+
+    /**
+     * รายการในตะกร้าที่ต้องการสั่งซื้อรอบนี้
+     *
+     * null หรือ list ว่าง = สั่งซื้อทั้งตะกร้า (พฤติกรรมเดิม ไม่พังของที่เรียกอยู่แล้ว)
+     * ระบุมา = สั่งเฉพาะรายการที่เลือก ที่เหลือยังค้างอยู่ในตะกร้าให้สั่งทีหลังได้
+     */
+    private List<Integer> cartItemIds;
 }

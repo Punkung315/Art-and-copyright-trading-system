@@ -48,6 +48,19 @@ public class AddArtRequest {
     private String publishDate;
 
     // Optional fields
+    /**
+     * เปิดให้ซื้อลิขสิทธิ์ไหม — ไม่ส่งมา = เปิด (ค่าเริ่มต้นของระบบ)
+     * ใช้ Boolean ไม่ใช่ boolean เพราะต้องแยก "ไม่ได้ส่งมา" ออกจาก "ส่ง false มา"
+     */
+    private Boolean copyrightAvailable;
+
+    /**
+     * ให้ระบบคำนวณราคาลิขสิทธิ์จากราคาขายให้ไหม — ไม่ส่งมา = คำนวณให้ (ค่าเริ่มต้น)
+     * ถ้าเป็น true ค่า copyrightPrice ที่ส่งมาจะถูกมองข้าม ระบบคิดเองทั้งหมด
+     */
+    private Boolean copyrightAutoPrice;
+
+    /** ใช้เฉพาะตอน copyrightAutoPrice = false เท่านั้น */
     @Positive(message = "ราคาลิขสิทธิ์ต้องมากกว่า 0")
     private Double copyrightPrice;
 

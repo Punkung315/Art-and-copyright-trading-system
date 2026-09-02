@@ -29,6 +29,9 @@ public class ArtworkDetailResponse {
     private Double price;
     private Double copyrightPrice;
 
+    /** true = ราคาลิขสิทธิ์ด้านบนมาจากการคำนวณอัตโนมัติ ไม่ใช่ผู้ขายกรอกเอง */
+    private boolean copyrightAutoPrice;
+
     /** ค่าจัดส่ง "ประเมิน" ยังไม่รู้ปลายทาง ค่าจริงคิดตอนยืนยันคำสั่งซื้อ */
     private Double shippingCost;
 
@@ -71,6 +74,7 @@ public class ArtworkDetailResponse {
                 .description(artwork.getDescription())
                 .price(artwork.getPrice())
                 .copyrightPrice(artwork.getCopyrightPrice())
+                .copyrightAutoPrice(artwork.isCopyrightAutoPrice())
                 .shippingCost(artwork.getShippingCost())
                 .shippingCompany(artwork.getShippingCompany())
                 .shippingCompanyName(artwork.getShippingCompany() != null

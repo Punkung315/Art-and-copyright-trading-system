@@ -1409,10 +1409,24 @@ export async function removeFromCart(
  * ยืนยันคำสั่งซื้อ ต้องระบุที่อยู่ปลายทางเสมอ
  * เพราะค่าจัดส่งคำนวณจากจังหวัดปลายทาง (ดู ShippingRateService ฝั่ง backend)
  */
-export async function confirmOrder(_buyer: User, addressId: string): Promise<Order[]> {
+export async function confirmOrder(
+  _buyer: User,
+  addressId: string,
+  cartItemIds?: string[]
+): Promise<Order[]> {
   const o = await request<BeOrder>("/cart/confirm", {
     method: "POST",
-    body: JSON.stringify({ addressId: Number(addressId) }),
+    body: JSON.stringify({
+      addressId: Number(addressId),
+      /*
+       * ส่งเสมอเมื่อผู้เรียกระบุมา ไม่ปล่อยเป็น undefined
+       *
+       * backend ตีความ "ไม่ส่งมา" ว่าสั่งทั้งตะกร้า ซึ่งเป็น default ที่อันตราย
+       * ถ้า field นี้หายไประหว่างทางด้วยเหตุใดก็ตาม ระบบจะสั่งซื้อทุกชิ้นเงียบๆ
+       * แทนที่จะฟ้อง — เป็นความผิดพลาดที่ผู้ซื้อเสียเงินจริง
+       */
+      cartItemIds: cartItemIds?.length ? cartItemIds.map(Number) : undefined,
+    }),
   });
   return [mapOrder(o)];
 }
@@ -1463,9 +1477,19 @@ export async function getOrder(orderId: string): Promise<Order | undefined> {
  * frontend คิดเป็นระดับ "คำสั่งซื้อ" แต่ backend ยืนยันเป็นราย OrderItem
  * จึงต้องดึงรายการของคำสั่งซื้อนั้นมาก่อน แล้วยิงทีละชิ้นที่ยังรอยืนยันอยู่
  */
+/**
+ * ตอบความพร้อมขายแยกทีละชิ้น
+ *
+ * @param answers  orderItemId -> พร้อมขายไหม
+ *                 ส่งเฉพาะชิ้นที่ยังรอตอบอยู่ ชิ้นที่ตอบไปแล้ว backend ปฏิเสธ
+ *
+ * backend มี endpoint รายชิ้นอยู่แล้ว (PATCH /seller/order-items/{id}/availability)
+ * ของเดิมฝั่งนี้บังคับตอบเหมือนกันทุกชิ้น ทำให้ผู้ขายที่มีงานหลายชิ้นในคำสั่งซื้อเดียว
+ * แยกไม่ได้ว่าชิ้นไหนพร้อมชิ้นไหนไม่พร้อม
+ */
 export async function confirmAvailability(
   orderId: string,
-  confirmed: boolean
+  answers: Record<string, boolean>
 ): Promise<Order> {
   const orders = await requestOr<BeSellerOrder[]>("/seller/orders", []);
   const target = orders.find((o) => String(o.orderId) === String(orderId));
@@ -1476,10 +1500,14 @@ export async function confirmAvailability(
   );
   if (pendingItems.length === 0) throw new ApiError("รายการนี้ถูกยืนยันไปแล้ว");
 
-  for (const item of pendingItems) {
+  // ตอบเฉพาะชิ้นที่ผู้ขายเลือกไว้จริง ชิ้นที่ไม่ได้เลือกยังรอตอบต่อไป
+  const toAnswer = pendingItems.filter((i) => answers[String(i.orderItemId)] !== undefined);
+  if (toAnswer.length === 0) throw new ApiError("กรุณาเลือกผลงานที่ต้องการตอบอย่างน้อย 1 ชิ้น");
+
+  for (const item of toAnswer) {
     await request<unknown>(`/seller/order-items/${item.orderItemId}/availability`, {
       method: "PATCH",
-      body: JSON.stringify({ available: confirmed }),
+      body: JSON.stringify({ available: answers[String(item.orderItemId)] }),
     });
   }
 

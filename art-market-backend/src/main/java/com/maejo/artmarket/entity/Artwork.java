@@ -34,7 +34,23 @@ public class Artwork {
 
     @Column(nullable = false)
     private Double price;
+    /**
+     * ราคาลิขสิทธิ์ — null = ไม่เปิดให้ซื้อลิขสิทธิ์ของงานชิ้นนี้
+     * (ไม่มีคอลัมน์ copyrightAvailable แยก เพราะ null สื่อความหมายนั้นอยู่แล้ว)
+     */
     private Double copyrightPrice;
+
+    /**
+     * true = ให้ระบบคำนวณราคาลิขสิทธิ์ให้อัตโนมัติจากราคาขาย (ดู ArtworkService)
+     * false = ผู้ขายกรอกราคาเอง
+     *
+     * ต้องเก็บเป็น flag ใน DB ไม่ใช่แค่สถานะบนหน้าเว็บ เพราะเวลาผู้ขายแก้ "ราคาขาย"
+     * ทีหลัง ระบบต้องรู้ว่าจะต้องคิดราคาลิขสิทธิ์ใหม่ตามไปด้วยไหม
+     * ถ้าไม่เก็บไว้ ราคาลิขสิทธิ์จะค้างอยู่ที่ค่าเดิมเงียบๆ แบบเดียวกับ shippingCost
+     */
+    @Column(name = "copyright_auto_price", nullable = false,
+            columnDefinition = "BOOLEAN NOT NULL DEFAULT TRUE")
+    private boolean copyrightAutoPrice = true;
 
     /**
      * ค่าจัดส่ง "ประเมิน" เท่านั้น — ระบบคำนวณให้จากน้ำหนัก/ขนาด/ขนส่งที่ผู้ขายเลือก

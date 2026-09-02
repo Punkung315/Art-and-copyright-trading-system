@@ -29,7 +29,13 @@ function OrderDetailContent({ id }: { id: string }) {
   const { notify } = useToast();
   const [order, setOrder] = useState<Order | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
-  const [confirmingAvailability, setConfirmingAvailability] = useState<null | boolean>(null);
+  /*
+   * คำตอบความพร้อมรายชิ้น: orderItemId -> พร้อมขายไหม
+   * ผู้ขายที่มีงานหลายชิ้นในคำสั่งซื้อเดียวต้องตอบแยกกันได้
+   * ชิ้นที่ยังไม่ได้เลือกจะไม่ถูกส่งไป backend และยังรอตอบต่อไป
+   */
+  const [answers, setAnswers] = useState<Record<string, boolean>>({});
+  const [confirming, setConfirming] = useState(false);
 
   const load = useCallback(async () => {
     setOrder((await getOrder(id)) ?? null);
@@ -52,7 +58,8 @@ function OrderDetailContent({ id }: { id: string }) {
       );
     } finally {
       setBusy(false);
-      setConfirmingAvailability(null);
+      setConfirming(false);
+      setAnswers({});
     }
   }
 
@@ -77,11 +84,22 @@ function OrderDetailContent({ id }: { id: string }) {
   const visibleItems = isSeller ? myItems : order.items;
   const visibleTotal = visibleItems.reduce((s, i) => s + i.price, 0);
 
-  const myAvailability = myItems.every((i) => i.availabilityStatus === "confirmed")
-    ? "confirmed"
-    : myItems.some((i) => i.availabilityStatus === "rejected")
-      ? "rejected"
-      : "waiting";
+  // ชิ้นของเราที่ยังไม่ได้ตอบ — เป็นตัวตัดสินว่าจะโชว์แผงเลือกความพร้อมไหม
+  const pendingMyItems = myItems.filter((i) => i.availabilityStatus === "waiting");
+  const answeredCount = pendingMyItems.filter((i) => answers[i.id] !== undefined).length;
+
+  /*
+   * สรุปสถานะของผู้ขายคนนี้
+   * ต้องมี "mixed" ด้วย เพราะตอบแยกรายชิ้นได้แล้ว การสรุปว่า "ยืนยันแล้ว" หรือ
+   * "ไม่พร้อมจำหน่ายแล้ว" อย่างใดอย่างหนึ่งจะบิดความจริงเมื่อมีทั้งสองแบบปนกัน
+   */
+  const myAvailability = pendingMyItems.length > 0
+    ? "waiting"
+    : myItems.every((i) => i.availabilityStatus === "confirmed")
+      ? "confirmed"
+      : myItems.every((i) => i.availabilityStatus === "rejected")
+        ? "rejected"
+        : "mixed";
 
   const progress = availabilityProgress(order.items);
   const pending = progress.total - progress.confirmed - progress.rejected;
@@ -206,19 +224,53 @@ function OrderDetailContent({ id }: { id: string }) {
                 ตรวจรายการสินค้าด้านบนให้ครบก่อนยืนยันความพร้อมในการขาย
               </p>
 
-              {myAvailability === "waiting" ? (
-                confirmingAvailability === null ? (
-                  <div className="flex flex-wrap gap-2">
-                    <Button disabled={busy} onClick={() => setConfirmingAvailability(true)}>
-                      ยืนยันความพร้อมในการขาย
-                    </Button>
-                    <Button
-                      variant="danger"
-                      disabled={busy}
-                      onClick={() => setConfirmingAvailability(false)}
-                    >
-                      ไม่พร้อมจำหน่าย
-                    </Button>
+              {pendingMyItems.length > 0 ? (
+                !confirming ? (
+                  /*
+                    เลือกความพร้อมแยกทีละชิ้น
+                    ผู้ขายรายเดียวอาจมีงานหลายชิ้นในคำสั่งซื้อเดียว บางชิ้นพร้อมส่ง
+                    บางชิ้นอาจเสียหาย/ขายไปแล้ว การบังคับตอบเหมือนกันทุกชิ้น
+                    ทำให้ต้องปฏิเสธทั้งใบทั้งที่มีของพร้อมส่งอยู่
+                  */
+                  <div className="flex flex-col gap-2">
+                    {pendingMyItems.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-stone-200 p-3"
+                      >
+                        <span className="text-sm text-stone-800">{item.artworkName}</span>
+                        <div className="flex gap-2">
+                          <Button
+                            variant={answers[item.id] === true ? "primary" : "secondary"}
+                            disabled={busy}
+                            onClick={() => setAnswers((a) => ({ ...a, [item.id]: true }))}
+                          >
+                            พร้อมขาย
+                          </Button>
+                          <Button
+                            variant={answers[item.id] === false ? "danger" : "secondary"}
+                            disabled={busy}
+                            onClick={() => setAnswers((a) => ({ ...a, [item.id]: false }))}
+                          >
+                            ไม่พร้อมขาย
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+
+                    <div className="mt-2 flex flex-wrap items-center gap-3">
+                      <Button
+                        disabled={busy || answeredCount === 0}
+                        onClick={() => setConfirming(true)}
+                      >
+                        บันทึกความพร้อม ({answeredCount}/{pendingMyItems.length})
+                      </Button>
+                      {answeredCount === 0 && (
+                        <span className="text-sm text-stone-500">
+                          เลือกความพร้อมของผลงานอย่างน้อย 1 ชิ้นก่อน
+                        </span>
+                      )}
+                    </div>
                   </div>
                 ) : (
                   /*
@@ -227,55 +279,74 @@ function OrderDetailContent({ id }: { id: string }) {
                     การกดพลาดจึงย้อนไม่ได้เลย ต้องเตือนให้ชัดก่อน
                   */
                   <div className="rounded-lg border border-amber-300 bg-amber-50 p-4">
-                    <p className="font-medium text-amber-900">
-                      {confirmingAvailability
-                        ? "ยืนยันความพร้อมในการขายผลงานนี้?"
-                        : "แจ้งว่าไม่พร้อมจำหน่ายผลงานนี้?"}
-                    </p>
-                    <p className="mt-1 text-sm text-amber-800">
-                      {confirmingAvailability
-                        ? "เมื่อยืนยันแล้วจะแก้ไขไม่ได้อีก และผู้ซื้อจะชำระเงินได้ทันทีเมื่อผู้ขายทุกคนยืนยันครบ"
-                        : "เมื่อแจ้งไม่พร้อมจำหน่ายแล้วจะแก้ไขไม่ได้อีก ผลงานจะกลับไปเปิดขายให้คนอื่น และผู้ซื้อจะชำระเงินคำสั่งซื้อนี้ไม่ได้"}
+                    <p className="font-medium text-amber-900">ยืนยันการตอบความพร้อม?</p>
+                    <ul className="mt-2 flex flex-col gap-1 text-sm text-amber-900">
+                      {pendingMyItems
+                        .filter((i) => answers[i.id] !== undefined)
+                        .map((i) => (
+                          <li key={i.id}>
+                            {i.artworkName} —{" "}
+                            <span className="font-medium">
+                              {answers[i.id] ? "พร้อมขาย" : "ไม่พร้อมขาย"}
+                            </span>
+                          </li>
+                        ))}
+                    </ul>
+                    <p className="mt-2 text-sm text-amber-800">
+                      เมื่อบันทึกแล้วจะแก้ไขไม่ได้อีก ผลงานที่แจ้งไม่พร้อมจะกลับไปเปิดขายให้คนอื่น
+                      ส่วนผู้ซื้อจะชำระเงินได้เมื่อผู้ขายทุกคนตอบครบ
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <Button
-                        variant={confirmingAvailability ? "primary" : "danger"}
                         disabled={busy}
                         onClick={() =>
                           run(
-                            () => confirmAvailability(order.id, confirmingAvailability),
-                            confirmingAvailability
-                              ? "ยืนยันความพร้อมในการขายผลงานแล้ว"
-                              : "แจ้งไม่พร้อมจำหน่ายแล้ว"
+                            () => confirmAvailability(order.id, answers),
+                            "บันทึกความพร้อมในการขายแล้ว"
                           )
                         }
                       >
                         {busy ? "กำลังบันทึก..." : "ยืนยัน"}
                       </Button>
-                      <Button
-                        variant="ghost"
-                        disabled={busy}
-                        onClick={() => setConfirmingAvailability(null)}
-                      >
+                      <Button variant="ghost" disabled={busy} onClick={() => setConfirming(false)}>
                         ยกเลิก
                       </Button>
                     </div>
                   </div>
                 )
               ) : (
-                /* ยืนยันแล้วแทนที่ปุ่มด้วยข้อความ ไม่เหลือปุ่มให้กดซ้ำแล้วเจอ error */
-                <p
-                  className={`rounded-lg px-3 py-2 text-sm font-medium ${
-                    myAvailability === "confirmed"
-                      ? "bg-emerald-50 text-emerald-800"
-                      : "bg-rose-50 text-rose-700"
-                  }`}
-                >
-                  {/* ใส่ "คุณ" นำหน้าให้ต่างจากป้ายสถานะรวมของคำสั่งซื้อที่อยู่ด้านบน */}
-                  {myAvailability === "confirmed"
-                    ? "คุณยืนยันความพร้อมแล้ว"
-                    : "คุณแจ้งไม่พร้อมจำหน่ายแล้ว"}
-                </p>
+                /* ตอบครบแล้วแทนที่ปุ่มด้วยสรุป ไม่เหลือปุ่มให้กดซ้ำแล้วเจอ error */
+                <div className="flex flex-col gap-2">
+                  <p
+                    className={`rounded-lg px-3 py-2 text-sm font-medium ${
+                      myAvailability === "confirmed"
+                        ? "bg-emerald-50 text-emerald-800"
+                        : myAvailability === "rejected"
+                          ? "bg-rose-50 text-rose-700"
+                          : "bg-amber-50 text-amber-800"
+                    }`}
+                  >
+                    {/* ใส่ "คุณ" นำหน้าให้ต่างจากป้ายสถานะรวมของคำสั่งซื้อที่อยู่ด้านบน */}
+                    {myAvailability === "confirmed"
+                      ? "คุณยืนยันความพร้อมแล้ว"
+                      : myAvailability === "rejected"
+                        ? "คุณแจ้งไม่พร้อมจำหน่ายแล้ว"
+                        : "คุณตอบความพร้อมครบทุกชิ้นแล้ว"}
+                  </p>
+                  {/* มีทั้งพร้อมและไม่พร้อมปนกัน ต้องบอกรายชิ้นไม่งั้นสรุปรวมกำกวม */}
+                  {myAvailability === "mixed" && (
+                    <ul className="flex flex-col gap-1 text-sm text-stone-600">
+                      {myItems.map((i) => (
+                        <li key={i.id}>
+                          {i.artworkName} —{" "}
+                          <span className="font-medium">
+                            {i.availabilityStatus === "confirmed" ? "พร้อมขาย" : "ไม่พร้อมขาย"}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               )}
 
               <div className="mt-5 border-t border-stone-100 pt-4">
