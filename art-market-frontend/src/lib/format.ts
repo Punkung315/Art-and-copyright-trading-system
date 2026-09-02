@@ -24,3 +24,17 @@ export function formatArtworkSize(artwork: Artwork): string {
   // artworkSize เป็นตัวเลขล้วน (เช่น "50") ต้องเติมหน่วยให้ ไม่งั้นจะอ่านไม่รู้เรื่อง
   return /^\d+(\.\d+)?$/.test(raw) ? `${raw} ซม.` : raw;
 }
+
+/**
+ * ตัวคูณราคาลิขสิทธิ์ ต้องตรงกับ COPYRIGHT_PRICE_MULTIPLIER ใน ArtworkService.java
+ *
+ * ฝั่งนี้ใช้แค่ "แสดงตัวอย่าง" ให้ผู้ขายเห็นทันทีที่พิมพ์ราคา
+ * ค่าที่บันทึกจริงคำนวณจาก backend เสมอ frontend ไม่ได้ส่งตัวเลขนี้ไป
+ */
+export const COPYRIGHT_PRICE_MULTIPLIER = 3;
+
+/** ราคาลิขสิทธิ์ที่ระบบจะคำนวณให้ จากราคาขาย */
+export function calcCopyrightPrice(price: number | undefined): number {
+  if (!price || !Number.isFinite(price) || price <= 0) return 0;
+  return Math.round(price * COPYRIGHT_PRICE_MULTIPLIER * 100) / 100;
+}

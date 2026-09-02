@@ -220,6 +220,7 @@ interface BeArtworkDetail extends BeArtworkSummary {
   artworkSize: number | null;
   description: string | null;
   copyrightPrice: number | null;
+  copyrightAutoPrice?: boolean;
   shippingCost: number | null;
   shippingCompany: ShippingCompanyCode | null;
   shippingCompanyName: string | null;
@@ -535,6 +536,8 @@ function mapArtworkDetail(a: BeArtworkDetail): Artwork {
     publishDate: a.publishDate ?? "",
     copyrightAvailable: (a.copyrightPrice ?? 0) > 0,
     copyrightPrice: a.copyrightPrice ?? undefined,
+    // ไม่ระบุมา = โหมดอัตโนมัติ ซึ่งเป็นค่าเริ่มต้นของระบบ
+    copyrightAutoPrice: a.copyrightAutoPrice ?? true,
   };
 }
 
@@ -1258,7 +1261,10 @@ export async function addArtwork(
       description: input.description,
       price: input.price,
       publishDate: new Date().toISOString().slice(0, 10),
-      copyrightPrice: input.copyrightAvailable ? input.copyrightPrice ?? null : null,
+      // ราคาลิขสิทธิ์ให้ backend เป็นคนคิด ฝั่งนี้ส่งแค่ "เปิดไหม" กับ "คิดเองไหม"
+      copyrightAvailable: input.copyrightAvailable,
+      copyrightAutoPrice: input.copyrightAutoPrice ?? true,
+      copyrightPrice: input.copyrightAutoPrice === false ? input.copyrightPrice ?? null : null,
     }),
   });
   return mapArtworkDetail(a);
@@ -1303,7 +1309,21 @@ export async function updateArtwork(
   }
   if (patch.description !== undefined) body.description = patch.description;
   if (patch.price !== undefined) body.price = patch.price;
-  if (patch.copyrightPrice !== undefined) body.copyrightPrice = patch.copyrightPrice;
+  /*
+   * ต้องส่ง copyrightAvailable ไปด้วยเสมอเมื่อฟอร์มมีค่านี้
+   * ของเดิมส่งแต่ copyrightPrice ทำให้ติ๊กปิด "เปิดให้ซื้อลิขสิทธิ์" แล้วไม่มีผลอะไรเลย
+   * เพราะ backend ไม่มีทางรู้ว่าต้องเซ็ตราคากลับเป็น null
+   */
+  if (patch.copyrightAvailable !== undefined) {
+    body.copyrightAvailable = patch.copyrightAvailable;
+  }
+  if (patch.copyrightAutoPrice !== undefined) {
+    body.copyrightAutoPrice = patch.copyrightAutoPrice;
+  }
+  // ส่งราคาที่กรอกเองเฉพาะตอนปิดโหมดอัตโนมัติ ไม่งั้น backend คิดเองอยู่แล้ว
+  if (patch.copyrightAutoPrice === false && patch.copyrightPrice !== undefined) {
+    body.copyrightPrice = patch.copyrightPrice;
+  }
 
   const a = await request<BeArtworkDetail>(`/artworks/${id}`, {
     method: "PUT",

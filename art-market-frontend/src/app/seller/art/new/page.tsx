@@ -10,6 +10,7 @@ import { ShippingCompanyCode } from "@/types";
 import { Button, Card, Container, Field, Input, Select, Textarea } from "@/components/ui";
 import { ImageUploadField } from "@/components/ImageUploadField";
 import { ShippingPicker } from "@/components/ShippingPicker";
+import { CopyrightPriceField } from "@/components/CopyrightPriceField";
 import { validateNotEmpty } from "@/lib/validation";
 
 function AddArtContent() {
@@ -32,6 +33,8 @@ function AddArtContent() {
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
   const [copyrightAvailable, setCopyrightAvailable] = useState(true);
+  // คำนวณอัตโนมัติเป็นค่าเริ่มต้น ผู้ขายส่วนใหญ่ไม่อยากมานั่งคิดเอง
+  const [copyrightAutoPrice, setCopyrightAutoPrice] = useState(true);
   const [copyrightPrice, setCopyrightPrice] = useState("");
   const [errors, setErrors] = useState<Record<string, string | null>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -52,6 +55,11 @@ function AddArtContent() {
       length: !length || Number(length) <= 0 ? "กรุณากรอกความหนาเป็นตัวเลขมากกว่า 0" : null,
       weight: !weight || Number(weight) <= 0 ? "กรุณากรอกน้ำหนักเป็นตัวเลขมากกว่า 0" : null,
       shippingCompany: shippingCompany ? null : "กรุณาเลือกบริษัทขนส่ง",
+      // บังคับกรอกเฉพาะตอนปิดโหมดอัตโนมัติ ไม่งั้นระบบคิดให้อยู่แล้ว
+      copyrightPrice:
+        copyrightAvailable && !copyrightAutoPrice && (!copyrightPrice || Number(copyrightPrice) <= 0)
+          ? "กรุณากรอกราคาลิขสิทธิ์ หรือเปิดให้ระบบคำนวณให้"
+          : null,
     };
     setErrors(nextErrors);
     if (Object.values(nextErrors).some(Boolean)) {
@@ -77,7 +85,11 @@ function AddArtContent() {
         description,
         price: Number(price),
         copyrightAvailable,
-        copyrightPrice: copyrightAvailable && copyrightPrice ? Number(copyrightPrice) : undefined,
+        copyrightAutoPrice,
+        copyrightPrice:
+          copyrightAvailable && !copyrightAutoPrice && copyrightPrice
+            ? Number(copyrightPrice)
+            : undefined,
       });
       notify("บันทึกข้อมูลงานศิลปะสำเร็จ", "success");
       router.push(`/seller/art/${artwork.id}/edit`);
@@ -187,29 +199,16 @@ function AddArtContent() {
             error={errors.shippingCompany}
           />
 
-          <div className="flex items-center gap-2 pt-6">
-            <input
-              id="copyrightAvailable"
-              type="checkbox"
-              checked={copyrightAvailable}
-              onChange={(e) => setCopyrightAvailable(e.target.checked)}
-            />
-            <label htmlFor="copyrightAvailable" className="text-sm text-stone-700">
-              เปิดให้ซื้อลิขสิทธิ์ของผลงานนี้
-            </label>
-          </div>
-
-          {copyrightAvailable && (
-            <Field label="ราคาลิขสิทธิ์ (copyrightPrice)">
-              <Input
-                type="number"
-                min={0}
-                value={copyrightPrice}
-                onChange={(e) => setCopyrightPrice(e.target.value)}
-                placeholder="ถ้าไม่ระบุ ระบบจะคำนวณให้อัตโนมัติ"
-              />
-            </Field>
-          )}
+          <CopyrightPriceField
+            available={copyrightAvailable}
+            onAvailableChange={setCopyrightAvailable}
+            autoPrice={copyrightAutoPrice}
+            onAutoPriceChange={setCopyrightAutoPrice}
+            price={Number(price) || undefined}
+            manualPrice={copyrightPrice}
+            onManualPriceChange={setCopyrightPrice}
+            error={errors.copyrightPrice}
+          />
 
           <div className="sm:col-span-2">
             <Field label="คำอธิบายงานศิลปะ (description)" error={errors.description}>

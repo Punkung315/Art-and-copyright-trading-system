@@ -103,6 +103,8 @@ export interface Artwork {
   salesStatus?: ArtworkSalesStatus;
   copyrightAvailable: boolean;
   copyrightPrice?: number;
+  /** true = ราคาลิขสิทธิ์มาจากการคำนวณอัตโนมัติ (ราคาขาย x 3) ไม่ใช่ผู้ขายกรอกเอง */
+  copyrightAutoPrice?: boolean;
 }
 
 export interface CartItem {

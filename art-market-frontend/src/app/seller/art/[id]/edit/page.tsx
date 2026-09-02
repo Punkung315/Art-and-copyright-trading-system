@@ -18,6 +18,7 @@ import { Button, Card, Container, Field, Input, Select, Spinner, Textarea } from
 import { StatusBadge } from "@/components/StatusBadge";
 import { ImageUploadField } from "@/components/ImageUploadField";
 import { ShippingPicker } from "@/components/ShippingPicker";
+import { CopyrightPriceField } from "@/components/CopyrightPriceField";
 import { validateNotEmpty } from "@/lib/validation";
 
 function EditArtContent({ id }: { id: string }) {
@@ -58,6 +59,11 @@ function EditArtContent({ id }: { id: string }) {
       length: !form.length || form.length <= 0 ? "กรุณากรอกความหนาเป็นตัวเลขมากกว่า 0" : null,
       weight: !form.weight || form.weight <= 0 ? "กรุณากรอกน้ำหนักเป็นตัวเลขมากกว่า 0" : null,
       shippingCompany: form.shippingCompany ? null : "กรุณาเลือกบริษัทขนส่ง",
+      // บังคับกรอกเฉพาะตอนปิดโหมดคำนวณอัตโนมัติ
+      copyrightPrice:
+        form.copyrightAvailable && form.copyrightAutoPrice === false && !form.copyrightPrice
+          ? "กรุณากรอกราคาลิขสิทธิ์ หรือเปิดให้ระบบคำนวณให้"
+          : null,
     };
     setErrors(nextErrors);
     if (Object.values(nextErrors).some(Boolean)) {
@@ -261,28 +267,18 @@ function EditArtContent({ id }: { id: string }) {
             error={errors.shippingCompany}
           />
 
-          <div className="flex items-center gap-2 pt-6">
-            <input
-              id="copyrightAvailable"
-              type="checkbox"
-              checked={form.copyrightAvailable ?? false}
-              onChange={(e) => set("copyrightAvailable", e.target.checked)}
-            />
-            <label htmlFor="copyrightAvailable" className="text-sm text-stone-700">
-              เปิดให้ซื้อลิขสิทธิ์ของผลงานนี้
-            </label>
-          </div>
-
-          {form.copyrightAvailable && (
-            <Field label="ราคาลิขสิทธิ์ (copyrightPrice)">
-              <Input
-                type="number"
-                min={0}
-                value={form.copyrightPrice ?? 0}
-                onChange={(e) => set("copyrightPrice", Number(e.target.value))}
-              />
-            </Field>
-          )}
+          <CopyrightPriceField
+            available={form.copyrightAvailable ?? false}
+            onAvailableChange={(v) => set("copyrightAvailable", v)}
+            autoPrice={form.copyrightAutoPrice ?? true}
+            onAutoPriceChange={(v) => set("copyrightAutoPrice", v)}
+            price={form.price}
+            manualPrice={form.copyrightPrice != null ? String(form.copyrightPrice) : ""}
+            onManualPriceChange={(v) =>
+              set("copyrightPrice", v === "" ? undefined : Number(v))
+            }
+            error={errors.copyrightPrice}
+          />
 
           <div className="sm:col-span-2">
             <Field label="คำอธิบายงานศิลปะ (description)" error={errors.description}>
