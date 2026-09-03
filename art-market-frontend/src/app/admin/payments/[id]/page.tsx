@@ -7,6 +7,7 @@ import { useToast } from "@/context/ToastContext";
 import { getPayment, confirmPayment, AdminPaymentDetail, ApiError } from "@/lib/api";
 import { Button, Card, Container, EmptyState, Spinner } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 function Row({ label, value }: { label: string; value?: string | number | null }) {
   const empty = value === null || value === undefined || value === "";
@@ -47,6 +48,11 @@ function AdminPaymentDetailContent({ paymentId }: { paymentId: string }) {
   const { notify } = useToast();
   const [payment, setPayment] = useState<AdminPaymentDetail | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
+  /*
+   * null = ยังไม่ได้กดอะไร / true = กำลังจะยืนยันการโอน / false = กำลังจะปฏิเสธ
+   * เก็บแยกจาก busy เพราะกล่องยืนยันต้องรู้ว่ากำลังถามเรื่องอะไรอยู่
+   */
+  const [pendingAction, setPendingAction] = useState<boolean | null>(null);
 
   const load = useCallback(async () => {
     setPayment((await getPayment(paymentId)) ?? null);
@@ -69,6 +75,7 @@ function AdminPaymentDetailContent({ paymentId }: { paymentId: string }) {
       );
     } finally {
       setBusy(false);
+      setPendingAction(null);
     }
   }
 
@@ -244,13 +251,13 @@ function AdminPaymentDetailContent({ paymentId }: { paymentId: string }) {
                 เทียบสลิปกับยอดสุทธิ ฿{payment.grandTotal.toLocaleString()} ก่อนตัดสินใจ
               </p>
               <div className="flex gap-2">
-                <Button disabled={busy} onClick={() => handleConfirm(true)} className="flex-1">
+                <Button disabled={busy} onClick={() => setPendingAction(true)} className="flex-1">
                   ยืนยันการโอนเงิน
                 </Button>
                 <Button
                   variant="danger"
                   disabled={busy}
-                  onClick={() => handleConfirm(false)}
+                  onClick={() => setPendingAction(false)}
                   className="flex-1"
                 >
                   ปฏิเสธ
@@ -260,6 +267,58 @@ function AdminPaymentDetailContent({ paymentId }: { paymentId: string }) {
           )}
         </div>
       </div>
+
+      {/*
+        ยืนยันสองขั้นก่อนตัดสินการโอนเงิน
+        กดพลาดครั้งเดียว = เงินถูกปล่อยให้ผู้ขายไปแล้ว หรือผู้ซื้อถูกปฏิเสธทั้งที่โอนจริง
+        backend ไม่ให้แก้ซ้ำ จึงย้อนไม่ได้เลย
+
+        ขั้นที่สองไม่ได้ถามซ้ำด้วยคำเดิม แต่สรุป "ผลที่จะเกิดขึ้น" พร้อมยอดเงินและคู่กรณี
+        ถ้าถามซ้ำคำเดิมคนจะกดผ่านโดยไม่อ่าน ซึ่งไม่ได้กันอะไรเลย
+      */}
+      <ConfirmDialog
+        open={pendingAction !== null}
+        busy={busy}
+        destructive={pendingAction === false}
+        onCancel={() => setPendingAction(null)}
+        onConfirm={() => handleConfirm(pendingAction === true)}
+        steps={
+          pendingAction
+            ? [
+                {
+                  title: "ยืนยันการโอนเงินนี้?",
+                  description:
+                    `ตรวจสลิปตรงกับยอดสุทธิ ฿${payment.grandTotal.toLocaleString()} แล้วใช่ไหม ` +
+                    "เมื่อยืนยันแล้วจะแก้ไขไม่ได้อีก",
+                  confirmLabel: "ตรวจแล้ว ไปขั้นถัดไป",
+                },
+                {
+                  title: "ยืนยันครั้งสุดท้าย",
+                  description:
+                    `ระบบจะบันทึกว่าได้รับเงิน ฿${payment.grandTotal.toLocaleString()} ` +
+                    `จาก ${payment.buyerName || "ผู้ซื้อ"} ` +
+                    `และปล่อยให้ ${payment.sellerName || "ผู้ขาย"} จัดส่งสินค้าได้ทันที`,
+                  confirmLabel: "ยืนยันการโอนเงิน",
+                },
+              ]
+            : [
+                {
+                  title: "ปฏิเสธการโอนเงินนี้?",
+                  description:
+                    "ใช้เมื่อสลิปไม่ถูกต้อง ยอดไม่ตรง หรือตรวจไม่พบเงินเข้าจริง " +
+                    "เมื่อปฏิเสธแล้วจะแก้ไขไม่ได้อีก",
+                  confirmLabel: "ใช่ ไปขั้นถัดไป",
+                },
+                {
+                  title: "ยืนยันครั้งสุดท้าย",
+                  description:
+                    `คำสั่งซื้อ #${payment.orderId} จะขึ้นสถานะ "ถูกปฏิเสธการโอนเงิน" ` +
+                    `และ ${payment.buyerName || "ผู้ซื้อ"} ต้องอัปโหลดสลิปใหม่อีกครั้ง`,
+                  confirmLabel: "ปฏิเสธการโอนเงิน",
+                },
+              ]
+        }
+      />
     </Container>
   );
 }

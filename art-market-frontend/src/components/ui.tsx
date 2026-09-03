@@ -1,12 +1,14 @@
 "use client";
 
-import { ButtonHTMLAttributes, InputHTMLAttributes, LabelHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import { ComponentProps, InputHTMLAttributes, LabelHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 
 export function Button({
   variant = "primary",
   className = "",
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  // ComponentProps<"button"> ไม่ใช่ ButtonHTMLAttributes เพราะต้องรับ ref ด้วย
+  // (React 19 ส่ง ref เป็น prop ปกติของ function component ไม่ต้องใช้ forwardRef)
+}: ComponentProps<"button"> & {
   variant?: "primary" | "secondary" | "ghost" | "danger";
 }) {
   const base =
