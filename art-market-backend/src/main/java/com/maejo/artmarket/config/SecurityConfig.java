@@ -111,6 +111,11 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET,   "/api/copyright-transfers/received").hasRole("SELLER")
                 // ผู้ซื้อเป็นคนเซ็นสัญญากลับ (Sign Agreement 3.1.16) จึงต้องเข้าได้ด้วย
                 .requestMatchers(HttpMethod.PATCH, "/api/copyright-transfers/*/sign").hasAnyRole("BUYER", "SELLER")
+                // ชำระค่าลิขสิทธิ์ — ผู้ซื้อเป็นคนจ่าย (ผู้ขายก็ซื้อลิขสิทธิ์งานคนอื่นได้)
+                // ต้องประกาศไว้ตรงนี้ ไม่งั้น POST /{id}/payment จะตกไปที่ anyRequest()
+                // ซึ่งเปิดให้ทุก role ที่ login แล้วยิงได้ รวมถึง ADMIN
+                .requestMatchers(HttpMethod.GET,  "/api/copyright-transfers/*/payment").hasAnyRole("BUYER", "SELLER")
+                .requestMatchers(HttpMethod.POST, "/api/copyright-transfers/*/payment").hasAnyRole("BUYER", "SELLER")
                 .requestMatchers(HttpMethod.PATCH, "/api/copyright-transfers/**").hasRole("SELLER")
 
                 // อื่นๆ ต้อง login

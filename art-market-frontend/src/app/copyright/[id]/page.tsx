@@ -153,10 +153,59 @@ function CopyrightDetailContent({ id }: { id: string }) {
           </div>
         )}
 
-        {isBuyer && transfer.transferStatus === "accepted" && (
+        {/*
+          สถานะการชำระค่าลิขสิทธิ์ — แสดงให้ทั้งสองฝ่ายเห็นตั้งแต่ผู้ขายตอบรับ
+          ผู้ขายต้องรู้ว่าเงินเข้าหรือยังก่อนที่ผู้ซื้อจะลงนาม
+        */}
+        {transfer.transferStatus !== "requested" && transfer.transferStatus !== "rejected" && (
+          <div className="mt-4 flex items-center justify-between rounded-lg bg-stone-50 px-4 py-3 text-sm">
+            <span className="text-stone-500">การชำระค่าลิขสิทธิ์</span>
+            <span className="font-medium">
+              {transfer.paymentStatus === "confirmed" && (
+                <span className="text-emerald-700">
+                  ชำระแล้ว ฿{(transfer.paidAmount ?? transfer.price).toLocaleString()}
+                </span>
+              )}
+              {transfer.paymentStatus === "submitted" && (
+                <span className="text-amber-700">รอผู้ดูแลระบบตรวจสอบสลิป</span>
+              )}
+              {transfer.paymentStatus === "rejected" && (
+                <span className="text-rose-700">สลิปถูกปฏิเสธ ต้องอัปโหลดใหม่</span>
+              )}
+              {transfer.paymentStatus === "unpaid" && (
+                <span className="text-stone-500">ยังไม่ได้ชำระเงิน</span>
+              )}
+            </span>
+          </div>
+        )}
+
+        {/*
+          ผู้ซื้อต้องจ่ายเงินก่อนถึงจะลงนามได้ (backend บังคับกฎเดียวกันใน signAgreement)
+          จึงแยกเป็นสองขั้นชัดเจน แทนที่จะโชว์ปุ่มอัปโหลดสัญญาแล้วให้กดไปเจอ error
+        */}
+        {isBuyer && transfer.transferStatus === "accepted" && transfer.paymentStatus !== "confirmed" && (
+          <div className="mt-6 flex flex-col items-start gap-2 border-t border-stone-200 pt-5">
+            <p className="text-sm text-stone-600">
+              {transfer.paymentStatus === "submitted"
+                ? "อัปโหลดสลิปแล้ว รอผู้ดูแลระบบตรวจสอบก่อนจึงจะลงนามสัญญาได้"
+                : "ผู้ขายยอมรับคำขอแล้ว ขั้นต่อไปคือชำระค่าลิขสิทธิ์ แล้วจึงลงนามสัญญา"}
+            </p>
+            {transfer.paymentStatus !== "submitted" && (
+              <Link href={`/copyright/${transfer.id}/payment`}>
+                <Button>
+                  {transfer.paymentStatus === "rejected"
+                    ? "อัปโหลดสลิปใหม่อีกครั้ง"
+                    : `ชำระค่าลิขสิทธิ์ ฿${transfer.price.toLocaleString()}`}
+                </Button>
+              </Link>
+            )}
+          </div>
+        )}
+
+        {isBuyer && transfer.transferStatus === "accepted" && transfer.paymentStatus === "confirmed" && (
           <div className="mt-6 flex flex-col gap-2 border-t border-stone-200 pt-5">
             <p className="text-sm text-stone-600">
-              ผู้ขายยอมรับคำขอแล้ว กรุณาดาวน์โหลดสัญญา ลงนาม แล้วอัปโหลดกลับเข้าระบบ
+              ชำระค่าลิขสิทธิ์เรียบร้อยแล้ว กรุณาดาวน์โหลดสัญญา ลงนาม แล้วอัปโหลดกลับเข้าระบบ
             </p>
             <label className="inline-flex w-fit cursor-pointer items-center rounded-lg bg-stone-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-stone-700">
               อัปโหลดสัญญาที่ลงนามแล้ว

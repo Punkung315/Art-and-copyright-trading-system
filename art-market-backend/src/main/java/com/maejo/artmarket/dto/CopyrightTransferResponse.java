@@ -1,7 +1,9 @@
 package com.maejo.artmarket.dto;
 
+import com.maejo.artmarket.entity.CopyrightPayment;
 import com.maejo.artmarket.entity.CopyrightTransfer;
 import com.maejo.artmarket.enums.CopyrightTransferStatus;
+import com.maejo.artmarket.enums.PaymentStatus;
 import lombok.Builder;
 import lombok.Data;
 
@@ -61,7 +63,34 @@ public class CopyrightTransferResponse {
     private LocalDateTime transferDate;
     private String sellerResponseDetail; // null ถ้าผู้ขายยังไม่ตอบ
 
+    /**
+     * สถานะการชำระค่าลิขสิทธิ์ — null = ผู้ซื้อยังไม่เคยอัปสลิป
+     *
+     * ต้องส่งมาด้วยเพราะหน้าสัญญาเป็นที่เดียวที่ผู้ซื้อเห็นว่าต้องทำอะไรต่อ
+     * ถ้าไม่มีข้อมูลนี้ ปุ่ม "ลงนามสัญญา" จะโผล่ตั้งแต่ผู้ขายตอบรับ
+     * แล้วผู้ใช้จะกดแล้วเจอ error จาก backend โดยไม่รู้ว่าต้องไปจ่ายเงินก่อน
+     */
+    private PaymentStatus copyrightPaymentStatus;
+
+    /** ยอดที่ล็อกไว้ตอนจ่าย — null ถ้ายังไม่เคยจ่าย (ใช้ copyrightPrice แทน) */
+    private Double copyrightPaidAmount;
+
+    /** true เมื่อแอดมินยืนยันสลิปแล้ว = ผู้ซื้อกดลงนามได้ */
+    private Boolean copyrightPaid;
+
     public static CopyrightTransferResponse from(CopyrightTransfer ct) {
+        return from(ct, null);
+    }
+
+    public static CopyrightTransferResponse from(CopyrightTransfer ct, CopyrightPayment payment) {
+        return baseFrom(ct)
+                .copyrightPaymentStatus(payment != null ? payment.getTransferStatus() : null)
+                .copyrightPaidAmount(payment != null ? payment.getAmount() : null)
+                .copyrightPaid(payment != null && payment.getTransferStatus() == PaymentStatus.COMPLETED)
+                .build();
+    }
+
+    private static CopyrightTransferResponseBuilder baseFrom(CopyrightTransfer ct) {
         return CopyrightTransferResponse.builder()
                 .copyrightId(ct.getCopyrightId())
                 .orderId(ct.getOrder() != null ? ct.getOrder().getOrderId() : null)
@@ -93,7 +122,6 @@ public class CopyrightTransferResponse {
                 .artworks(List.of(ArtworkSummaryResponse.from(ct.getArtwork())))
                 .transferStatus(ct.getTransferStatus())
                 .transferDate(ct.getTransferDate())
-                .sellerResponseDetail(ct.getSellerResponseDetail())
-                .build();
+                .sellerResponseDetail(ct.getSellerResponseDetail());
     }
 }

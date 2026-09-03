@@ -3,6 +3,7 @@ package com.maejo.artmarket.controller;
 import com.maejo.artmarket.dto.*;
 import com.maejo.artmarket.service.AdminService;
 import com.maejo.artmarket.service.AuthService;
+import com.maejo.artmarket.service.CopyrightPaymentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +23,9 @@ import java.util.List;
  * GET  /api/admin/payments            List Payment    (ยูสเคส 3.1.27)
  * GET  /api/admin/payments/{id}       ดูรายละเอียด Payment
  * PATCH /api/admin/payments/{id}/confirm Confirm Payment (ยูสเคส 3.1.28)
+ * GET  /api/admin/copyright-payments            รายการชำระค่าลิขสิทธิ์
+ * GET  /api/admin/copyright-payments/{id}       ดูรายละเอียด + สลิป
+ * PATCH /api/admin/copyright-payments/{id}/confirm อนุมัติ/ปฏิเสธสลิปค่าลิขสิทธิ์
  *
  * ทุก endpoint (ยกเว้น /login) ต้อง login เป็น ADMIN และแนบ JWT ใน header
  */
@@ -32,6 +36,36 @@ public class AdminController {
 
     private final AdminService adminService;
     private final AuthService  authService;
+    private final CopyrightPaymentService copyrightPaymentService;
+
+    // -----------------------------------------------------------------------
+    // การชำระค่าลิขสิทธิ์ — แยก endpoint จาก /payments เพราะเป็นคนละตาราง
+    //
+    // หน้าเว็บของแอดมินเป็นหน้าเดียวกัน แต่ให้ frontend ยิงสองเส้นแล้วรวมเอง
+    // ดีกว่ายัดสองชนิดลง DTO เดียว: การโอนค่าชิ้นงานมี order/รายการงาน/ค่าส่ง
+    // ส่วนค่าลิขสิทธิ์มีแค่สัญญาฉบับเดียว ถ้ารวมกันครึ่งหนึ่งของ field จะเป็น null เสมอ
+    // -----------------------------------------------------------------------
+
+    /** GET /api/admin/copyright-payments — ไม่ส่งสลิปมาด้วย (ดูหมายเหตุใน DTO) */
+    @GetMapping("/copyright-payments")
+    public ResponseEntity<ApiResponse<List<CopyrightPaymentResponse>>> listCopyrightPayments() {
+        return ResponseEntity.ok(copyrightPaymentService.listPayments());
+    }
+
+    /** GET /api/admin/copyright-payments/{id} — มีสลิปให้ตรวจ */
+    @GetMapping("/copyright-payments/{id}")
+    public ResponseEntity<ApiResponse<CopyrightPaymentResponse>> getCopyrightPaymentDetail(
+            @PathVariable Integer id) {
+        return ResponseEntity.ok(copyrightPaymentService.getPaymentDetail(id));
+    }
+
+    /** PATCH /api/admin/copyright-payments/{id}/confirm  Body: { "approved": true } */
+    @PatchMapping("/copyright-payments/{id}/confirm")
+    public ResponseEntity<ApiResponse<CopyrightPaymentResponse>> confirmCopyrightPayment(
+            @PathVariable Integer id,
+            @Valid @RequestBody ConfirmPaymentRequest request) {
+        return ResponseEntity.ok(copyrightPaymentService.confirmPayment(id, request));
+    }
 
     // -----------------------------------------------------------------------
     // Admin Login (ไม่ต้องการ token ก่อน)

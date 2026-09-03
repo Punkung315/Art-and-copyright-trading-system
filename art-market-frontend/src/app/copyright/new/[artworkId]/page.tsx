@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { RequireUser } from "@/components/RoleGuard";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
-import { getArtwork, sendCopyrightTransfer, ApiError } from "@/lib/api";
-import { Artwork } from "@/types";
+import { getArtwork, getMe, sendCopyrightTransfer, ApiError } from "@/lib/api";
+import { Address, Artwork } from "@/types";
+import { formatAddress } from "@/components/AddressBook";
 import { Button, Card, Container, Field, Input, Spinner, Textarea } from "@/components/ui";
 import {
   validateFullName,
@@ -36,9 +37,46 @@ function SendCopyrightContent({ artworkId }: { artworkId: string }) {
   const [errors, setErrors] = useState<Record<string, string | null>>({});
   const [submitting, setSubmitting] = useState(false);
 
+  /** ที่อยู่ในสมุดของผู้ซื้อ ไว้ให้เลือกเติมฟอร์มแทนการพิมพ์เองทุกช่อง */
+  const [savedAddresses, setSavedAddresses] = useState<Address[]>([]);
+  const [prefilled, setPrefilled] = useState(false);
+
   useEffect(() => {
     getArtwork(artworkId).then((a) => setArtwork(a ?? null));
   }, [artworkId]);
+
+  /*
+   * เติมข้อมูลที่ระบบมีอยู่แล้วให้อัตโนมัติ — ชื่อจริง เลขบัตรประชาชน และที่อยู่แรก
+   *
+   * ผู้ซื้อกรอกข้อมูลชุดนี้ไปแล้วตอนสมัคร/แก้โปรไฟล์ การให้พิมพ์ใหม่ทุกครั้งที่ขอลิขสิทธิ์
+   * นอกจากเสียเวลาแล้วยังเสี่ยงพิมพ์เลขบัตรผิดจนสัญญาใช้ไม่ได้
+   *
+   * เติมครั้งเดียวตอนโหลด (prefilled) ไม่เขียนทับสิ่งที่ผู้ใช้แก้เองทีหลัง
+   * เพราะข้อมูลในสัญญาอาจตั้งใจให้ต่างจากโปรไฟล์ เช่นใช้ที่อยู่บริษัท
+   */
+  useEffect(() => {
+    if (prefilled) return;
+    getMe().then((me) => {
+      if (!me) return;
+      setPrefilled(true);
+      if (me.fullName) setFullName(me.fullName);
+      if (me.nationalNo) setNationalNo(me.nationalNo);
+
+      const list = me.addresses ?? [];
+      setSavedAddresses(list);
+      if (list.length > 0) applyAddress(list[0]);
+    });
+  }, [prefilled]);
+
+  function applyAddress(a: Address) {
+    setHouseNo(a.houseNo ?? "");
+    setVillageNo(a.villageNo ?? "");
+    setThoroughfare(a.thoroughfare ?? "");
+    setSubDistrict(a.subDistrict ?? "");
+    setDistrict(a.district ?? "");
+    setProvince(a.province ?? "");
+    setPostalCode(a.postalCode ?? "");
+  }
 
   if (artwork === undefined) return <Spinner />;
   if (artwork === null) {
@@ -113,6 +151,28 @@ function SendCopyrightContent({ artworkId }: { artworkId: string }) {
           <Field label="เลขบัตรประชาชน (nationalNo)" error={errors.nationalNo}>
             <Input value={nationalNo} onChange={(e) => setNationalNo(e.target.value)} />
           </Field>
+          {/*
+            มีที่อยู่ในสมุดมากกว่าหนึ่งรายการ ให้เลือกเติมได้ ไม่ต้องพิมพ์ใหม่ทั้งชุด
+            ระบบเติมรายการแรกให้ตั้งแต่โหลดหน้าแล้ว ปุ่มนี้ไว้สลับไปใช้ที่อยู่อื่น
+          */}
+          {savedAddresses.length > 1 && (
+            <div className="sm:col-span-2">
+              <p className="mb-2 text-sm font-medium text-stone-700">เติมจากที่อยู่ที่บันทึกไว้</p>
+              <div className="flex flex-wrap gap-2">
+                {savedAddresses.map((a) => (
+                  <Button
+                    key={a.id}
+                    type="button"
+                    variant="secondary"
+                    onClick={() => applyAddress(a)}
+                  >
+                    {formatAddress(a).slice(0, 40)}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <Field label="บ้านเลขที่ (houseNo)" error={errors.houseNo}>
             <Input value={houseNo} onChange={(e) => setHouseNo(e.target.value)} />
           </Field>

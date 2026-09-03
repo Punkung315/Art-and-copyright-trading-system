@@ -200,6 +200,48 @@ export interface CopyrightTransfer {
   documentFile?: string; // data URL of uploaded signed contract
   transferStatus: TransferStatus;
   transferDate: string;
+
+  /**
+   * สถานะการชำระค่าลิขสิทธิ์ — "unpaid" = ยังไม่เคยอัปสลิป
+   *
+   * ต้องรู้ตรงนี้เพราะหน้าสัญญาเป็นที่เดียวที่ผู้ซื้อเห็นว่าต้องทำอะไรต่อ
+   * ถ้าไม่มี ปุ่มลงนามจะโผล่ตั้งแต่ผู้ขายตอบรับ แล้วกดแล้วเจอ error เฉยๆ
+   */
+  paymentStatus: PaymentStatus;
+  /** ยอดที่ล็อกไว้ตอนจ่าย — undefined ถ้ายังไม่เคยจ่าย (ใช้ price แทน) */
+  paidAmount?: number;
+}
+
+/** ยอดและสถานะสำหรับหน้าชำระค่าลิขสิทธิ์ของผู้ซื้อ */
+export interface CopyrightPaymentPreview {
+  copyrightId: string;
+  artworkId: string;
+  artworkName: string;
+  sellerName: string;
+  amount: number;
+  transferStatus: TransferStatus;
+  paymentStatus: PaymentStatus;
+  slipTransfer?: string;
+  /** backend เป็นเจ้าของกฎว่าจ่ายได้ตอนไหน — หน้าเว็บแค่แสดงตาม */
+  canPay: boolean;
+  reason?: string;
+}
+
+/** รายการชำระค่าลิขสิทธิ์ในหน้าตรวจสลิปของแอดมิน */
+export interface CopyrightPayment {
+  id: string;
+  copyrightId: string;
+  amount: number;
+  status: PaymentStatus;
+  paymentDate: string;
+  slipTransfer?: string;
+  artworkId: string;
+  artworkName: string;
+  buyerName: string;
+  buyerEmail?: string;
+  buyerPhone?: string;
+  sellerName: string;
+  transferStatus: TransferStatus;
 }
 
 export interface Payment {

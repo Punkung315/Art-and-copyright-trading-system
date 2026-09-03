@@ -1,6 +1,7 @@
 package com.maejo.artmarket.controller;
 
 import com.maejo.artmarket.dto.*;
+import com.maejo.artmarket.service.CopyrightPaymentService;
 import com.maejo.artmarket.service.CopyrightTransferService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,35 @@ import java.util.List;
 public class CopyrightTransferController {
 
     private final CopyrightTransferService copyrightTransferService;
+    private final CopyrightPaymentService  copyrightPaymentService;
+
+    /**
+     * ยอดที่ต้องชำระค่าลิขสิทธิ์ + สถานะปัจจุบัน — BUYER เท่านั้น
+     * GET /api/copyright-transfers/{id}/payment
+     */
+    @GetMapping("/{id}/payment")
+    public ResponseEntity<ApiResponse<CopyrightPaymentPreviewResponse>> previewCopyrightPayment(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable Integer id) {
+        return ResponseEntity.ok(
+                copyrightPaymentService.previewPayment(userDetails.getUsername(), id));
+    }
+
+    /**
+     * อัปโหลดสลิปค่าลิขสิทธิ์ — BUYER เท่านั้น
+     * POST /api/copyright-transfers/{id}/payment
+     * Body: { "slipTransfer": "data:image/png;base64,..." }
+     *
+     * ใช้ได้เมื่อผู้ขายตอบรับแล้ว (transferStatus = SIGNED) และยังไม่เคยจ่ายสำเร็จ
+     */
+    @PostMapping("/{id}/payment")
+    public ResponseEntity<ApiResponse<CopyrightPaymentResponse>> makeCopyrightPayment(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable Integer id,
+            @Valid @RequestBody MakeCopyrightPaymentRequest request) {
+        return ResponseEntity.ok(
+                copyrightPaymentService.makePayment(userDetails.getUsername(), id, request));
+    }
 
     /**
      * ยูสเคส 3.1.12 Send Copyright Transfer — BUYER เท่านั้น

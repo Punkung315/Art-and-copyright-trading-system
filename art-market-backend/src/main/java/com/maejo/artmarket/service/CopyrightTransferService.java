@@ -3,6 +3,7 @@ package com.maejo.artmarket.service;
 import com.maejo.artmarket.dto.*;
 import com.maejo.artmarket.entity.*;
 import com.maejo.artmarket.enums.CopyrightTransferStatus;
+import com.maejo.artmarket.enums.PaymentStatus;
 import com.maejo.artmarket.enums.PublishStatus;
 import com.maejo.artmarket.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -10,7 +11,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * CopyrightTransferService — Business Logic ของยูสเคส:
@@ -22,10 +25,38 @@ import java.util.Optional;
 public class CopyrightTransferService {
 
     private final CopyrightTransferRepository copyrightTransferRepository;
+    private final CopyrightPaymentRepository  copyrightPaymentRepository;
     private final BuyerRepository   buyerRepository;
     private final SellerRepository  sellerRepository;
     private final OrdersRepository  ordersRepository;
     private final ArtworkRepository artworkRepository;
+
+    /**
+     * แปะสถานะการชำระค่าลิขสิทธิ์ลงในรายการสัญญาด้วยคิวรีเดียว
+     *
+     * ไม่ไล่เรียก findByCopyrightTransfer_CopyrightId ทีละฉบับใน stream
+     * เพราะจะกลายเป็น N+1 ตามจำนวนสัญญาในหน้า
+     */
+    private List<CopyrightTransferResponse> withPayments(List<CopyrightTransfer> transfers) {
+        if (transfers.isEmpty()) return List.of();
+
+        Map<Integer, CopyrightPayment> byTransfer = copyrightPaymentRepository
+                .findByCopyrightTransfer_CopyrightIdIn(
+                        transfers.stream().map(CopyrightTransfer::getCopyrightId).toList())
+                .stream()
+                .collect(Collectors.toMap(p -> p.getCopyrightTransfer().getCopyrightId(), p -> p));
+
+        return transfers.stream()
+                .map(t -> CopyrightTransferResponse.from(t, byTransfer.get(t.getCopyrightId())))
+                .toList();
+    }
+
+    /** สถานะการจ่ายเงินของสัญญาฉบับเดียว — null ถ้ายังไม่เคยอัปสลิป */
+    private CopyrightPayment paymentOf(CopyrightTransfer transfer) {
+        return copyrightPaymentRepository
+                .findByCopyrightTransfer_CopyrightId(transfer.getCopyrightId())
+                .orElse(null);
+    }
 
     /** ข้อความข้อตกลงมาตรฐาน ใช้เมื่อ client ไม่ได้ส่ง agreement มา */
     private static final String DEFAULT_AGREEMENT =
@@ -143,7 +174,7 @@ public class CopyrightTransferService {
         // list ว่าง = ยังไม่มีสัญญา ไม่ใช่ error
         return ApiResponse.ok(
                 transfers.isEmpty() ? "ไม่พบข้อมูลสัญญาการโอนลิขสิทธิ์" : "พบสัญญา " + transfers.size() + " ฉบับ",
-                transfers.stream().map(CopyrightTransferResponse::from).toList());
+                withPayments(transfers));
     }
 
     // =========================================================================
@@ -163,7 +194,7 @@ public class CopyrightTransferService {
         // list ว่าง = ยังไม่มีสัญญา ไม่ใช่ error
         return ApiResponse.ok(
                 transfers.isEmpty() ? "ไม่พบข้อมูลสัญญาการโอนลิขสิทธิ์" : "พบสัญญา " + transfers.size() + " ฉบับ",
-                transfers.stream().map(CopyrightTransferResponse::from).toList());
+                withPayments(transfers));
     }
 
     /**
@@ -204,12 +235,30 @@ public class CopyrightTransferService {
             return ApiResponse.error("ต้องรอผู้ขายตอบรับสัญญาก่อนจึงจะลงนามได้");
         }
 
+        // ต้องชำระค่าลิขสิทธิ์และผู้ดูแลระบบยืนยันสลิปแล้วเท่านั้น
+        //
+        // ลิขสิทธิ์ที่โอนไปแล้วเรียกคืนยากกว่าชิ้นงานที่ยังตามของกลับมาได้
+        // ถ้าปล่อยให้ลงนามก่อนจ่าย เอกสารสัญญาที่สมบูรณ์จะอยู่ในมือผู้ซื้อ
+        // ทั้งที่ผู้ขายยังไม่ได้เงินสักบาท
+        //
+        // หน้าเว็บล็อกปุ่มไว้แล้ว แต่ต้องกันที่นี่ด้วย — ยิงตรงมาที่ API ก็ผ่านได้ถ้าไม่กัน
+        CopyrightPayment payment = paymentOf(transfer);
+        if (payment == null) {
+            return ApiResponse.error("กรุณาชำระค่าลิขสิทธิ์ก่อนลงนามสัญญา");
+        }
+        if (payment.getTransferStatus() != PaymentStatus.COMPLETED) {
+            return ApiResponse.error(
+                    payment.getTransferStatus() == PaymentStatus.REJECTED
+                            ? "หลักฐานการชำระเงินถูกปฏิเสธ กรุณาอัปโหลดสลิปใหม่อีกครั้ง"
+                            : "รอผู้ดูแลระบบตรวจสอบหลักฐานการชำระเงินก่อนจึงจะลงนามได้");
+        }
+
         try {
             transfer.setDocumentFile(req.getDocumentFile());
             transfer.setTransferStatus(CopyrightTransferStatus.COMPLETED);
             copyrightTransferRepository.save(transfer);
             return ApiResponse.ok("ลงนามสัญญาโอนลิขสิทธิ์สำเร็จ",
-                    CopyrightTransferResponse.from(transfer));
+                    CopyrightTransferResponse.from(transfer, payment));
         } catch (Exception e) {
             return ApiResponse.error("ไม่สามารถบันทึกไฟล์สัญญาได้ กรุณาลองใหม่อีกครั้ง");
         }
@@ -246,7 +295,7 @@ public class CopyrightTransferService {
             copyrightTransferRepository.save(transfer);
             return ApiResponse.ok(
                     req.getApproved() ? "ตอบรับสัญญาโอนลิขสิทธิ์สำเร็จ" : "ปฏิเสธสัญญาโอนลิขสิทธิ์สำเร็จ",
-                    CopyrightTransferResponse.from(transfer));
+                    CopyrightTransferResponse.from(transfer, paymentOf(transfer)));
 
         } catch (Exception e) {
             // Alternate Flow 9.1.1

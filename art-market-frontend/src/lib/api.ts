@@ -28,6 +28,8 @@ import {
   ArtworkStatus,
   AvailabilityStatus,
   CartItem,
+  CopyrightPayment,
+  CopyrightPaymentPreview,
   CopyrightTransfer,
   Order,
   OrderItem,
@@ -368,6 +370,41 @@ interface BeTransfer {
   documentFile: string | null;
   copyrightPrice: number | null;
   artworks: BeArtworkSummary[] | null;
+  /** null = ผู้ซื้อยังไม่เคยอัปสลิปค่าลิขสิทธิ์ */
+  copyrightPaymentStatus?: BePaymentStatus | null;
+  copyrightPaidAmount?: number | null;
+  copyrightPaid?: boolean | null;
+}
+
+interface BeCopyrightPaymentPreview {
+  copyrightId: number;
+  artworkId: number | null;
+  artworkName: string | null;
+  sellerName: string | null;
+  amount: number;
+  copyrightTransferStatus: BeTransfer["transferStatus"];
+  paymentStatus: BePaymentStatus | null;
+  slipTransfer: string | null;
+  canPay: boolean;
+  reason: string | null;
+}
+
+interface BeCopyrightPayment {
+  copyrightPaymentId: number;
+  copyrightId: number;
+  amount: number;
+  transferStatus: BePaymentStatus;
+  paymentDate: string;
+  slipTransfer: string | null;
+  artworkId: number | null;
+  artworkName: string | null;
+  buyerName: string | null;
+  buyerUserId: number | null;
+  buyerEmail: string | null;
+  buyerPhone: string | null;
+  sellerName: string | null;
+  sellerUserId: number | null;
+  copyrightTransferStatus: BeTransfer["transferStatus"];
 }
 
 interface BeUserSummary {
@@ -798,6 +835,8 @@ function mapTransfer(t: BeTransfer): CopyrightTransfer {
     documentFile: t.documentFile ?? undefined,
     transferStatus: TRANSFER_STATUS_MAP[t.transferStatus],
     transferDate: t.transferDate,
+    paymentStatus: mapPaymentStatus(t.copyrightPaymentStatus),
+    paidAmount: t.copyrightPaidAmount ?? undefined,
   };
 }
 
@@ -1684,4 +1723,86 @@ export async function signCopyrightTransfer(
     body: JSON.stringify({ documentFile }),
   });
   return mapTransfer(t);
+}
+
+/* ----------------------- Copyright Payment (ผู้ซื้อ) ---------------------- */
+
+function mapCopyrightPaymentPreview(p: BeCopyrightPaymentPreview): CopyrightPaymentPreview {
+  return {
+    copyrightId: String(p.copyrightId),
+    artworkId: String(p.artworkId ?? ""),
+    artworkName: p.artworkName ?? "",
+    sellerName: p.sellerName ?? "",
+    amount: p.amount ?? 0,
+    transferStatus: TRANSFER_STATUS_MAP[p.copyrightTransferStatus],
+    paymentStatus: mapPaymentStatus(p.paymentStatus),
+    slipTransfer: p.slipTransfer ?? undefined,
+    canPay: !!p.canPay,
+    reason: p.reason ?? undefined,
+  };
+}
+
+function mapCopyrightPayment(p: BeCopyrightPayment): CopyrightPayment {
+  return {
+    id: String(p.copyrightPaymentId),
+    copyrightId: String(p.copyrightId),
+    amount: p.amount ?? 0,
+    status: mapPaymentStatus(p.transferStatus),
+    paymentDate: p.paymentDate,
+    slipTransfer: p.slipTransfer ?? undefined,
+    artworkId: String(p.artworkId ?? ""),
+    artworkName: p.artworkName ?? "",
+    buyerName: p.buyerName ?? "",
+    buyerEmail: p.buyerEmail ?? undefined,
+    buyerPhone: p.buyerPhone ?? undefined,
+    sellerName: p.sellerName ?? "",
+    transferStatus: TRANSFER_STATUS_MAP[p.copyrightTransferStatus],
+  };
+}
+
+export async function getCopyrightPaymentPreview(
+  copyrightId: string
+): Promise<CopyrightPaymentPreview> {
+  const p = await request<BeCopyrightPaymentPreview>(
+    `/copyright-transfers/${copyrightId}/payment`
+  );
+  return mapCopyrightPaymentPreview(p);
+}
+
+export async function payCopyrightTransfer(
+  copyrightId: string,
+  slipTransfer: string
+): Promise<CopyrightPayment> {
+  const p = await request<BeCopyrightPayment>(`/copyright-transfers/${copyrightId}/payment`, {
+    method: "POST",
+    body: JSON.stringify({ slipTransfer }),
+  });
+  return mapCopyrightPayment(p);
+}
+
+/* ---------------------- Copyright Payment (ผู้ดูแลระบบ) --------------------- */
+
+export async function listCopyrightPayments(): Promise<CopyrightPayment[]> {
+  const list = await requestOr<BeCopyrightPayment[]>("/admin/copyright-payments", []);
+  return list.map(mapCopyrightPayment);
+}
+
+export async function getCopyrightPayment(id: string): Promise<CopyrightPayment | undefined> {
+  try {
+    const p = await request<BeCopyrightPayment>(`/admin/copyright-payments/${id}`);
+    return mapCopyrightPayment(p);
+  } catch {
+    return undefined;
+  }
+}
+
+export async function confirmCopyrightPayment(
+  id: string,
+  approved: boolean
+): Promise<CopyrightPayment> {
+  const p = await request<BeCopyrightPayment>(`/admin/copyright-payments/${id}/confirm`, {
+    method: "PATCH",
+    body: JSON.stringify({ approved }),
+  });
+  return mapCopyrightPayment(p);
 }

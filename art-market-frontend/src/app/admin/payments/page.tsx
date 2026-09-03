@@ -3,14 +3,39 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { RequireAdmin } from "@/components/RoleGuard";
-import { listPayments } from "@/lib/api";
-import { Payment, PaymentStatus } from "@/types";
+import { listCopyrightPayments, listPayments } from "@/lib/api";
+import { PaymentStatus } from "@/types";
 import { Container, EmptyState, Input, Spinner } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
 import { SummaryTable } from "@/components/SummaryTable";
 import { FilterChips } from "@/components/FilterChips";
 
 type PaymentFilter = "all" | PaymentStatus;
+type KindFilter = "all" | "artwork" | "copyright";
+
+/**
+ * แถวเดียวของตาราง ไม่ว่าจะเป็นการโอนค่าชิ้นงานหรือค่าลิขสิทธิ์
+ *
+ * แปลงเป็นรูปแบบกลางตั้งแต่ตอนโหลด แทนที่จะเช็ค kind กระจายทั่วทั้งไฟล์
+ * — ตัวกรอง การค้นหา และการนับยอด จะได้ทำงานกับข้อมูลชุดเดียว
+ * ไม่งั้นเพิ่มประเภทที่สามทีหลังต้องไล่แก้ทุกจุดที่ลืมไม่ได้เลย
+ */
+type Row = {
+  key: string;
+  kind: "artwork" | "copyright";
+  kindLabel: string;
+  id: string;
+  /** เลขอ้างอิงที่แอดมินใช้คุยกับผู้ใช้ — คำสั่งซื้อ หรือ สัญญาลิขสิทธิ์ */
+  refLabel: string;
+  date: string;
+  buyerName: string;
+  sellerName: string;
+  amount: number;
+  status: PaymentStatus;
+  href: string;
+  /** ใช้ค้นหา */
+  searchable: string[];
+};
 
 /** เรียงตามลำดับที่ Admin ต้องสนใจก่อนหลัง */
 const STATUS_ROWS: { status: PaymentStatus; label: string; chip: string; highlight?: boolean }[] = [
@@ -20,6 +45,12 @@ const STATUS_ROWS: { status: PaymentStatus; label: string; chip: string; highlig
   { status: "unpaid", label: "ยังไม่ชำระเงิน", chip: "ยังไม่ชำระ" },
 ];
 
+const KIND_CHIPS: { value: KindFilter; label: string }[] = [
+  { value: "all", label: "ทุกประเภท" },
+  { value: "artwork", label: "ค่าชิ้นงาน" },
+  { value: "copyright", label: "ค่าลิขสิทธิ์" },
+];
+
 function formatDate(iso?: string) {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -27,69 +58,113 @@ function formatDate(iso?: string) {
 }
 
 function AdminPaymentsContent() {
-  const [payments, setPayments] = useState<Payment[] | null>(null);
+  const [rows, setRows] = useState<Row[] | null>(null);
   const [filter, setFilter] = useState<PaymentFilter>("all");
+  const [kind, setKind] = useState<KindFilter>("all");
   const [keyword, setKeyword] = useState("");
 
   useEffect(() => {
-    listPayments().then(setPayments);
+    Promise.all([listPayments(), listCopyrightPayments()]).then(([orders, copyrights]) => {
+      setRows([
+        ...orders.map<Row>((p) => ({
+          key: `artwork-${p.id}`,
+          kind: "artwork",
+          kindLabel: "ค่าชิ้นงาน",
+          id: p.id,
+          refLabel: `คำสั่งซื้อ #${p.orderId}`,
+          date: p.createdAt,
+          buyerName: p.buyerName,
+          sellerName: p.sellerName,
+          amount: p.grandTotal,
+          status: p.status,
+          href: `/admin/payments/${p.id}`,
+          searchable: [p.buyerName, p.sellerName, `#${p.id}`, `#${p.orderId}`, p.id, p.orderId],
+        })),
+        ...copyrights.map<Row>((p) => ({
+          key: `copyright-${p.id}`,
+          kind: "copyright",
+          kindLabel: "ค่าลิขสิทธิ์",
+          id: p.id,
+          refLabel: `สัญญา #${p.copyrightId}`,
+          date: p.paymentDate,
+          buyerName: p.buyerName,
+          sellerName: p.sellerName,
+          amount: p.amount,
+          status: p.status,
+          href: `/admin/copyright-payments/${p.id}`,
+          searchable: [
+            p.buyerName,
+            p.sellerName,
+            p.artworkName,
+            `#${p.id}`,
+            `#${p.copyrightId}`,
+            p.id,
+            p.copyrightId,
+          ],
+        })),
+      ]);
+    });
   }, []);
 
-  const all = useMemo(() => payments ?? [], [payments]);
+  const all = useMemo(() => rows ?? [], [rows]);
 
-  /**
-   * เรียงรายการใหม่ล่าสุดไว้บนสุด
-   *
-   * ตาราง payment ไม่มีคอลัมน์ "วันที่แจ้งโอน" จึงใช้วันที่สั่งซื้อเป็นตัวแทน
-   * แล้วเทียบด้วยรหัสการโอนเงิน (ซึ่งเรียงตามลำดับที่ถูกสร้างจริง) เป็นตัวตัดสินรอง
-   */
+  // ตัวกรองประเภทมาก่อนทุกอย่าง เพื่อให้ยอดสรุปและตัวเลขบนชิปตรงกับที่เห็นในตาราง
+  const inScope = useMemo(
+    () => (kind === "all" ? all : all.filter((r) => r.kind === kind)),
+    [all, kind]
+  );
+
+  /** เรียงรายการใหม่ล่าสุดไว้บนสุด แล้วเทียบด้วยรหัสเป็นตัวตัดสินรอง */
   const sorted = useMemo(
     () =>
-      [...all].sort((a, b) => {
-        const diff = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-        return diff !== 0 ? diff : Number(b.id) - Number(a.id);
+      [...inScope].sort((a, b) => {
+        const diff = new Date(b.date).getTime() - new Date(a.date).getTime();
+        if (!Number.isNaN(diff) && diff !== 0) return diff;
+        return Number(b.id) - Number(a.id);
       }),
-    [all]
+    [inScope]
   );
 
   const visible = useMemo(() => {
     const kw = keyword.trim().toLowerCase();
-    return sorted.filter((p) => {
-      if (filter !== "all" && p.status !== filter) return false;
+    return sorted.filter((r) => {
+      if (filter !== "all" && r.status !== filter) return false;
       if (!kw) return true;
-      // ค้นหาได้ทั้งชื่อคนและรหัส เพราะ Admin มักได้รับแจ้งมาเป็นเลขคำสั่งซื้อ
-      return [p.buyerName, p.sellerName, `#${p.id}`, `#${p.orderId}`, p.id, p.orderId]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(kw));
+      return r.searchable.filter(Boolean).some((v) => String(v).toLowerCase().includes(kw));
     });
   }, [sorted, filter, keyword]);
 
-  // ตัวเลขในสรุปนับจากข้อมูลทั้งหมดเสมอ ไม่ใช่เฉพาะที่ผ่านตัวกรอง
   const groups = STATUS_ROWS.map((row) => ({
     ...row,
-    items: all.filter((p) => p.status === row.status),
+    items: inScope.filter((r) => r.status === row.status),
   }));
 
   const summary = groups.map((g) => ({
     label: g.label,
     count: g.items.length,
-    amount: g.items.reduce((s, p) => s + p.grandTotal, 0),
+    amount: g.items.reduce((s, r) => s + r.amount, 0),
     highlight: g.highlight,
     filterValue: g.status,
   }));
 
-  const chips = [
-    { value: "all", label: "ทั้งหมด", count: all.length },
+  const statusChips = [
+    { value: "all", label: "ทั้งหมด", count: inScope.length },
     ...groups.map((g) => ({ value: g.status, label: g.chip, count: g.items.length })),
   ];
 
+  const kindChips = KIND_CHIPS.map((k) => ({
+    ...k,
+    count: k.value === "all" ? all.length : all.filter((r) => r.kind === k.value).length,
+  }));
+
   const activeLabel = STATUS_ROWS.find((r) => r.status === filter)?.label;
+  const activeKindLabel = kind === "all" ? null : KIND_CHIPS.find((k) => k.value === kind)?.label;
 
   return (
     <Container className="py-10">
       <h1 className="mb-6 font-serif text-2xl font-bold text-stone-900">รายการโอนเงินให้ผู้ขาย</h1>
 
-      {payments === null ? (
+      {rows === null ? (
         <Spinner />
       ) : all.length === 0 ? (
         <EmptyState
@@ -98,8 +173,16 @@ function AdminPaymentsContent() {
         />
       ) : (
         <>
+          <div className="mb-4">
+            <FilterChips
+              options={kindChips}
+              value={kind}
+              onChange={(v) => setKind(v as KindFilter)}
+            />
+          </div>
+
           <SummaryTable
-            title="สรุปการโอนเงิน"
+            title={`สรุปการโอนเงิน${activeKindLabel ? ` · ${activeKindLabel}` : ""}`}
             rows={summary}
             totalLabel="รวมทุกสถานะ"
             activeFilter={filter}
@@ -108,7 +191,7 @@ function AdminPaymentsContent() {
 
           <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <FilterChips
-              options={chips}
+              options={statusChips}
               value={filter}
               onChange={(v) => setFilter(v as PaymentFilter)}
             />
@@ -123,7 +206,8 @@ function AdminPaymentsContent() {
           </div>
 
           <p className="mb-2 text-sm text-stone-500">
-            แสดง {visible.length} จาก {all.length} รายการ
+            แสดง {visible.length} จาก {inScope.length} รายการ
+            {activeKindLabel && ` · ${activeKindLabel}`}
             {activeLabel && ` · ${activeLabel}`}
             {keyword.trim() && ` · คำค้น "${keyword.trim()}"`}
           </p>
@@ -139,8 +223,9 @@ function AdminPaymentsContent() {
                 <thead className="bg-stone-50 text-stone-500">
                   <tr>
                     <th className="px-4 py-3">รหัส</th>
-                    <th className="px-4 py-3">คำสั่งซื้อ</th>
-                    <th className="px-4 py-3">วันที่สั่งซื้อ</th>
+                    <th className="px-4 py-3">ประเภท</th>
+                    <th className="px-4 py-3">อ้างอิง</th>
+                    <th className="px-4 py-3">วันที่</th>
                     <th className="px-4 py-3">ผู้ซื้อ</th>
                     <th className="px-4 py-3">ผู้ขาย</th>
                     <th className="px-4 py-3 text-right">ยอดสุทธิ</th>
@@ -149,22 +234,33 @@ function AdminPaymentsContent() {
                   </tr>
                 </thead>
                 <tbody>
-                  {visible.map((p) => (
-                    <tr key={p.id} className="border-t border-stone-100 hover:bg-stone-50">
-                      <td className="px-4 py-3 text-stone-600">#{p.id}</td>
-                      <td className="px-4 py-3 text-stone-600">#{p.orderId}</td>
-                      <td className="px-4 py-3 text-stone-600">{formatDate(p.createdAt)}</td>
-                      <td className="px-4 py-3 font-medium text-stone-900">{p.buyerName || "—"}</td>
-                      <td className="px-4 py-3 text-stone-600">{p.sellerName || "—"}</td>
+                  {visible.map((r) => (
+                    <tr key={r.key} className="border-t border-stone-100 hover:bg-stone-50">
+                      <td className="px-4 py-3 text-stone-600">#{r.id}</td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                            r.kind === "copyright"
+                              ? "bg-indigo-50 text-indigo-700"
+                              : "bg-stone-100 text-stone-600"
+                          }`}
+                        >
+                          {r.kindLabel}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-stone-600">{r.refLabel}</td>
+                      <td className="px-4 py-3 text-stone-600">{formatDate(r.date)}</td>
+                      <td className="px-4 py-3 font-medium text-stone-900">{r.buyerName || "—"}</td>
+                      <td className="px-4 py-3 text-stone-600">{r.sellerName || "—"}</td>
                       <td className="px-4 py-3 text-right font-medium text-stone-900">
-                        ฿{p.grandTotal.toLocaleString()}
+                        ฿{r.amount.toLocaleString()}
                       </td>
                       <td className="px-4 py-3">
-                        <StatusBadge status={p.status} domain="payment" />
+                        <StatusBadge status={r.status} domain="payment" />
                       </td>
                       <td className="px-4 py-3 text-right">
                         <Link
-                          href={`/admin/payments/${p.id}`}
+                          href={r.href}
                           className="text-sm font-medium text-stone-700 underline hover:text-stone-900"
                         >
                           ดูข้อมูล
