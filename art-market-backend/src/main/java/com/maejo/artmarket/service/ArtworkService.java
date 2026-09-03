@@ -5,9 +5,11 @@ import com.maejo.artmarket.entity.Address;
 import com.maejo.artmarket.entity.Artwork;
 import com.maejo.artmarket.entity.Seller;
 import com.maejo.artmarket.enums.ArtworkStatus;
+import com.maejo.artmarket.enums.CopyrightTransferStatus;
 import com.maejo.artmarket.enums.PublishStatus;
 import com.maejo.artmarket.repository.ArtworkRepository;
 import com.maejo.artmarket.repository.CartItemRepository;
+import com.maejo.artmarket.repository.CopyrightTransferRepository;
 import com.maejo.artmarket.repository.OrderItemRepository;
 import com.maejo.artmarket.repository.SellerRepository;
 import com.maejo.artmarket.repository.UserRepository;
@@ -39,6 +41,7 @@ public class ArtworkService {
     private final CartItemRepository  cartItemRepository;
     private final UserRepository      userRepository;
     private final ShippingRateService shippingRateService;
+    private final CopyrightTransferRepository copyrightTransferRepository;
 
     /** ค่าที่ไม่มีทางตรงกับข้อมูลจริง ใช้กันไม่ให้ IN () กลายเป็น list ว่างซึ่งทำให้ SQL พัง */
     private static final String NO_MATCH = "__NO_MATCH__";
@@ -57,6 +60,17 @@ public class ArtworkService {
      * @param enabled  เปิดให้ซื้อลิขสิทธิ์ไหม
      * @param manualPrice ราคาที่ผู้ขายกรอกเอง (ใช้เฉพาะตอนปิดโหมดคำนวณอัตโนมัติ)
      */
+    /**
+     * ลิขสิทธิ์ของงานชิ้นนี้ถูกโอนให้ผู้อื่นไปเรียบร้อยแล้วหรือยัง
+     *
+     * เป็น "แหล่งความจริงเดียว" ที่อ่านจากตารางสัญญาโดยตรง ไม่เก็บ flag ซ้ำไว้ใน artwork
+     * — flag ที่ต้องคอยอัปเดตเองมีโอกาสหลุดจากความจริงเมื่อสถานะสัญญาเปลี่ยนทางอื่น
+     */
+    private boolean copyrightSold(Artwork artwork) {
+        return copyrightTransferRepository.findFirstByArtwork_ArtworkIdAndTransferStatus(
+                artwork.getArtworkId(), CopyrightTransferStatus.COMPLETED).isPresent();
+    }
+
     private void applyCopyrightPrice(Artwork artwork, boolean enabled, Double manualPrice) {
         if (!enabled) {
             artwork.setCopyrightPrice(null);
@@ -274,14 +288,16 @@ public class ArtworkService {
 
         Optional<Artwork> published = artworkRepository.findPublishedById(artworkId);
         if (published.isPresent()) {
-            return ApiResponse.ok("ดึงข้อมูลผลงานสำเร็จ", ArtworkDetailResponse.from(published.get()));
+            return ApiResponse.ok("ดึงข้อมูลผลงานสำเร็จ",
+                    ArtworkDetailResponse.from(published.get(), copyrightSold(published.get())));
         }
 
         if (currentUsername != null) {
             Optional<Artwork> own = artworkRepository.findById(artworkId)
                     .filter(a -> a.getSeller().getUser().getUsername().equals(currentUsername));
             if (own.isPresent()) {
-                return ApiResponse.ok("ดึงข้อมูลผลงานสำเร็จ", ArtworkDetailResponse.from(own.get()));
+                return ApiResponse.ok("ดึงข้อมูลผลงานสำเร็จ",
+                        ArtworkDetailResponse.from(own.get(), copyrightSold(own.get())));
             }
         }
 
@@ -405,14 +421,27 @@ public class ArtworkService {
          * ราคาลิขสิทธิ์ต้องคิดใหม่ "หลัง" set ราคาขายเสมอ
          * ไม่งั้นตอนผู้ขายแก้ราคาขายในโหมดคำนวณอัตโนมัติ ราคาลิขสิทธิ์จะค้างค่าเดิม
          */
-        if (req.getCopyrightAutoPrice() != null) {
-            artwork.setCopyrightAutoPrice(req.getCopyrightAutoPrice());
+        /*
+         * ถ้าลิขสิทธิ์ถูกขายไปแล้ว ห้ามแตะราคาลิขสิทธิ์อีก
+         *
+         * สัญญาเป็นการโอนแต่เพียงผู้เดียวตลอดอายุการคุ้มครอง ผู้ขายไม่มีลิขสิทธิ์
+         * เหลือให้ขายแล้ว ถ้าปล่อยให้ตั้งราคาใหม่ได้ ปุ่ม "ขอซื้อลิขสิทธิ์" จะกลับมาโผล่
+         * แล้วผู้ซื้อรายใหม่จะยื่นคำขอในสิ่งที่ไม่มีอยู่จริง
+         *
+         * ราคาขายชิ้นงานยังแก้ได้ตามปกติ — ตัวงานต้นฉบับไม่ได้ถูกโอนไปด้วย
+         */
+        if (copyrightSold(artwork)) {
+            artwork.setCopyrightAutoPrice(false);
+        } else {
+            if (req.getCopyrightAutoPrice() != null) {
+                artwork.setCopyrightAutoPrice(req.getCopyrightAutoPrice());
+            }
+            // ไม่ได้ส่ง copyrightAvailable มา = ไม่ได้ตั้งใจเปลี่ยน ให้ยึดสถานะเดิมของชิ้นงาน
+            boolean copyrightEnabled = req.getCopyrightAvailable() != null
+                    ? req.getCopyrightAvailable()
+                    : artwork.getCopyrightPrice() != null;
+            applyCopyrightPrice(artwork, copyrightEnabled, req.getCopyrightPrice());
         }
-        // ไม่ได้ส่ง copyrightAvailable มา = ไม่ได้ตั้งใจเปลี่ยน ให้ยึดสถานะเดิมของชิ้นงาน
-        boolean copyrightEnabled = req.getCopyrightAvailable() != null
-                ? req.getCopyrightAvailable()
-                : artwork.getCopyrightPrice() != null;
-        applyCopyrightPrice(artwork, copyrightEnabled, req.getCopyrightPrice());
 
         // ค่าส่งประเมินต้องขยับตามทุกครั้ง ไม่งั้นผู้ขายแก้น้ำหนักแล้วราคายังค้างของเดิม
         refreshShippingEstimate(artwork);

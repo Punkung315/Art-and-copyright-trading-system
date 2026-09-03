@@ -59,6 +59,13 @@ public class CopyrightTransferResponse {
     private String  documentFile;
     private String  sellerSignature;
     private Double  copyrightPrice;
+
+    /** วันที่แต่ละฝ่ายลงนาม — null = ยังไม่ได้เซ็น */
+    private LocalDateTime sellerSignedDate;
+    private LocalDateTime buyerSignedDate;
+
+    /** เวอร์ชันข้อความสัญญาที่คู่สัญญาตกลงกัน ใช้เลือกข้อความตอนพิมพ์ */
+    private String termsVersion;
     private List<ArtworkSummaryResponse> artworks;
     private LocalDateTime transferDate;
     private String sellerResponseDetail; // null ถ้าผู้ขายยังไม่ตอบ
@@ -114,11 +121,19 @@ public class CopyrightTransferResponse {
                 .sellerId(ct.getSeller().getSellerId())
                 .documentFile(ct.getDocumentFile())
                 .sellerSignature(ct.getSellerSignature())
-                // ราคาและรายละเอียดงานอ่านจาก artwork ของสัญญาโดยตรง
-                // (เดิมไล่จาก orderItems ซึ่งใช้ไม่ได้แล้วเมื่อสัญญาไม่จำเป็นต้องมี order)
-                .copyrightPrice(ct.getArtwork().getCopyrightPrice() != null
-                        ? ct.getArtwork().getCopyrightPrice()
-                        : 0.0)
+                .sellerSignedDate(ct.getSellerSignedDate())
+                .buyerSignedDate(ct.getBuyerSignedDate())
+                .termsVersion(ct.getTermsVersion())
+                // ราคาที่ตกลงกัน ล็อกไว้ตอนยื่นคำขอ — ห้าม fallback ไป artwork.copyrightPrice
+                //
+                // เดิมอ่านสดจาก artwork ทำให้ผู้ขายแก้ราคาหลังเซ็นสัญญาแล้ว
+                // ใบสัญญาที่พิมพ์ย้อนหลังเปลี่ยนตัวเลขตามไปด้วย
+                // สัญญาเก่าที่ยังไม่มี agreed_price ใช้ราคาปัจจุบันไปก่อน (ดู migration)
+                .copyrightPrice(ct.getAgreedPrice() != null
+                        ? ct.getAgreedPrice()
+                        : (ct.getArtwork().getCopyrightPrice() != null
+                                ? ct.getArtwork().getCopyrightPrice()
+                                : 0.0))
                 .artworks(List.of(ArtworkSummaryResponse.from(ct.getArtwork())))
                 .transferStatus(ct.getTransferStatus())
                 .transferDate(ct.getTransferDate())

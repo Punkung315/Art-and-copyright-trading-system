@@ -29,6 +29,15 @@ public class ArtworkDetailResponse {
     private Double price;
     private Double copyrightPrice;
 
+    /**
+     * ลิขสิทธิ์ถูกโอนให้ผู้อื่นไปแล้ว — ขอซื้อไม่ได้อีกตลอดไป
+     *
+     * ต้องส่งแยกจาก copyrightPrice เพราะ "ผู้ขายไม่เปิดขายลิขสิทธิ์" กับ "ขายไปแล้ว"
+     * เป็นคนละสถานะในสายตาผู้ใช้ ถ้าดูจากราคาว่าง/ไม่ว่างอย่างเดียว
+     * หน้าเว็บจะบอกได้แค่ "ไม่มีขาย" ซึ่งกำกวม
+     */
+    private Boolean copyrightSold;
+
     /** true = ราคาลิขสิทธิ์ด้านบนมาจากการคำนวณอัตโนมัติ ไม่ใช่ผู้ขายกรอกเอง */
     private boolean copyrightAutoPrice;
 
@@ -60,6 +69,13 @@ public class ArtworkDetailResponse {
      * ทำให้เช็ค "นี่คืองาน/สัญญาของฉันไหม" ผิดพลาดแบบเงียบๆ
      */
     private Integer sellerUserId;
+
+    /** ใช้ตอนที่ผู้เรียกรู้สถานะการขายลิขสิทธิ์แล้ว (หน้ารายละเอียดงาน) */
+    public static ArtworkDetailResponse from(Artwork artwork, boolean copyrightSold) {
+        ArtworkDetailResponse r = from(artwork);
+        r.setCopyrightSold(copyrightSold);
+        return r;
+    }
 
     public static ArtworkDetailResponse from(Artwork artwork) {
         return ArtworkDetailResponse.builder()

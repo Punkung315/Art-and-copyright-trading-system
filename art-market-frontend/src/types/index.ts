@@ -102,6 +102,8 @@ export interface Artwork {
   /** สถานะการขายดิบจาก backend — ใช้ตัดสินว่าถอนงานออกจากการเผยแพร่ได้ไหม */
   salesStatus?: ArtworkSalesStatus;
   copyrightAvailable: boolean;
+  /** ลิขสิทธิ์ถูกโอนให้ผู้อื่นไปแล้ว — คนละความหมายกับ "ผู้ขายไม่เปิดขาย" */
+  copyrightSold?: boolean;
   copyrightPrice?: number;
   /** true = ราคาลิขสิทธิ์มาจากการคำนวณอัตโนมัติ (ราคาขาย x 3) ไม่ใช่ผู้ขายกรอกเอง */
   copyrightAutoPrice?: boolean;
@@ -200,6 +202,14 @@ export interface CopyrightTransfer {
   documentFile?: string; // data URL of uploaded signed contract
   transferStatus: TransferStatus;
   transferDate: string;
+
+  /** ลายมือชื่อผู้โอน แนบตอนตอบรับคำขอ (พ.ร.บ. ลิขสิทธิ์ ม.17 ต้องมีลายมือชื่อสองฝ่าย) */
+  sellerSignature?: string;
+  /** วันที่แต่ละฝ่ายลงนาม — คนละตัวกับ transferDate ซึ่งเป็นวันที่ยื่นคำขอ */
+  sellerSignedDate?: string;
+  buyerSignedDate?: string;
+  /** เวอร์ชันข้อความสัญญาที่คู่สัญญาตกลงกัน ใช้เลือกข้อความตอนพิมพ์ */
+  termsVersion?: string;
 
   /**
    * สถานะการชำระค่าลิขสิทธิ์ — "unpaid" = ยังไม่เคยอัปสลิป

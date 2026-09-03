@@ -31,4 +31,21 @@ public interface CopyrightTransferRepository extends JpaRepository<CopyrightTran
      */
     boolean existsByBuyer_BuyerIdAndArtwork_ArtworkIdAndTransferStatusIn(
             Integer buyerId, Integer artworkId, List<CopyrightTransferStatus> statuses);
+
+    /**
+     * มีสัญญาของงานชิ้นนี้ที่ยังดำเนินการอยู่หรือปิดจบไปแล้วหรือไม่ — **ไม่สนว่าใครเป็นผู้ขอ**
+     *
+     * สัญญาของระบบนี้เป็นการโอนลิขสิทธิ์ "แต่เพียงผู้เดียว ตลอดอายุการคุ้มครอง"
+     * งานหนึ่งชิ้นจึงขายลิขสิทธิ์ได้ครั้งเดียวในชีวิต
+     *
+     * เดิมเช็คซ้ำด้วย buyer + artwork ซึ่งกันได้แค่ "คนเดิมขอซ้ำ"
+     * ผู้ซื้อคนละคนยังของานชิ้นเดียวกันพร้อมกันได้ และจบเป็น COMPLETED ได้ทั้งคู่
+     * = ขายสิทธิ์ผูกขาดชิ้นเดียวกันสองรอบ ซึ่งขัดกับตัวสัญญาโดยตรง
+     */
+    boolean existsByArtwork_ArtworkIdAndTransferStatusIn(
+            Integer artworkId, List<CopyrightTransferStatus> statuses);
+
+    /** สัญญาที่ปิดจบแล้วของงานชิ้นนี้ — ใช้บอกผู้ใช้ว่าลิขสิทธิ์ถูกขายไปแล้ว */
+    Optional<CopyrightTransfer> findFirstByArtwork_ArtworkIdAndTransferStatus(
+            Integer artworkId, CopyrightTransferStatus status);
 }

@@ -15,6 +15,7 @@ import { CopyrightTransfer } from "@/types";
 import { Button, Card, Container, Field, Spinner, Textarea } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
 import { fileToDataUrl } from "@/lib/storage";
+import { validateImageFile } from "@/lib/validation";
 
 function CopyrightDetailContent({ id }: { id: string }) {
   const { user } = useAuth();
@@ -22,6 +23,8 @@ function CopyrightDetailContent({ id }: { id: string }) {
   const [transfer, setTransfer] = useState<CopyrightTransfer | null | undefined>(undefined);
   const [responseDetail, setResponseDetail] = useState("");
   const [fileError, setFileError] = useState<string | null>(null);
+  const [signature, setSignature] = useState("");
+  const [signatureError, setSignatureError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   async function load() {
@@ -42,10 +45,24 @@ function CopyrightDetailContent({ id }: { id: string }) {
   const isBuyer = user?.id === transfer.buyerId;
   const isSeller = user?.id === transfer.sellerId;
 
+  async function handleSignatureFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0] ?? null;
+    const err = validateImageFile(file);
+    setSignatureError(err);
+    if (err || !file) return;
+    setSignature(await fileToDataUrl(file));
+  }
+
   async function handleRespond(accept: boolean) {
+    // ตอบรับ = ลงนามในฐานะผู้โอน จึงต้องมีลายมือชื่อ (พ.ร.บ. ลิขสิทธิ์ ม.17)
+    // ปฏิเสธไม่ต้องเซ็น เพราะไม่มีการโอนเกิดขึ้น
+    if (accept && !signature) {
+      setSignatureError("กรุณาแนบลายมือชื่อเพื่อยืนยันการตอบรับ");
+      return;
+    }
     setSubmitting(true);
     try {
-      await respondCopyrightTransfer(transfer!.id, accept, responseDetail);
+      await respondCopyrightTransfer(transfer!.id, accept, responseDetail, accept ? signature : undefined);
       await load();
       notify(accept ? "ยอมรับคำขอโอนลิขสิทธิ์แล้ว" : "ปฏิเสธคำขอโอนลิขสิทธิ์แล้ว", "success");
     } catch (err) {
@@ -142,9 +159,37 @@ function CopyrightDetailContent({ id }: { id: string }) {
                 placeholder="ระบุเหตุผลในการยอมรับหรือปฏิเสธคำขอ"
               />
             </Field>
+            {/*
+              ลายมือชื่อผู้โอน — กฎหมายกำหนดให้สัญญาโอนลิขสิทธิ์ต้องมีลายมือชื่อสองฝ่าย
+              จำเป็นเฉพาะตอนตอบรับ ตอนปฏิเสธไม่ต้องเซ็นเพราะไม่มีการโอนเกิดขึ้น
+            */}
+            <div>
+              <p className="mb-1 text-sm font-medium text-stone-700">
+                ลายมือชื่อผู้โอน <span className="text-stone-400">(จำเป็นเมื่อยอมรับคำขอ)</span>
+              </p>
+              <p className="mb-2 text-xs text-stone-500">
+                เซ็นชื่อลงกระดาษแล้วถ่ายรูปหรือสแกนมาแนบ — สัญญาโอนลิขสิทธิ์ต้องมีลายมือชื่อทั้งสองฝ่าย
+              </p>
+              <input
+                type="file"
+                accept="image/png,image/jpeg"
+                onChange={handleSignatureFile}
+                className="block w-full text-sm text-stone-600 file:mr-3 file:rounded-lg file:border-0 file:bg-stone-900 file:px-3 file:py-2 file:text-white"
+              />
+              {signatureError && <p className="mt-1 text-xs text-rose-600">{signatureError}</p>}
+              {signature && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={signature}
+                  alt="ลายมือชื่อ"
+                  className="mt-2 h-20 rounded-lg border border-stone-200 bg-white object-contain p-1"
+                />
+              )}
+            </div>
+
             <div className="flex gap-3">
               <Button onClick={() => handleRespond(true)} disabled={submitting} className="flex-1">
-                ยอมรับคำขอ
+                ยอมรับและลงนาม
               </Button>
               <Button variant="danger" onClick={() => handleRespond(false)} disabled={submitting} className="flex-1">
                 ปฏิเสธคำขอ

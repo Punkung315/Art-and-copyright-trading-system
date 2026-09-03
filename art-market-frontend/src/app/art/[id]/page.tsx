@@ -137,7 +137,7 @@ export default function ArtDetailPage({ params }: { params: Promise<{ id: string
               </>
             )}
             <span className="mt-0.5 block text-xs text-stone-500">
-              ค่าจัดส่งจริงคำนวณหลังจากยืนยันคำสั่งซื้อ
+              ค่าจัดส่งจริงคำนวณจากจังหวัดปลายทาง จะแสดงตอนยืนยันคำสั่งซื้อ
             </span>
           </div>
         )}
@@ -154,7 +154,17 @@ export default function ArtDetailPage({ params }: { params: Promise<{ id: string
                 {cartButtonLabel()}
               </Button>
 
-              {artwork.copyrightAvailable &&
+              {/*
+                ลิขสิทธิ์ถูกโอนไปแล้ว = จบถาวร ไม่ใช่แค่ "ตอนนี้ยังไม่ว่าง"
+                สัญญาของระบบเป็นการโอนแต่เพียงผู้เดียวตลอดอายุการคุ้มครอง ขายได้ครั้งเดียว
+                ต้องขึ้นปุ่มบอกสถานะ ไม่ใช่ซ่อนไปเฉยๆ แล้วให้ผู้ใช้เดาว่าทำไมหาย
+              */}
+              {artwork.copyrightSold ? (
+                <Button variant="secondary" disabled>
+                  ลิขสิทธิ์ถูกโอนไปแล้ว
+                </Button>
+              ) : (
+                artwork.copyrightAvailable &&
                 /*
                  * ลิขสิทธิ์กับตัวชิ้นงานเป็นสินค้าคนละชิ้น งานที่มีคนสั่งซื้ออยู่ (RESERVED)
                  * จึงยังขอซื้อลิขสิทธิ์ได้ตามปกติ — ปิดเฉพาะตอนขายขาดไปแล้ว (SOLD)
@@ -169,15 +179,16 @@ export default function ArtDetailPage({ params }: { params: Promise<{ id: string
                       ขอซื้อลิขสิทธิ์ (฿{(artwork.copyrightPrice ?? 0).toLocaleString()})
                     </Button>
                   </Link>
-                ))}
+                ))
+              )}
             </div>
 
             {/* บอกเหตุผลที่กดไม่ได้ ไม่ใช่ปล่อยปุ่มเทาไว้เฉยๆ ให้เดาเอง */}
             {!isAvailable && (
               <p className="rounded-lg bg-stone-100 px-3 py-2 text-sm text-stone-600">
                 {isSold
-                  ? "ผลงานชิ้นนี้ขายไปแล้ว"
-                  : "ผลงานชิ้นนี้อยู่ในคำสั่งซื้อของผู้ซื้อรายอื่นอยู่"}
+                  ? "ผลงานชิ้นนี้ขายไปแล้ว จึงสั่งซื้อไม่ได้"
+                  : "ผลงานชิ้นนี้อยู่ในคำสั่งซื้อของผู้ซื้อรายอื่นอยู่ หากผู้ขายแจ้งว่าไม่พร้อมจำหน่าย ผลงานจะกลับมาเปิดขายอีกครั้ง"}
               </p>
             )}
           </div>

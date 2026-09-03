@@ -2,6 +2,7 @@ package com.maejo.artmarket.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 /**
@@ -17,4 +18,15 @@ public class ReceiveCopyrightTransferRequest {
 
     @NotBlank(message = "กรุณากรอกรายละเอียดการต่อรอง")
     private String detail;
+
+    /**
+     * ลายมือชื่อของผู้โอน — บังคับเมื่อ approved = true (ตรวจในเซอร์วิส ไม่ใช่ที่นี่)
+     *
+     * ที่ไม่ใส่ @NotBlank เพราะกรณีปฏิเสธไม่ต้องเซ็น
+     * bean validation ไม่รู้จักเงื่อนไข "บังคับเฉพาะเมื่ออีก field เป็นค่าหนึ่ง"
+     * ถ้าใส่ @NotBlank ตรงนี้จะทำให้ปฏิเสธคำขอไม่ได้เลย
+     */
+    @Pattern(regexp = "^(data:image/(png|jpe?g);base64,.+|.+\\.(png|jpg|jpeg|PNG|JPG|JPEG))$",
+             message = "ลายมือชื่อต้องเป็นไฟล์รูป .png หรือ .jpg เท่านั้น")
+    private String signature;
 }

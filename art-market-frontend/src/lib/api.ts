@@ -223,6 +223,8 @@ interface BeArtworkDetail extends BeArtworkSummary {
   description: string | null;
   copyrightPrice: number | null;
   copyrightAutoPrice?: boolean;
+  /** true = ลิขสิทธิ์ถูกโอนให้ผู้อื่นไปแล้ว ขอซื้อไม่ได้อีก */
+  copyrightSold?: boolean | null;
   shippingCost: number | null;
   shippingCompany: ShippingCompanyCode | null;
   shippingCompanyName: string | null;
@@ -368,6 +370,11 @@ interface BeTransfer {
   /** คำตอบ/เหตุผลของผู้ขาย — null จนกว่าผู้ขายจะตอบ */
   sellerResponseDetail: string | null;
   documentFile: string | null;
+  sellerSignature?: string | null;
+  sellerSignedDate?: string | null;
+  buyerSignedDate?: string | null;
+  termsVersion?: string | null;
+  /** ราคาที่ตกลงกัน ล็อกไว้ตอนยื่นคำขอ (ไม่ใช่ราคาลิขสิทธิ์ปัจจุบันของงาน) */
   copyrightPrice: number | null;
   artworks: BeArtworkSummary[] | null;
   /** null = ผู้ซื้อยังไม่เคยอัปสลิปค่าลิขสิทธิ์ */
@@ -571,7 +578,10 @@ function mapArtworkDetail(a: BeArtworkDetail): Artwork {
     shippingCost: a.shippingCost ?? undefined,
     description: a.description ?? "",
     publishDate: a.publishDate ?? "",
-    copyrightAvailable: (a.copyrightPrice ?? 0) > 0,
+    // ขายไปแล้ว = ไม่ว่างขายอีก ไม่ว่าราคาจะยังค้างอยู่หรือไม่
+    // (สัญญาเป็นการโอนแต่เพียงผู้เดียวตลอดอายุการคุ้มครอง — ขายได้ครั้งเดียว)
+    copyrightAvailable: (a.copyrightPrice ?? 0) > 0 && !a.copyrightSold,
+    copyrightSold: !!a.copyrightSold,
     copyrightPrice: a.copyrightPrice ?? undefined,
     // ไม่ระบุมา = โหมดอัตโนมัติ ซึ่งเป็นค่าเริ่มต้นของระบบ
     copyrightAutoPrice: a.copyrightAutoPrice ?? true,
@@ -835,6 +845,10 @@ function mapTransfer(t: BeTransfer): CopyrightTransfer {
     documentFile: t.documentFile ?? undefined,
     transferStatus: TRANSFER_STATUS_MAP[t.transferStatus],
     transferDate: t.transferDate,
+    sellerSignature: t.sellerSignature ?? undefined,
+    sellerSignedDate: t.sellerSignedDate ?? undefined,
+    buyerSignedDate: t.buyerSignedDate ?? undefined,
+    termsVersion: t.termsVersion ?? undefined,
     paymentStatus: mapPaymentStatus(t.copyrightPaymentStatus),
     paidAmount: t.copyrightPaidAmount ?? undefined,
   };
@@ -1705,11 +1719,13 @@ export async function getCopyrightTransfer(
 export async function respondCopyrightTransfer(
   id: string,
   accept: boolean,
-  responseDetail: string
+  responseDetail: string,
+  /** ลายมือชื่อผู้โอน — จำเป็นเมื่อตอบรับ (backend บังคับกฎเดียวกัน) */
+  signature?: string
 ): Promise<CopyrightTransfer> {
   const t = await request<BeTransfer>(`/copyright-transfers/${id}/respond`, {
     method: "PATCH",
-    body: JSON.stringify({ approved: accept, detail: responseDetail }),
+    body: JSON.stringify({ approved: accept, detail: responseDetail, signature }),
   });
   return mapTransfer(t);
 }

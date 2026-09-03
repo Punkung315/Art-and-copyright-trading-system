@@ -199,7 +199,18 @@ public class CopyrightPaymentService {
         return null;
     }
 
+    /**
+     * ยอดที่ต้องจ่ายของสัญญาฉบับนี้ = ราคาที่ตกลงกันตอนยื่นคำขอ
+     *
+     * ห้ามอ่านสดจาก artwork.copyrightPrice — ผู้ขายแก้ราคาได้ตลอด และระบบยัง
+     * คำนวณใหม่ให้อัตโนมัติเมื่อราคาขายเปลี่ยน (price × 3)
+     * ถ้าอ่านสด ผู้ซื้อที่ยื่นคำขอตอนราคา 28,500 แล้วผู้ขายขึ้นราคาระหว่างรอตอบรับ
+     * จะถูกเรียกเก็บตามราคาใหม่ ทั้งที่สัญญาที่ยื่นไประบุราคาเดิม
+     *
+     * fallback ไป artwork ให้เฉพาะสัญญาเก่าที่สร้างก่อนมีคอลัมน์ agreed_price
+     */
     private static double currentCopyrightPrice(CopyrightTransfer transfer) {
+        if (transfer.getAgreedPrice() != null) return transfer.getAgreedPrice();
         Double price = transfer.getArtwork().getCopyrightPrice();
         return price != null ? price : 0.0;
     }

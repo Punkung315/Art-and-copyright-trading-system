@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -57,6 +58,21 @@ public class CopyrightTransferService {
                 .findByCopyrightTransfer_CopyrightId(transfer.getCopyrightId())
                 .orElse(null);
     }
+
+    /** สถานะที่ถือว่าสัญญา "ยังมีผลอยู่" — REJECTED ไม่นับ ยื่นใหม่ได้ */
+    private static final List<CopyrightTransferStatus> ACTIVE_STATUSES = List.of(
+            CopyrightTransferStatus.PENDING,
+            CopyrightTransferStatus.SIGNED,
+            CopyrightTransferStatus.COMPLETED);
+
+    /**
+     * เวอร์ชันข้อความสัญญาที่ระบบใช้อยู่ตอนนี้
+     *
+     * ถ้าแก้เนื้อหาสัญญาในหน้าพิมพ์เมื่อไหร่ ต้องขยับเลขนี้ด้วย
+     * แล้วหน้าพิมพ์ต้องเลือกแสดงข้อความตามเวอร์ชันที่บันทึกไว้ในแต่ละสัญญา
+     * ไม่ใช่แสดงเวอร์ชันล่าสุดเสมอ
+     */
+    public static final String CURRENT_TERMS_VERSION = "v1-2026";
 
     /** ข้อความข้อตกลงมาตรฐาน ใช้เมื่อ client ไม่ได้ส่ง agreement มา */
     private static final String DEFAULT_AGREEMENT =
@@ -119,11 +135,28 @@ public class CopyrightTransferService {
                 .existsByBuyer_BuyerIdAndArtwork_ArtworkIdAndTransferStatusIn(
                         buyer.getBuyerId(),
                         artwork.getArtworkId(),
-                        List.of(CopyrightTransferStatus.PENDING,
-                                CopyrightTransferStatus.SIGNED,
-                                CopyrightTransferStatus.COMPLETED));
+                        ACTIVE_STATUSES);
         if (duplicate) {
             return ApiResponse.error("คุณส่งคำขอโอนลิขสิทธิ์ของงานชิ้นนี้ไปแล้ว");
+        }
+
+        // งานหนึ่งชิ้นขายลิขสิทธิ์ได้ครั้งเดียว — เช็คแยกจากด้านบนเพราะคนละกฎกัน
+        //
+        // ด้านบนกัน "คนเดิมขอซ้ำ" ส่วนตรงนี้กัน "คนใหม่ขอทับของคนอื่น"
+        // สัญญาของระบบเป็นการโอนแต่เพียงผู้เดียวตลอดอายุการคุ้มครอง
+        // ถ้าปล่อยให้สองคนขอพร้อมกันแล้วผู้ขายกดตอบรับทั้งคู่
+        // จะกลายเป็นขายสิทธิ์ผูกขาดชิ้นเดียวกันสองรอบ ซึ่งผิดทั้งสัญญาและกฎหมาย
+        //
+        // แยกข้อความสองแบบ เพราะ "ขายไปแล้วถาวร" กับ "มีคนจองอยู่ อาจว่างทีหลัง"
+        // เป็นคนละสถานการณ์สำหรับผู้ใช้
+        if (copyrightTransferRepository.findFirstByArtwork_ArtworkIdAndTransferStatus(
+                artwork.getArtworkId(), CopyrightTransferStatus.COMPLETED).isPresent()) {
+            return ApiResponse.error("ลิขสิทธิ์ของผลงานชิ้นนี้ถูกโอนให้ผู้อื่นไปแล้ว ไม่สามารถขอซื้อได้อีก");
+        }
+        if (copyrightTransferRepository.existsByArtwork_ArtworkIdAndTransferStatusIn(
+                artwork.getArtworkId(),
+                List.of(CopyrightTransferStatus.PENDING, CopyrightTransferStatus.SIGNED))) {
+            return ApiResponse.error("มีผู้ซื้อรายอื่นกำลังขอโอนลิขสิทธิ์ของผลงานชิ้นนี้อยู่ กรุณารอผลก่อน");
         }
 
         // ถ้าผู้ซื้อเคยสั่งซื้อชิ้นงานนี้ ให้ผูกคำสั่งซื้อไว้เพื่อการอ้างอิง
@@ -152,6 +185,10 @@ public class CopyrightTransferService {
                     .agreement(req.getAgreement() != null && !req.getAgreement().isBlank()
                             ? req.getAgreement().trim()
                             : DEFAULT_AGREEMENT)
+                    // ล็อกราคา ณ วินาทีที่ยื่นคำขอ — ตั้งแต่จุดนี้ผู้ขายแก้ราคาลิขสิทธิ์
+                    // ของงานได้ตามใจ แต่ไม่กระทบสัญญาฉบับที่ยื่นไปแล้ว
+                    .agreedPrice(artwork.getCopyrightPrice())
+                    .termsVersion(CURRENT_TERMS_VERSION)
                     .transferStatus(CopyrightTransferStatus.PENDING)
                     .build();
 
@@ -255,6 +292,7 @@ public class CopyrightTransferService {
 
         try {
             transfer.setDocumentFile(req.getDocumentFile());
+            transfer.setBuyerSignedDate(LocalDateTime.now());
             transfer.setTransferStatus(CopyrightTransferStatus.COMPLETED);
             copyrightTransferRepository.save(transfer);
             return ApiResponse.ok("ลงนามสัญญาโอนลิขสิทธิ์สำเร็จ",
@@ -287,8 +325,31 @@ public class CopyrightTransferService {
             return ApiResponse.error("สัญญาฉบับนี้ถูกดำเนินการแล้ว");
         }
 
+        // ตอบรับ = ลงนามในฐานะผู้โอน จึงต้องมีลายมือชื่อ (มาตรา 17)
+        // ปฏิเสธไม่ต้องเซ็น เพราะไม่มีการโอนเกิดขึ้น
+        if (req.getApproved() && (req.getSignature() == null || req.getSignature().isBlank())) {
+            return ApiResponse.error("กรุณาแนบลายมือชื่อของผู้โอนเพื่อยืนยันการตอบรับ");
+        }
+
+        // งานชิ้นนี้ต้องยังไม่ถูกขายลิขสิทธิ์ให้ใคร — เช็คซ้ำที่นี่ด้วย
+        //
+        // ตอนยื่นคำขอเช็คไปแล้วรอบหนึ่ง แต่ระหว่างที่คำขอนี้รอผู้ขายตอบ
+        // สัญญาฉบับอื่นของงานเดียวกันอาจปิดจบไปก่อนได้ (เช่นผู้ขายเผลอตอบรับสองฉบับ)
+        // ถ้าไม่เช็คตรงนี้อีกครั้ง จะเกิดสัญญา COMPLETED สองฉบับของงานชิ้นเดียว
+        if (req.getApproved()
+                && copyrightTransferRepository.findFirstByArtwork_ArtworkIdAndTransferStatus(
+                        transfer.getArtwork().getArtworkId(), CopyrightTransferStatus.COMPLETED)
+                   .filter(other -> !other.getCopyrightId().equals(transfer.getCopyrightId()))
+                   .isPresent()) {
+            return ApiResponse.error("ลิขสิทธิ์ของผลงานชิ้นนี้ถูกโอนให้ผู้อื่นไปแล้ว ไม่สามารถตอบรับคำขอนี้ได้");
+        }
+
         try {
             transfer.setSellerResponseDetail(req.getDetail());
+            if (req.getApproved()) {
+                transfer.setSellerSignature(req.getSignature());
+                transfer.setSellerSignedDate(LocalDateTime.now());
+            }
             transfer.setTransferStatus(
                     req.getApproved() ? CopyrightTransferStatus.SIGNED : CopyrightTransferStatus.REJECTED);
 
