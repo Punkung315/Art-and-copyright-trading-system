@@ -210,8 +210,6 @@ public class CopyrightPaymentService {
      * fallback ไป artwork ให้เฉพาะสัญญาเก่าที่สร้างก่อนมีคอลัมน์ agreed_price
      */
     private static double currentCopyrightPrice(CopyrightTransfer transfer) {
-        if (transfer.getAgreedPrice() != null) return transfer.getAgreedPrice();
-        Double price = transfer.getArtwork().getCopyrightPrice();
-        return price != null ? price : 0.0;
+        return transfer.effectiveAgreedPrice();
     }
 }

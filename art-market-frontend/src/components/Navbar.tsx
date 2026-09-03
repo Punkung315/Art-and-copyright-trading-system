@@ -49,7 +49,8 @@ export function Navbar() {
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-stone-200 bg-white/90 backdrop-blur">
+    // แถบเมนูไม่ใช่ส่วนหนึ่งของเอกสาร — ซ่อนตอนสั่งพิมพ์ใบสัญญา/ใบเสนอราคา/ใบรับรอง
+    <header className="sticky top-0 z-40 border-b border-stone-200 bg-white/90 backdrop-blur print:hidden">
       <Container className="flex h-16 items-center justify-between gap-4">
         <Link href="/" className="font-serif text-xl font-bold tracking-tight text-stone-900">
           Artmara<span className="text-amber-600">.</span>

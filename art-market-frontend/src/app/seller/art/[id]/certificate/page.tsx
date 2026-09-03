@@ -25,7 +25,7 @@ function CertificateContent({ id }: { id: string }) {
         <Button onClick={() => window.print()}>พิมพ์ใบรับรอง</Button>
       </div>
 
-      <Card className="mx-auto max-w-2xl border-4 border-double border-stone-300 p-10 text-center print:border-0 print:shadow-none">
+      <Card className="mx-auto max-w-2xl border-4 border-double border-stone-300 p-10 text-center print:max-w-none print:p-0 print:border-0 print:shadow-none">
         <p className="font-serif text-2xl font-bold uppercase tracking-widest text-stone-900">
           Certificate of Authenticity
         </p>

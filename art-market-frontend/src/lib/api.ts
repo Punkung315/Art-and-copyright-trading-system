@@ -371,6 +371,7 @@ interface BeTransfer {
   sellerResponseDetail: string | null;
   documentFile: string | null;
   sellerSignature?: string | null;
+  buyerSignature?: string | null;
   sellerSignedDate?: string | null;
   buyerSignedDate?: string | null;
   termsVersion?: string | null;
@@ -846,6 +847,7 @@ function mapTransfer(t: BeTransfer): CopyrightTransfer {
     transferStatus: TRANSFER_STATUS_MAP[t.transferStatus],
     transferDate: t.transferDate,
     sellerSignature: t.sellerSignature ?? undefined,
+    buyerSignature: t.buyerSignature ?? undefined,
     sellerSignedDate: t.sellerSignedDate ?? undefined,
     buyerSignedDate: t.buyerSignedDate ?? undefined,
     termsVersion: t.termsVersion ?? undefined,
@@ -1732,11 +1734,14 @@ export async function respondCopyrightTransfer(
 
 export async function signCopyrightTransfer(
   id: string,
-  documentFile: string
+  /** ลายมือชื่อผู้รับโอน — สิ่งที่บังคับ */
+  signature: string,
+  /** ไฟล์เอกสารที่เซ็นกระดาษแล้ว — ไม่บังคับ แนบเพิ่มเป็นหลักฐานได้ */
+  documentFile?: string
 ): Promise<CopyrightTransfer> {
   const t = await request<BeTransfer>(`/copyright-transfers/${id}/sign`, {
     method: "PATCH",
-    body: JSON.stringify({ documentFile }),
+    body: JSON.stringify({ signature, documentFile }),
   });
   return mapTransfer(t);
 }

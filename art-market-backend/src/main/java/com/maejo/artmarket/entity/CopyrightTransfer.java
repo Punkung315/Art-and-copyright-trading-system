@@ -55,6 +55,19 @@ public class CopyrightTransfer {
     private String sellerSignature;
 
     /**
+     * ลายมือชื่อผู้รับโอน — ผู้ซื้อเซ็นตอนลงนามสัญญา
+     *
+     * แยกจาก documentFile เพราะเป็นคนละอย่างกัน:
+     *   buyerSignature = ลายมือชื่อ (บังคับ) เอาไปแสดงในช่องลงนามบนใบสัญญา
+     *   documentFile   = ไฟล์เอกสารที่เซ็นกระดาษแล้วสแกนกลับ (ไม่บังคับ) เป็นหลักฐานแนบเพิ่ม
+     *
+     * เดิมมีแต่ documentFile ทำให้ลายเซ็นผู้ซื้อ "ฝัง" อยู่ในรูปถ่ายเอกสารทั้งใบ
+     * ช่องลงนามฝั่งผู้รับโอนบนใบสัญญาจึงว่างเปล่าเสมอ ทั้งที่ผู้ซื้อเซ็นไปแล้ว
+     */
+    @Column(columnDefinition = "LONGTEXT")
+    private String buyerSignature;
+
+    /**
      * วันที่แต่ละฝ่ายลงนาม — คนละตัวกับ transferDate ซึ่งเป็นวันที่ "ยื่นคำขอ"
      *
      * สัญญาต้องบอกได้ว่าใครเซ็นวันไหน ไม่ใช่มีวันเดียวแล้วเอาไปแปะว่า "วันที่ทำสัญญา"
@@ -151,6 +164,25 @@ public class CopyrightTransfer {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id")
     private Orders order;
+
+    /**
+     * ราคาที่ตกลงกันของสัญญาฉบับนี้ — จุดเดียวที่ตัดสินว่าราคาคือเท่าไหร่
+     *
+     * ต้องเช็ค "> 0" ไม่ใช่แค่ "!= null" เพราะข้อมูลเก่าจะมีค่าเป็น 0 ไม่ใช่ null:
+     *
+     *   ตอน Hibernate (ddl-auto: update) เพิ่มคอลัมน์ NOT NULL เข้าตารางที่มีข้อมูลอยู่แล้ว
+     *   MySQL เติมค่าให้แถวเดิมด้วย 0 (ตัวเลข) และ '' (ข้อความ) — ไม่ใช่ NULL
+     *   สัญญาทุกฉบับที่มีอยู่ก่อนอัปเดตจึงมี agreed_price = 0 และถ้าเช็คแค่ null
+     *   หน้าเว็บจะแสดงราคาเป็น ฿0 ทั้งหมด และผู้ซื้อจะถูกเรียกเก็บเงิน 0 บาท
+     *
+     * fallback ไปที่ราคาลิขสิทธิ์ปัจจุบันของงาน ใช้เฉพาะกรณีข้อมูลเก่าแบบนั้นเท่านั้น
+     * สัญญาที่สร้างหลังจากนี้จะมีราคาล็อกไว้ตั้งแต่ตอนยื่นคำขอเสมอ
+     */
+    public double effectiveAgreedPrice() {
+        if (agreedPrice != null && agreedPrice > 0) return agreedPrice;
+        Double current = artwork != null ? artwork.getCopyrightPrice() : null;
+        return current != null ? current : 0.0;
+    }
 
     @PrePersist
     protected void onCreate() {

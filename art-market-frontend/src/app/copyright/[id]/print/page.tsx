@@ -83,12 +83,13 @@ function PrintContent({ id }: { id: string }) {
   const effectiveDate = thaiDate(transfer.buyerSignedDate) ?? thaiDate(transfer.transferDate);
 
   return (
-    <Container className="py-10">
+    // ตอนพิมพ์ไม่ต้องมีระยะขอบของหน้าเว็บอีก เพราะ @page ตั้งขอบกระดาษไว้แล้ว
+    <Container className="py-10 print:p-0">
       <div className="mb-4 flex justify-end print:hidden">
         <Button onClick={() => window.print()}>พิมพ์เอกสาร</Button>
       </div>
 
-      <Card className="mx-auto max-w-3xl p-10 print:border-0 print:shadow-none">
+      <Card className="mx-auto max-w-3xl p-10 print:max-w-none print:p-0 print:border-0 print:shadow-none">
         <header className="text-center">
           <h1 className="font-serif text-xl font-bold text-stone-900">สัญญาโอนลิขสิทธิ์ผลงานศิลปะ</h1>
           <p className="mt-0.5 text-xs uppercase tracking-wide text-stone-500">
@@ -182,6 +183,7 @@ function PrintContent({ id }: { id: string }) {
           <SignatureBlock
             role="ผู้รับโอน"
             name={transfer.fullName}
+            signature={transfer.buyerSignature}
             signedDate={transfer.buyerSignedDate}
           />
         </div>

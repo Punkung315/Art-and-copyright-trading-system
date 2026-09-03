@@ -24,7 +24,7 @@ function QuotationContent({ id }: { id: string }) {
         <Button onClick={() => window.print()}>พิมพ์ใบเสนอราคา</Button>
       </div>
 
-      <Card className="mx-auto max-w-2xl p-8 print:border-0 print:shadow-none">
+      <Card className="mx-auto max-w-2xl p-8 print:max-w-none print:p-0 print:border-0 print:shadow-none">
         <div className="mb-6 flex items-center justify-between border-b border-stone-200 pb-4">
           <div>
             <h1 className="font-serif text-xl font-bold text-stone-900">ใบเสนอราคา</h1>

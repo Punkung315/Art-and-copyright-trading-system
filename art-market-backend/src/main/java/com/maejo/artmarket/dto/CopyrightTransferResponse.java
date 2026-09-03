@@ -58,6 +58,8 @@ public class CopyrightTransferResponse {
     private Integer sellerUserId;
     private String  documentFile;
     private String  sellerSignature;
+    /** ลายมือชื่อผู้รับโอน — คนละตัวกับ documentFile (ดูหมายเหตุใน entity) */
+    private String  buyerSignature;
     private Double  copyrightPrice;
 
     /** วันที่แต่ละฝ่ายลงนาม — null = ยังไม่ได้เซ็น */
@@ -121,19 +123,16 @@ public class CopyrightTransferResponse {
                 .sellerId(ct.getSeller().getSellerId())
                 .documentFile(ct.getDocumentFile())
                 .sellerSignature(ct.getSellerSignature())
+                .buyerSignature(ct.getBuyerSignature())
                 .sellerSignedDate(ct.getSellerSignedDate())
                 .buyerSignedDate(ct.getBuyerSignedDate())
                 .termsVersion(ct.getTermsVersion())
-                // ราคาที่ตกลงกัน ล็อกไว้ตอนยื่นคำขอ — ห้าม fallback ไป artwork.copyrightPrice
+                // ราคาที่ตกลงกัน ล็อกไว้ตอนยื่นคำขอ — ไม่อ่านสดจาก artwork.copyrightPrice
                 //
                 // เดิมอ่านสดจาก artwork ทำให้ผู้ขายแก้ราคาหลังเซ็นสัญญาแล้ว
                 // ใบสัญญาที่พิมพ์ย้อนหลังเปลี่ยนตัวเลขตามไปด้วย
-                // สัญญาเก่าที่ยังไม่มี agreed_price ใช้ราคาปัจจุบันไปก่อน (ดู migration)
-                .copyrightPrice(ct.getAgreedPrice() != null
-                        ? ct.getAgreedPrice()
-                        : (ct.getArtwork().getCopyrightPrice() != null
-                                ? ct.getArtwork().getCopyrightPrice()
-                                : 0.0))
+                // (กติกาการ fallback สำหรับข้อมูลเก่าอยู่ใน effectiveAgreedPrice ที่เดียว)
+                .copyrightPrice(ct.effectiveAgreedPrice())
                 .artworks(List.of(ArtworkSummaryResponse.from(ct.getArtwork())))
                 .transferStatus(ct.getTransferStatus())
                 .transferDate(ct.getTransferDate())

@@ -205,6 +205,8 @@ export interface CopyrightTransfer {
 
   /** ลายมือชื่อผู้โอน แนบตอนตอบรับคำขอ (พ.ร.บ. ลิขสิทธิ์ ม.17 ต้องมีลายมือชื่อสองฝ่าย) */
   sellerSignature?: string;
+  /** ลายมือชื่อผู้รับโอน แนบตอนลงนาม — คนละตัวกับ documentFile ที่เป็นไฟล์แนบทางเลือก */
+  buyerSignature?: string;
   /** วันที่แต่ละฝ่ายลงนาม — คนละตัวกับ transferDate ซึ่งเป็นวันที่ยื่นคำขอ */
   sellerSignedDate?: string;
   buyerSignedDate?: string;

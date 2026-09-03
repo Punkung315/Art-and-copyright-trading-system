@@ -291,7 +291,11 @@ public class CopyrightTransferService {
         }
 
         try {
-            transfer.setDocumentFile(req.getDocumentFile());
+            transfer.setBuyerSignature(req.getSignature());
+            // ไฟล์เอกสารที่สแกนกลับมาเป็นทางเลือก — ไม่ส่งมาก็ไม่ทับของเดิมให้เป็น null
+            if (req.getDocumentFile() != null && !req.getDocumentFile().isBlank()) {
+                transfer.setDocumentFile(req.getDocumentFile());
+            }
             transfer.setBuyerSignedDate(LocalDateTime.now());
             transfer.setTransferStatus(CopyrightTransferStatus.COMPLETED);
             copyrightTransferRepository.save(transfer);

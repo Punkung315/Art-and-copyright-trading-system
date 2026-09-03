@@ -15,7 +15,7 @@ import { CopyrightTransfer } from "@/types";
 import { Button, Card, Container, Field, Spinner, Textarea } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
 import { fileToDataUrl } from "@/lib/storage";
-import { validateImageFile } from "@/lib/validation";
+import { SignaturePad } from "@/components/SignaturePad";
 
 function CopyrightDetailContent({ id }: { id: string }) {
   const { user } = useAuth();
@@ -23,8 +23,11 @@ function CopyrightDetailContent({ id }: { id: string }) {
   const [transfer, setTransfer] = useState<CopyrightTransfer | null | undefined>(undefined);
   const [responseDetail, setResponseDetail] = useState("");
   const [fileError, setFileError] = useState<string | null>(null);
+  /** ลายเซ็นของ "ผู้ที่กำลังดูหน้านี้" — ผู้ขายใช้ตอนตอบรับ ผู้ซื้อใช้ตอนลงนาม */
   const [signature, setSignature] = useState("");
   const [signatureError, setSignatureError] = useState<string | null>(null);
+  /** ไฟล์เอกสารที่เซ็นกระดาษแล้วสแกนกลับ — ไม่บังคับ แนบเพิ่มได้ถ้าต้องการ */
+  const [signedDocument, setSignedDocument] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   async function load() {
@@ -45,14 +48,6 @@ function CopyrightDetailContent({ id }: { id: string }) {
   const isBuyer = user?.id === transfer.buyerId;
   const isSeller = user?.id === transfer.sellerId;
 
-  async function handleSignatureFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0] ?? null;
-    const err = validateImageFile(file);
-    setSignatureError(err);
-    if (err || !file) return;
-    setSignature(await fileToDataUrl(file));
-  }
-
   async function handleRespond(accept: boolean) {
     // ตอบรับ = ลงนามในฐานะผู้โอน จึงต้องมีลายมือชื่อ (พ.ร.บ. ลิขสิทธิ์ ม.17)
     // ปฏิเสธไม่ต้องเซ็น เพราะไม่มีการโอนเกิดขึ้น
@@ -72,7 +67,8 @@ function CopyrightDetailContent({ id }: { id: string }) {
     }
   }
 
-  async function handleSign(e: React.ChangeEvent<HTMLInputElement>) {
+  /** แนบไฟล์เอกสารที่เซ็นกระดาษแล้ว — ทางเลือก ไม่ใช่สิ่งที่บังคับให้ลงนามได้ */
+  async function handleSignedDocument(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
     if (!file) return;
     if (!["image/png", "image/jpeg", "application/pdf"].includes(file.type)) {
@@ -80,14 +76,22 @@ function CopyrightDetailContent({ id }: { id: string }) {
       return;
     }
     setFileError(null);
+    setSignedDocument(await fileToDataUrl(file));
+  }
+
+  async function handleSign() {
+    if (!signature) {
+      setSignatureError("กรุณาลงลายมือชื่อเพื่อยืนยันการรับโอนลิขสิทธิ์");
+      return;
+    }
+    setSignatureError(null);
     setSubmitting(true);
     try {
-      const dataUrl = await fileToDataUrl(file);
-      await signCopyrightTransfer(transfer!.id, dataUrl);
+      await signCopyrightTransfer(transfer!.id, signature, signedDocument || undefined);
       await load();
-      notify("อัปโหลดสัญญาที่ลงนามแล้วสำเร็จ", "success");
+      notify("ลงนามสัญญาโอนลิขสิทธิ์สำเร็จ", "success");
     } catch (err2) {
-      notify(err2 instanceof ApiError ? err2.message : "ระบบขัดข้อง ไม่สามารถแก้ไขหลักฐานได้", "error");
+      notify(err2 instanceof ApiError ? err2.message : "ระบบขัดข้อง ไม่สามารถบันทึกการลงนามได้", "error");
     } finally {
       setSubmitting(false);
     }
@@ -160,32 +164,20 @@ function CopyrightDetailContent({ id }: { id: string }) {
               />
             </Field>
             {/*
-              ลายมือชื่อผู้โอน — กฎหมายกำหนดให้สัญญาโอนลิขสิทธิ์ต้องมีลายมือชื่อสองฝ่าย
-              จำเป็นเฉพาะตอนตอบรับ ตอนปฏิเสธไม่ต้องเซ็นเพราะไม่มีการโอนเกิดขึ้น
+              ลายมือชื่อผู้โอน — จำเป็นเฉพาะตอนตอบรับ
+              ตอนปฏิเสธไม่ต้องเซ็นเพราะไม่มีการโอนเกิดขึ้น
             */}
-            <div>
-              <p className="mb-1 text-sm font-medium text-stone-700">
-                ลายมือชื่อผู้โอน <span className="text-stone-400">(จำเป็นเมื่อยอมรับคำขอ)</span>
-              </p>
-              <p className="mb-2 text-xs text-stone-500">
-                เซ็นชื่อลงกระดาษแล้วถ่ายรูปหรือสแกนมาแนบ — สัญญาโอนลิขสิทธิ์ต้องมีลายมือชื่อทั้งสองฝ่าย
-              </p>
-              <input
-                type="file"
-                accept="image/png,image/jpeg"
-                onChange={handleSignatureFile}
-                className="block w-full text-sm text-stone-600 file:mr-3 file:rounded-lg file:border-0 file:bg-stone-900 file:px-3 file:py-2 file:text-white"
-              />
-              {signatureError && <p className="mt-1 text-xs text-rose-600">{signatureError}</p>}
-              {signature && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={signature}
-                  alt="ลายมือชื่อ"
-                  className="mt-2 h-20 rounded-lg border border-stone-200 bg-white object-contain p-1"
-                />
-              )}
-            </div>
+            <SignaturePad
+              label="ลายมือชื่อผู้โอน (จำเป็นเมื่อยอมรับคำขอ)"
+              hint="สัญญาโอนลิขสิทธิ์ต้องมีลายมือชื่อทั้งผู้โอนและผู้รับโอน"
+              value={signature}
+              onChange={(v) => {
+                setSignature(v);
+                if (v) setSignatureError(null);
+              }}
+              disabled={submitting}
+            />
+            {signatureError && <p className="text-xs text-rose-600">{signatureError}</p>}
 
             <div className="flex gap-3">
               <Button onClick={() => handleRespond(true)} disabled={submitting} className="flex-1">
@@ -250,13 +242,47 @@ function CopyrightDetailContent({ id }: { id: string }) {
         {isBuyer && transfer.transferStatus === "accepted" && transfer.paymentStatus === "confirmed" && (
           <div className="mt-6 flex flex-col gap-2 border-t border-stone-200 pt-5">
             <p className="text-sm text-stone-600">
-              ชำระค่าลิขสิทธิ์เรียบร้อยแล้ว กรุณาดาวน์โหลดสัญญา ลงนาม แล้วอัปโหลดกลับเข้าระบบ
+              ชำระค่าลิขสิทธิ์เรียบร้อยแล้ว กรุณาอ่านสัญญาแล้วลงลายมือชื่อเพื่อรับโอนลิขสิทธิ์
             </p>
-            <label className="inline-flex w-fit cursor-pointer items-center rounded-lg bg-stone-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-stone-700">
-              อัปโหลดสัญญาที่ลงนามแล้ว
-              <input type="file" accept="image/png,image/jpeg,application/pdf" className="hidden" onChange={handleSign} />
-            </label>
-            {fileError && <p className="text-xs text-rose-600">{fileError}</p>}
+            <Link href={`/copyright/${transfer.id}/print`} className="w-fit">
+              <Button variant="secondary" type="button">
+                อ่านสัญญาฉบับเต็มก่อนลงนาม
+              </Button>
+            </Link>
+
+            <SignaturePad
+              label="ลายมือชื่อผู้รับโอน"
+              hint="ลงนามแล้วถือว่ายอมรับเงื่อนไขในสัญญาทั้งหมด"
+              value={signature}
+              onChange={(v) => {
+                setSignature(v);
+                if (v) setSignatureError(null);
+              }}
+              disabled={submitting}
+            />
+            {signatureError && <p className="text-xs text-rose-600">{signatureError}</p>}
+
+            {/*
+              ไฟล์เอกสารที่เซ็นกระดาษแล้ว — ทางเลือก ไม่ใช่เงื่อนไขในการลงนาม
+              เดิมนี่คือสิ่งที่บังคับ ทำให้ต้องมีเครื่องพิมพ์กับสแกนเนอร์ถึงจะจบสัญญาได้
+            */}
+            <div>
+              <p className="mb-1 text-sm font-medium text-stone-700">
+                แนบเอกสารที่เซ็นกระดาษแล้ว <span className="text-stone-400">(ไม่บังคับ)</span>
+              </p>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,application/pdf"
+                onChange={handleSignedDocument}
+                className="block w-full text-sm text-stone-600 file:mr-3 file:rounded-lg file:border-0 file:bg-stone-200 file:px-3 file:py-2 file:text-stone-700"
+              />
+              {fileError && <p className="mt-1 text-xs text-rose-600">{fileError}</p>}
+              {signedDocument && <p className="mt-1 text-xs text-emerald-700">แนบไฟล์แล้ว</p>}
+            </div>
+
+            <Button onClick={handleSign} disabled={submitting} className="w-fit">
+              {submitting ? "กำลังลงนาม..." : "ลงนามสัญญา"}
+            </Button>
           </div>
         )}
 
