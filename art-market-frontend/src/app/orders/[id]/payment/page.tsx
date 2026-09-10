@@ -9,6 +9,7 @@ import { Order } from "@/types";
 import { Button, Card, Container, Spinner } from "@/components/ui";
 import { fileToDataUrl } from "@/lib/storage";
 import { validateImageFile } from "@/lib/validation";
+import { BankTransferInfo } from "@/components/BankTransferInfo";
 
 function PaymentContent({ id }: { id: string }) {
   const [order, setOrder] = useState<Order | null | undefined>(undefined);
@@ -86,6 +87,8 @@ function PaymentContent({ id }: { id: string }) {
             </p>
           )}
         </div>
+
+        <BankTransferInfo />
 
         {order.paymentStatus === "rejected" && (
           <p className="mt-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">

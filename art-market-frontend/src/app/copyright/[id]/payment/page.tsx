@@ -9,6 +9,7 @@ import { CopyrightPaymentPreview } from "@/types";
 import { Button, Card, Container, Spinner } from "@/components/ui";
 import { fileToDataUrl } from "@/lib/storage";
 import { validateImageFile } from "@/lib/validation";
+import { BankTransferInfo } from "@/components/BankTransferInfo";
 
 function CopyrightPaymentContent({ id }: { id: string }) {
   const [preview, setPreview] = useState<CopyrightPaymentPreview | null | undefined>(undefined);
@@ -84,6 +85,8 @@ function CopyrightPaymentContent({ id }: { id: string }) {
             <span>฿{preview.amount.toLocaleString()}</span>
           </div>
         </div>
+
+        <BankTransferInfo />
 
         {preview.paymentStatus === "rejected" && (
           <p className="mt-4 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
