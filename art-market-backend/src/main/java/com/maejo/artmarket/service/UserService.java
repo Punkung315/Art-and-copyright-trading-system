@@ -1,5 +1,6 @@
 package com.maejo.artmarket.service;
 
+import com.maejo.artmarket.config.JwtUtil;
 import com.maejo.artmarket.dto.*;
 import com.maejo.artmarket.entity.Address;
 import com.maejo.artmarket.entity.Artwork;
@@ -27,6 +28,7 @@ public class UserService {
 
     private final UserRepository    userRepository;
     private final ArtworkRepository artworkRepository;
+    private final JwtUtil           jwtUtil;
 
     // =========================================================================
     // ยูสเคส 3.1.6 View Profile
@@ -115,6 +117,10 @@ public class UserService {
             return ApiResponse.error("อีเมลนี้ถูกใช้งานแล้ว กรุณาใช้อีเมลอื่น");
         }
 
+        // จำไว้ก่อนว่าชื่อผู้ใช้เปลี่ยนไหม — ต้องเช็คก่อน setUsername() ไม่งั้นเทียบไม่ได้แล้ว
+        boolean usernameChanged = StringUtils.hasText(req.getUsername())
+                && !req.getUsername().equals(user.getUsername());
+
         // Basic Flow ข้อ 5.1 — อัปเดตเฉพาะ field ที่ส่งมา (partial update)
         // ถ้า field ไหนเป็น null หรือ blank → คงค่าเดิมไว้
         if (StringUtils.hasText(req.getUsername()))    user.setUsername(req.getUsername());
@@ -132,8 +138,23 @@ public class UserService {
         }
 
         // คืนโปรไฟล์ที่อัปเดตแล้ว (isSelf=true เพราะแก้ข้อมูลตัวเอง)
-        return ApiResponse.ok("แก้ไขข้อมูลสำเร็จ",
-                ProfileResponse.from(user, List.of(), true));
+        ProfileResponse profile = ProfileResponse.from(user, List.of(), true);
+
+        /*
+         * เปลี่ยนชื่อผู้ใช้ = token ใบเดิมใช้ไม่ได้อีกต่อไป
+         *
+         * JWT เก็บ username ไว้ใน subject และ JwtAuthFilter ใช้ค่านั้นไปหา user ในฐานข้อมูล
+         * พอชื่อเปลี่ยน ชื่อเดิมก็ไม่มีในฐานข้อมูลแล้ว request ถัดไปจึงล้มทุกครั้ง
+         * ผู้ใช้จะรู้สึกเหมือนถูกเตะออกจากระบบทั้งที่แค่กดบันทึกโปรไฟล์
+         *
+         * จึงออก token ใบใหม่ให้ทันทีในคำตอบเดียวกัน frontend จะได้สลับไปใช้ใบใหม่
+         * โดยผู้ใช้ไม่ต้องล็อกอินซ้ำ
+         */
+        if (usernameChanged) {
+            profile.setToken(jwtUtil.generateToken(user.getUsername(), user.getRole().name()));
+        }
+
+        return ApiResponse.ok("แก้ไขข้อมูลสำเร็จ", profile);
     }
 
     // =========================================================================

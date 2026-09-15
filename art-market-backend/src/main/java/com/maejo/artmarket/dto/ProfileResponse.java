@@ -47,6 +47,18 @@ public class ProfileResponse {
     /** รายการผลงาน — แสดงเฉพาะเมื่อ user เป็น Seller (SRS: "รายการงานศิลปะ") */
     private List<ArtworkSummaryResponse> artworks;
 
+    /**
+     * token ใบใหม่ — ส่งมาเฉพาะตอนที่ผู้ใช้เปลี่ยน "ชื่อผู้ใช้" ของตัวเอง
+     *
+     * JWT เก็บ username ไว้ใน subject พอเปลี่ยนชื่อแล้ว token ใบเดิมจะชี้ไปยังชื่อ
+     * ที่ไม่มีอยู่ในฐานข้อมูลอีกต่อไป ทุก request หลังจากนั้นจะพังทันที
+     * (เหมือนถูกเตะออกจากระบบทั้งที่ผู้ใช้แค่แก้โปรไฟล์)
+     *
+     * จึงออก token ใบใหม่ให้พร้อมกับผลลัพธ์ แล้วให้ frontend เปลี่ยนไปใช้ใบนี้แทน
+     * ถ้าไม่ได้เปลี่ยนชื่อผู้ใช้ ค่านี้จะเป็น null และ frontend จะไม่แตะ token เดิม
+     */
+    private String token;
+
     public static ProfileResponse from(User user, List<ArtworkSummaryResponse> artworks, boolean isSelf) {
         String sellerStatus = "none";
         Integer sellerId = null;

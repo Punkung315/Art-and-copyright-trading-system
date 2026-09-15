@@ -207,6 +207,11 @@ interface BeProfile {
   sellerId: number | null;
   addresses: BeAddress[] | null;
   artworks: BeArtworkSummary[] | null;
+  /**
+   * token ใบใหม่ — backend ส่งมาเฉพาะตอนที่ผู้ใช้เปลี่ยนชื่อผู้ใช้ของตัวเอง
+   * เพราะ JWT เก็บ username ไว้ใน subject ใบเดิมจึงใช้ไม่ได้อีก
+   */
+  token?: string | null;
 }
 
 interface BeArtworkSummary {
@@ -890,7 +895,19 @@ export async function loginUser(
       body: JSON.stringify({ usernameOrEmail, password }),
     });
     setToken(auth.token);
-    return { kind: "user", user: mapAuthToUser(auth) };
+    /*
+     * /auth/login คืนแค่ "ผลการยืนยันตัวตน" (token + ตัวตนคร่าวๆ) ไม่ใช่โปรไฟล์
+     * AuthResponse ไม่มี addresses, phoneNumber, nationalNo อยู่เลย
+     *
+     * ถ้าใช้ค่าจาก login เป็น user ของ session ตรงๆ หน้าที่อ่าน user.addresses
+     * (เช่นหน้าแก้ไขโปรไฟล์) จะเห็นเป็นว่างทั้งที่ในฐานข้อมูลมีที่อยู่อยู่
+     * แล้วจู่ๆ มาแสดงตอนผู้ใช้กด refresh หน้า เพราะตอนนั้น AuthContext เรียก getMe()
+     *
+     * จึงดึงโปรไฟล์เต็มจาก /users/me ต่อทันทีหลังได้ token
+     * ให้ user ของ session มาจากแหล่งเดียวกันเสมอ ไม่ว่าจะเพิ่ง login หรือ refresh หน้า
+     */
+    const profile = await getMe();
+    return { kind: "user", user: profile ?? mapAuthToUser(auth) };
   } catch (userErr) {
     try {
       const auth = await request<BeAuth>("/admin/login", {
@@ -1024,6 +1041,17 @@ export async function updateProfile(
     method: "PUT",
     body: JSON.stringify(patch),
   });
+
+  /*
+   * เปลี่ยนชื่อผู้ใช้แล้ว token ใบเดิมใช้ไม่ได้ เพราะ JWT เก็บ username ไว้ใน subject
+   * และชื่อเดิมไม่มีอยู่ในฐานข้อมูลอีกแล้ว — request ถัดไปจะล้มทันที
+   * เหมือนถูกเตะออกจากระบบทั้งที่ผู้ใช้แค่กดบันทึกโปรไฟล์
+   *
+   * backend จึงส่ง token ใบใหม่มาด้วยเฉพาะกรณีนี้ สลับไปใช้ทันทีก่อนคืนค่า
+   * เพื่อให้ refresh() หรือ request ตัวถัดไปใช้ใบที่ถูกต้อง
+   */
+  if (p.token) setToken(p.token);
+
   return mapProfile(p);
 }
 

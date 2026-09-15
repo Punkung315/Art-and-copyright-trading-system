@@ -31,11 +31,22 @@ public class JwtUtil {
     }
 
     public String generateToken(UserDetails userDetails, String role) {
+        return generateToken(userDetails.getUsername(), role);
+    }
+
+    /**
+     * สร้าง token จากชื่อผู้ใช้ตรงๆ โดยไม่ต้องโหลด UserDetails ก่อน
+     *
+     * ใช้ตอนผู้ใช้เปลี่ยนชื่อผู้ใช้ของตัวเอง (Edit Profile) — ตอนนั้นชื่อใหม่เพิ่งถูกบันทึก
+     * และยังอยู่ใน transaction เดียวกัน การไปเรียก loadUserByUsername() ซ้ำ
+     * จะเป็นการยิง query เพิ่มโดยไม่จำเป็น และต้องพึ่งจังหวะ flush ของ Hibernate
+     */
+    public String generateToken(String username, String role) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("role", role);
         return Jwts.builder()
                 .claims(claims)
-                .subject(userDetails.getUsername())
+                .subject(username)
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + expirationMs))
                 .signWith(getSigningKey())
