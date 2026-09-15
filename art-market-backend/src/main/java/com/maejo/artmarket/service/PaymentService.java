@@ -60,7 +60,7 @@ public class PaymentService {
 
         // สลิปที่ถูกปฏิเสธไปแล้วต้องอัปโหลดใหม่ได้ หน้าชำระเงินจึงต้องเปิดยอดให้ดูอีกครั้ง
         boolean paidAlready = paymentRepository.findByOrder_OrderId(orderId)
-                .filter(p -> p.getTransferStatus() != PaymentStatus.REJECTED)
+                .filter(p -> p.getPaymentStatus() != PaymentStatus.REJECTED)
                 .isPresent();
         if (paidAlready) {
             return ApiResponse.error("คำสั่งซื้อนี้ชำระเงินไปแล้ว");
@@ -121,7 +121,7 @@ public class PaymentService {
         // ตรงนั้นต้องให้ผู้ซื้ออัปโหลดใหม่ได้ ไม่งั้นคำสั่งซื้อจะค้างตายอยู่แบบนั้นตลอดไป
         Optional<Payment> existingOpt = paymentRepository.findByOrder_OrderId(req.getOrderId());
         if (existingOpt.isPresent()
-                && existingOpt.get().getTransferStatus() != PaymentStatus.REJECTED) {
+                && existingOpt.get().getPaymentStatus() != PaymentStatus.REJECTED) {
             return ApiResponse.error("คำสั่งซื้อนี้ชำระเงินไปแล้ว");
         }
 
@@ -140,7 +140,7 @@ public class PaymentService {
             payment.setGrandTotal(preview.getGrandTotal());
             payment.setShippingCost(preview.getShippingCost());
             payment.setSlipTransfer(req.getSlipTransfer());
-            payment.setTransferStatus(PaymentStatus.PENDING_CONFIRMATION); // รอ Admin ตรวจสอบ
+            payment.setPaymentStatus(PaymentStatus.PENDING_CONFIRMATION); // รอ Admin ตรวจสอบ
 
             paymentRepository.save(payment);
             return ApiResponse.ok("อัปโหลดหลักฐานการชำระเงินสำเร็จ รอการตรวจสอบจากผู้ดูแลระบบ",
@@ -160,7 +160,8 @@ public class PaymentService {
     private static double shippingOf(OrderItem item) {
         if (item.getShippingCost() != null) return item.getShippingCost();
         var artwork = item.getArtwork();
-        return artwork != null && artwork.getShippingCost() != null ? artwork.getShippingCost() : 0.0;
+        return artwork != null && artwork.getShippingCostEstimate() != null
+                ? artwork.getShippingCostEstimate() : 0.0;
     }
 
     private PaymentPreviewResponse buildPreview(Orders order) {

@@ -130,7 +130,8 @@ public class OrderDetailResponse {
     private static double shippingOf(OrderItem item) {
         if (item.getShippingCost() != null) return item.getShippingCost();
         var artwork = item.getArtwork();
-        return artwork != null && artwork.getShippingCost() != null ? artwork.getShippingCost() : 0.0;
+        return artwork != null && artwork.getShippingCostEstimate() != null
+                ? artwork.getShippingCostEstimate() : 0.0;
     }
 
     public static OrderDetailResponse from(Orders order) {
@@ -189,7 +190,7 @@ public class OrderDetailResponse {
                 .sellerId(seller != null ? seller.getSellerId() : null)
                 .sellerName(seller != null ? seller.getUser().getFullName() : null)
                 .paymentId(payment != null ? payment.getPaymentId() : null)
-                .paymentStatus(payment != null ? payment.getTransferStatus() : null)
+                .paymentStatus(payment != null ? payment.getPaymentStatus() : null)
                 .slipTransfer(payment != null ? payment.getSlipTransfer() : null)
                 .items(items)
                 .build();

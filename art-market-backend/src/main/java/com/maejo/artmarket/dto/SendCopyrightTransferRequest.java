@@ -57,5 +57,5 @@ public class SendCopyrightTransferRequest {
      * field นี้พังไปเลย — ถ้าไม่ส่งมา service จะเติมข้อความมาตรฐานให้แทน
      */
     @Size(max = 1000, message = "รายละเอียดข้อตกลงต้องไม่เกิน 1000 ตัวอักษร")
-    private String agreement;
+    private String buyerAgreementDetail;
 }

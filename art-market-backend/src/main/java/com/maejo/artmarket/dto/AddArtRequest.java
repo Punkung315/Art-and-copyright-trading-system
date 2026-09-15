@@ -1,15 +1,18 @@
 package com.maejo.artmarket.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.maejo.artmarket.enums.ShippingCompany;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.Data;
 
+import java.time.LocalDate;
+
 /**
  * DTO รับข้อมูลเพิ่มงานศิลปะ (ยูสเคส 3.1.16 Add Art หน้า 38)
  * SRS ระบุ field บังคับ: artworkName, artworkImage, artworkType, artworkStyle,
- * artworkMediums, artworkMaterial, artworkSize, description, price, publishDate
+ * artworkMediums, artworkMaterial, description, price, publishDate และขนาด (width/height)
  * งานที่เพิ่งเพิ่มจะถูก set publishStatus=DRAFT, artworkStatus=AVAILABLE อัตโนมัติ
  */
 @Data
@@ -33,10 +36,6 @@ public class AddArtRequest {
     @NotBlank(message = "กรุณาระบุวัสดุงานศิลปะ")
     private String artworkMaterial;
 
-    @NotNull(message = "กรุณาระบุขนาดงานศิลปะ")
-    @Positive(message = "ขนาดงานศิลปะต้องมากกว่า 0")
-    private Double artworkSize;
-
     @NotBlank(message = "กรุณากรอกคำอธิบายผลงาน")
     private String description;
 
@@ -44,8 +43,14 @@ public class AddArtRequest {
     @Positive(message = "ราคาต้องมากกว่า 0")
     private Double price;
 
-    @NotBlank(message = "กรุณาระบุวันที่ลงขาย")
-    private String publishDate;
+    /**
+     * วันที่ลงขาย รูปแบบ ISO "yyyy-MM-dd" (Jackson แปลงให้เป็น LocalDate เอง)
+     * ถ้าส่งรูปแบบอื่นมาจะได้ 400 พร้อมข้อความบอกรูปแบบที่ถูก แทนที่จะบันทึกขยะลงไปเงียบๆ
+     * แบบสมัยที่คอลัมน์นี้ยังเป็น varchar
+     */
+    @NotNull(message = "กรุณาระบุวันที่ลงขาย")
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
+    private LocalDate publishDate;
 
     // Optional fields
     /**
@@ -76,6 +81,15 @@ public class AddArtRequest {
     @Positive(message = "น้ำหนักต้องมากกว่า 0")
     private Double weight;
 
+    /**
+     * ความกว้าง — บังคับกรอก เพราะเป็นทั้งตัวคำนวณค่าส่งและตัวกรอง "ช่วงขนาด" ในหน้าค้นหา
+     *
+     * เดิมมีคอลัมน์ artworkSize แยกไว้ให้ตัวกรองใช้โดยเฉพาะ แต่ฝั่งหน้าเว็บ
+     * บังคับให้ artworkSize = width เสมออยู่แล้ว (มีคอมเมนต์กำกับไว้ในโค้ดเก่า)
+     * = เก็บความกว้างไว้สองที่โดยตั้งใจให้มีค่าเท่ากันตลอด ซึ่งรอวันหลุดออกจากกัน
+     * จึงตัด artworkSize ทิ้งแล้วให้ตัวกรองอ่าน width โดยตรง
+     */
+    @NotNull(message = "กรุณาระบุความกว้างของผลงาน")
     @Positive(message = "ความกว้างต้องมากกว่า 0")
     private Double width;
 

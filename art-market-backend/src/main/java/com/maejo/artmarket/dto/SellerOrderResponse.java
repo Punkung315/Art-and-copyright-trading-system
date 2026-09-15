@@ -75,7 +75,7 @@ public class SellerOrderResponse {
                 .buyerId(order.getBuyer().getBuyerId())
                 .buyerName(order.getBuyer().getUser().getFullName())
                 .buyerUserId(order.getBuyer().getUser().getUserId())
-                .paymentStatus(payment != null ? payment.getTransferStatus() : null)
+                .paymentStatus(payment != null ? payment.getPaymentStatus() : null)
                 .orderDate(order.getOrderDate())
                 .orderStatus(order.getOrderStatus())
                 .totalAmount(totalAmount)

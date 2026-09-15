@@ -45,7 +45,7 @@ public class PaymentDetailResponse {
     private Double        grandTotal;
     private Double        shippingCost;
     private String        slipTransfer;
-    private PaymentStatus transferStatus;
+    private PaymentStatus paymentStatus;
 
     /** ข้อมูลคำสั่งซื้อที่ผูกอยู่ */
     private LocalDateTime orderDate;
@@ -108,7 +108,7 @@ public class PaymentDetailResponse {
                 .grandTotal(p.getGrandTotal())
                 .shippingCost(p.getShippingCost())
                 .slipTransfer(p.getSlipTransfer())
-                .transferStatus(p.getTransferStatus())
+                .paymentStatus(p.getPaymentStatus())
                 .orderDate(order.getOrderDate())
                 .confirmDateTime(order.getConfirmDateTime())
                 .orderStatus(order.getOrderStatus())

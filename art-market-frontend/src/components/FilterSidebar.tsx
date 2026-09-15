@@ -132,7 +132,7 @@ export const PRICE_RANGES: RangeOption[] = [
   { label: "มากกว่า ฿20,000", min: 20000 },
 ];
 
-/** ช่วงขนาดผลงาน — อ้างอิงค่า artworkSize ที่ผู้ขายกรอกตอนลงงาน */
+/** ช่วงขนาดผลงาน — อ้างอิงความกว้าง (artwork.width) ที่ผู้ขายกรอกตอนลงงาน */
 export const SIZE_RANGES: RangeOption[] = [
   { label: "เล็ก (น้อยกว่า 40)", max: 40 },
   { label: "กลาง (40 - 60)", min: 40, max: 60 },

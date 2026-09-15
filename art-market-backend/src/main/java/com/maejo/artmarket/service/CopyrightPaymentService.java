@@ -73,7 +73,7 @@ public class CopyrightPaymentService {
                         .sellerName(transfer.getSeller().getUser().getFullName())
                         .amount(amount)
                         .copyrightTransferStatus(transfer.getTransferStatus())
-                        .paymentStatus(existing != null ? existing.getTransferStatus() : null)
+                        .paymentStatus(existing != null ? existing.getPaymentStatus() : null)
                         .slipTransfer(existing != null ? existing.getSlipTransfer() : null)
                         .canPay(blockReason == null)
                         .reason(blockReason)
@@ -117,7 +117,7 @@ public class CopyrightPaymentService {
             // ผู้ซื้อจะโอนตามยอดที่หน้าเว็บเพิ่งแสดง ไม่ใช่ยอดของรอบก่อน
             payment.setAmount(amount);
             payment.setSlipTransfer(req.getSlipTransfer());
-            payment.setTransferStatus(PaymentStatus.PENDING_CONFIRMATION);
+            payment.setPaymentStatus(PaymentStatus.PENDING_CONFIRMATION);
 
             copyrightPaymentRepository.save(payment);
             return ApiResponse.ok("อัปโหลดหลักฐานการชำระค่าลิขสิทธิ์สำเร็จ รอการตรวจสอบจากผู้ดูแลระบบ",
@@ -157,12 +157,12 @@ public class CopyrightPaymentService {
         if (paymentOpt.isEmpty()) return ApiResponse.error("ไม่พบรายการชำระค่าลิขสิทธิ์");
 
         CopyrightPayment payment = paymentOpt.get();
-        if (payment.getTransferStatus() != PaymentStatus.PENDING_CONFIRMATION) {
+        if (payment.getPaymentStatus() != PaymentStatus.PENDING_CONFIRMATION) {
             return ApiResponse.error("รายการนี้ถูกดำเนินการแล้ว");
         }
 
         try {
-            payment.setTransferStatus(
+            payment.setPaymentStatus(
                     req.getApproved() ? PaymentStatus.COMPLETED : PaymentStatus.REJECTED);
             copyrightPaymentRepository.save(payment);
 
@@ -191,8 +191,8 @@ public class CopyrightPaymentService {
             return "กรุณารอผู้ขายตอบรับคำขอโอนลิขสิทธิ์ก่อนชำระเงิน";
         }
         // สลิปที่ถูกปฏิเสธไปแล้วต้องอัปใหม่ได้ ไม่งั้นสัญญาจะค้างตายอยู่แบบนั้นตลอดไป
-        if (existing != null && existing.getTransferStatus() != PaymentStatus.REJECTED) {
-            return existing.getTransferStatus() == PaymentStatus.COMPLETED
+        if (existing != null && existing.getPaymentStatus() != PaymentStatus.REJECTED) {
+            return existing.getPaymentStatus() == PaymentStatus.COMPLETED
                     ? "สัญญาฉบับนี้ชำระเงินเรียบร้อยแล้ว"
                     : "อัปโหลดสลิปแล้ว รอผู้ดูแลระบบตรวจสอบ";
         }

@@ -1,8 +1,6 @@
 package com.maejo.artmarket.config;
 
-import com.maejo.artmarket.entity.Admin;
 import com.maejo.artmarket.entity.User;
-import com.maejo.artmarket.repository.AdminRepository;
 import com.maejo.artmarket.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -14,44 +12,29 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 
 /**
- * UserDetailsServiceImpl — bridge ระหว่าง Spring Security กับ User / Admin entity
+ * UserDetailsServiceImpl — bridge ระหว่าง Spring Security กับ User entity
  *
- * ลำดับการค้นหา:
- *   1. ค้นใน users table ก่อน (Buyer / Seller)
- *   2. ถ้าไม่พบ → ค้นใน admin table
- *   3. ถ้าไม่พบทั้งคู่ → throw UsernameNotFoundException
+ * ค้นตารางเดียวคือ users แล้วอ่านสิทธิ์จาก users.role (BUYER / SELLER / ADMIN)
  *
- * เหตุที่ต้องค้นสองตาราง: SRS กำหนดให้ Admin อยู่คนละตารางกับ User
- * ทำให้ Admin login ผ่าน endpoint เดียวกับ User ได้ แต่ได้ ROLE_ADMIN แทน
+ * เดิมต้องค้นสองตาราง เพราะผู้ดูแลระบบอยู่ในตาราง admin แยกต่างหาก
+ * ซึ่งมี username/password ของตัวเองซ้ำกับ users ทั้งชุด ผลคือมีเส้นทาง
+ * ยืนยันตัวตนสองเส้นที่ต้องดูแลให้ตรงกันตลอด ทั้งที่ทำงานเหมือนกันทุกอย่าง
  */
 @Service
 @RequiredArgsConstructor
 public class UserDetailsServiceImpl implements UserDetailsService {
 
-    private final UserRepository  userRepository;
-    private final AdminRepository adminRepository;
+    private final UserRepository userRepository;
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-
-        // ค้นใน users table ก่อน
-        User user = userRepository.findByUsername(username).orElse(null);
-        if (user != null) {
-            return new org.springframework.security.core.userdetails.User(
-                    user.getUsername(),
-                    user.getPassword(),
-                    List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()))
-            );
-        }
-
-        // ค้นใน admin table
-        Admin admin = adminRepository.findByUsername(username)
+        User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new UsernameNotFoundException("ไม่พบผู้ใช้: " + username));
 
         return new org.springframework.security.core.userdetails.User(
-                admin.getUsername(),
-                admin.getPassword(),
-                List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))
+                user.getUsername(),
+                user.getPassword(),
+                List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().name()))
         );
     }
 }

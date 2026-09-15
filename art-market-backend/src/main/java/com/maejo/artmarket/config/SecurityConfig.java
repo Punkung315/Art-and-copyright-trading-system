@@ -32,7 +32,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
  * endpoint อื่นๆ ที่จะเพิ่มในอนาคต:
  *   /api/artworks (POST/PUT/DELETE) → ROLE_SELLER เท่านั้น
  *   /api/orders/**               → ROLE_BUYER / ROLE_SELLER แล้วแต่ operation
- *   /api/admin/**                → ROLE_ADMIN (Admin entity แยกออกมา — TODO)
+ *   /api/admin/**                → ROLE_ADMIN (users.role = ADMIN)
  */
 @Configuration
 @EnableWebSecurity

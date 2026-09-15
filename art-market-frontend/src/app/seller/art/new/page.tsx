@@ -24,7 +24,7 @@ function AddArtContent() {
   const [artworkStyle, setArtworkStyle] = useState("");
   const [artworkMediums, setArtworkMediums] = useState("");
   const [artworkMaterial, setArtworkMaterial] = useState("");
-  // เก็บเป็น string เพราะช่องว่างต้องแยกจาก 0 ได้ (backend บังคับ artworkSize > 0)
+  // เก็บเป็น string เพราะช่องว่างต้องแยกจาก 0 ได้ (backend บังคับ width > 0)
   const [width, setWidth] = useState("");
   const [height, setHeight] = useState("");
   const [length, setLength] = useState("");
@@ -76,7 +76,6 @@ function AddArtContent() {
         artworkStyle,
         artworkMediums,
         artworkMaterial,
-        artworkSize: width,
         width: Number(width),
         height: Number(height),
         length: Number(length),

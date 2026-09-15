@@ -1,8 +1,11 @@
 package com.maejo.artmarket.dto;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.maejo.artmarket.enums.ShippingCompany;
 import jakarta.validation.constraints.Positive;
 import lombok.Data;
+
+import java.time.LocalDate;
 
 /**
  * DTO รับข้อมูลแก้ไขงานศิลปะ (ยูสเคส 3.1.18 Edit Art หน้า 40)
@@ -22,9 +25,6 @@ public class EditArtRequest {
     private String artworkStyle;
     private String artworkMediums;
     private String artworkMaterial;
-
-    @Positive(message = "ขนาดงานศิลปะต้องมากกว่า 0")
-    private Double artworkSize;
 
     private String description;
 
@@ -51,7 +51,8 @@ public class EditArtRequest {
     /** ขนส่งที่ผู้ขายเลือกใช้: FLASH / KERRY / THAILAND_POST / JT */
     private ShippingCompany shippingCompany;
 
-    private String publishDate;
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
+    private LocalDate publishDate;
 
     @Positive(message = "น้ำหนักต้องมากกว่า 0")
     private Double weight;

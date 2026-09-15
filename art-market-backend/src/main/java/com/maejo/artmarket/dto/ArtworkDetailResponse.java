@@ -3,9 +3,12 @@ package com.maejo.artmarket.dto;
 import com.maejo.artmarket.entity.Artwork;
 import com.maejo.artmarket.enums.ArtworkStatus;
 import com.maejo.artmarket.enums.PublishStatus;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.maejo.artmarket.enums.ShippingCompany;
 import lombok.Builder;
 import lombok.Data;
+
+import java.time.LocalDate;
 
 /**
  * DTO สำหรับ View Art (ยูสเคส 3.1.2)
@@ -24,7 +27,6 @@ public class ArtworkDetailResponse {
     private String artworkStyle;
     private String artworkMediums;
     private String artworkMaterial;
-    private Double artworkSize;
     private String description;
     private Double price;
     private Double copyrightPrice;
@@ -42,7 +44,7 @@ public class ArtworkDetailResponse {
     private boolean copyrightAutoPrice;
 
     /** ค่าจัดส่ง "ประเมิน" ยังไม่รู้ปลายทาง ค่าจริงคิดตอนยืนยันคำสั่งซื้อ */
-    private Double shippingCost;
+    private Double shippingCostEstimate;
 
     private ShippingCompany shippingCompany;
 
@@ -53,7 +55,8 @@ public class ArtworkDetailResponse {
     private Double width;
     private Double length;
     private Double height;
-    private String publishDate;
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
+    private LocalDate publishDate;
     private ArtworkStatus artworkStatus;
     private PublishStatus publishStatus;
 
@@ -86,12 +89,11 @@ public class ArtworkDetailResponse {
                 .artworkStyle(artwork.getArtworkStyle())
                 .artworkMediums(artwork.getArtworkMediums())
                 .artworkMaterial(artwork.getArtworkMaterial())
-                .artworkSize(artwork.getArtworkSize())
                 .description(artwork.getDescription())
                 .price(artwork.getPrice())
                 .copyrightPrice(artwork.getCopyrightPrice())
                 .copyrightAutoPrice(artwork.isCopyrightAutoPrice())
-                .shippingCost(artwork.getShippingCost())
+                .shippingCostEstimate(artwork.getShippingCostEstimate())
                 .shippingCompany(artwork.getShippingCompany())
                 .shippingCompanyName(artwork.getShippingCompany() != null
                         ? artwork.getShippingCompany().getDisplayName() : null)

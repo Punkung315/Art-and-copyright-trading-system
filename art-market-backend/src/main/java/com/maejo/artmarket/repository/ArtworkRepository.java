@@ -37,8 +37,11 @@ public interface ArtworkRepository extends JpaRepository<Artwork, Integer> {
            "AND (:artworkMediums IS NULL OR a.artworkMediums = :artworkMediums) " +
            "AND (:minPrice IS NULL OR a.price >= :minPrice) " +
            "AND (:maxPrice IS NULL OR a.price <= :maxPrice) " +
-           "AND (:minSize IS NULL OR a.artworkSize >= :minSize) " +
-           "AND (:maxSize IS NULL OR a.artworkSize <= :maxSize)")
+           // ตัวกรอง "ช่วงขนาด" อ่านความกว้างโดยตรง
+           // เดิมอ่านคอลัมน์ artworkSize ที่หน้าเว็บคอยเซ็ตให้เท่ากับ width อยู่ตลอด
+           // ซึ่งแปลว่าเก็บค่าเดียวกันไว้สองที่ พอตัดคอลัมน์นั้นทิ้งจึงย้ายมาอ่าน width
+           "AND (:minSize IS NULL OR a.width >= :minSize) " +
+           "AND (:maxSize IS NULL OR a.width <= :maxSize)")
     List<Artwork> searchArtworks(
             @Param("keyword")        String keyword,
             @Param("artworkType")    String artworkType,

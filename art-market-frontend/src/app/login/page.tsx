@@ -50,11 +50,15 @@ export default function LoginPage() {
             <Input
               value={usernameOrEmail}
               onChange={(e) => setUsernameOrEmail(e.target.value)}
-              placeholder="username หรือ email"
+              placeholder="ชื่อผู้ใช้ หรือ อีเมล"
             />
           </Field>
           <Field label="รหัสผ่าน">
-            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <Input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="รหัสผ่าน"/>
           </Field>
 
           <Button type="submit" disabled={submitting} className="mt-2 w-full">
@@ -74,13 +78,6 @@ export default function LoginPage() {
             เข้าสู่ระบบผู้ดูแลระบบ
           </Link>
         </p>
-
-        <div className="mt-6 rounded-lg bg-stone-50 p-3 text-xs text-stone-500">
-          <p className="font-medium text-stone-600">บัญชีทดสอบ</p>
-          <p>ผู้ซื้อ: punchapong / password1</p>
-          <p>ผู้ขาย (อนุมัติแล้ว): nichaart / password1</p>
-          <p>ผู้ขาย (รออนุมัติ): pendingartist / password1</p>
-        </div>
       </Card>
     </Container>
   );

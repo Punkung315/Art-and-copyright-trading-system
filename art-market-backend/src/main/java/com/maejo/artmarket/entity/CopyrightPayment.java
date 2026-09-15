@@ -46,9 +46,16 @@ public class CopyrightPayment {
     @Column(columnDefinition = "LONGTEXT")
     private String slipTransfer;
 
+    /**
+     * สถานะการชำระเงิน — ชื่อเดิม transfer_status และเป็น varchar(255) ธรรมดา
+     * ทั้งที่ payment ฝั่งซื้อชิ้นงานประกาศเป็น ENUM แล้ว
+     * varchar รับค่าที่ไม่มีในระบบได้เงียบๆ ตอนแก้ข้อมูลด้วยมือหรือ seed ผิด
+     * จึงบังคับเป็น ENUM ให้ตรงกัน และเปลี่ยนชื่อให้สื่อว่าเป็นสถานะ "การจ่ายเงิน"
+     */
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private PaymentStatus transferStatus;
+    @Column(name = "payment_status", nullable = false,
+            columnDefinition = "ENUM('AWAITING_PROOF','PENDING_CONFIRMATION','COMPLETED','REJECTED')")
+    private PaymentStatus paymentStatus;
 
     private LocalDateTime paymentDate;
 

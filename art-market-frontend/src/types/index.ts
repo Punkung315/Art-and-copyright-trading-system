@@ -76,7 +76,6 @@ export interface Artwork {
   artworkStyle: string;
   artworkMediums: string;
   artworkMaterial: string;
-  artworkSize: string;
   /**
    * มิติจริงของชิ้นงาน หน่วยเซนติเมตร แยกตามคอลัมน์ใน DB
    * หน้าชิ้นงานที่ผู้ใช้เรียกว่า "กว้าง x ยาว" คือ width x height
@@ -93,8 +92,11 @@ export interface Artwork {
   /**
    * ค่าจัดส่ง "ประเมิน" ที่ระบบคำนวณจากน้ำหนัก/ขนาด/ขนส่ง
    * ค่าจริงคิดอีกครั้งตอนยืนยันคำสั่งซื้อเมื่อรู้จังหวัดปลายทาง
+   *
+   * ชื่อมี Estimate ต่อท้ายเพื่อไม่ให้สับสนกับ OrderItem.shippingCost
+   * ซึ่งเป็นยอดที่คิดเงินจริงและห้ามเปลี่ยนย้อนหลัง
    */
-  shippingCost?: number;
+  shippingCostEstimate?: number;
   description: string;
   price: number;
   publishDate: string;

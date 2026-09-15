@@ -29,7 +29,7 @@ public class CopyrightPaymentResponse {
     /** ยอดที่ล็อกไว้ตอนผู้ซื้อกดจ่าย (ไม่ใช่ราคาลิขสิทธิ์ปัจจุบันของงาน) */
     private Double amount;
 
-    private PaymentStatus transferStatus;
+    private PaymentStatus paymentStatus;
     private LocalDateTime paymentDate;
 
     /** null ในโหมด summary — ดูหมายเหตุด้านบน */
@@ -65,7 +65,7 @@ public class CopyrightPaymentResponse {
                 .copyrightPaymentId(cp.getCopyrightPaymentId())
                 .copyrightId(ct.getCopyrightId())
                 .amount(cp.getAmount())
-                .transferStatus(cp.getTransferStatus())
+                .paymentStatus(cp.getPaymentStatus())
                 .paymentDate(cp.getPaymentDate())
                 .artworkId(ct.getArtwork().getArtworkId())
                 .artworkName(ct.getArtwork().getArtworkName())

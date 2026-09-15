@@ -96,11 +96,11 @@ public class ArtworkService {
 
     /**
      * คำนวณค่าส่ง "ประเมิน" ใหม่ทุกครั้งที่น้ำหนัก/ขนาด/ขนส่งเปลี่ยน
-     * เก็บลง artwork.shippingCost ไว้เป็น cache สำหรับโชว์บนหน้ารายละเอียดงาน
+     * เก็บลง artwork.shippingCostEstimate ไว้เป็น cache สำหรับโชว์บนหน้ารายละเอียดงาน
      * ค่าส่งที่คิดเงินจริงคำนวณแยกตอนยืนยันคำสั่งซื้อ เมื่อรู้ที่อยู่ปลายทางแล้ว
      */
     private void refreshShippingEstimate(Artwork artwork) {
-        artwork.setShippingCost(
+        artwork.setShippingCostEstimate(
                 shippingRateService.estimate(
                         artwork.getShippingCompany(),
                         artwork.getWeight(),
@@ -163,8 +163,11 @@ public class ArtworkService {
 
     /**
      * งานที่เผยแพร่ล่าสุด เรียงจากใหม่ไปเก่า
-     * เรียงด้วย artworkId แทน publishDate เพราะ publishDate เก็บเป็น String
-     * (ผู้ขายกรอกเอง) เรียงตามตัวอักษรจึงไม่ตรงกับลำดับเวลาจริงเสมอไป
+     *
+     * ยังเรียงด้วย artworkId ไม่ใช่ publishDate โดยตั้งใจ — ตอนนี้ publishDate
+     * เป็น LocalDate แล้วจึงเรียงตามเวลาได้จริง แต่ผู้ขายกรอกวันนี้เองและกรอก
+     * ย้อนหลัง/ล่วงหน้าได้ "งานมาใหม่" จึงควรหมายถึงลำดับที่เข้าระบบจริง
+     * ไม่ใช่วันที่ผู้ขายพิมพ์ลงไป (ดู sortOf() ที่ยังรองรับ newest = artworkId DESC)
      */
     @Transactional(readOnly = true)
     public ApiResponse<List<ArtworkSummaryResponse>> listLatest(Integer limit) {
@@ -327,7 +330,6 @@ public class ArtworkService {
                     .artworkStyle(req.getArtworkStyle())
                     .artworkMediums(req.getArtworkMediums())
                     .artworkMaterial(req.getArtworkMaterial())
-                    .artworkSize(req.getArtworkSize())
                     .description(req.getDescription())
                     .price(req.getPrice())
                     .publishDate(req.getPublishDate())
@@ -407,10 +409,9 @@ public class ArtworkService {
         if (StringUtils.hasText(req.getArtworkStyle()))     artwork.setArtworkStyle(req.getArtworkStyle());
         if (StringUtils.hasText(req.getArtworkMediums()))   artwork.setArtworkMediums(req.getArtworkMediums());
         if (StringUtils.hasText(req.getArtworkMaterial()))  artwork.setArtworkMaterial(req.getArtworkMaterial());
-        if (req.getArtworkSize()    != null) artwork.setArtworkSize(req.getArtworkSize());
         if (StringUtils.hasText(req.getDescription()))      artwork.setDescription(req.getDescription());
         if (req.getPrice()          != null) artwork.setPrice(req.getPrice());
-        if (StringUtils.hasText(req.getPublishDate()))      artwork.setPublishDate(req.getPublishDate());
+        if (req.getPublishDate()    != null) artwork.setPublishDate(req.getPublishDate());
         if (req.getShippingCompany() != null) artwork.setShippingCompany(req.getShippingCompany());
         if (req.getWeight() != null) artwork.setWeight(req.getWeight());
         if (req.getWidth()  != null) artwork.setWidth(req.getWidth());

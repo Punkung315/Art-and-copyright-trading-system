@@ -160,7 +160,15 @@ function qs(params: Record<string, string | number | undefined>): string {
 
 /* ------------------------- backend payload shapes ------------------------- */
 
-type BeRole = "BUYER" | "SELLER";
+/**
+ * บทบาทจาก backend — ADMIN รวมอยู่ในนี้แล้ว
+ *
+ * ผู้ดูแลระบบเคยอยู่คนละตารางกับผู้ใช้ทั่วไป enum ฝั่ง backend จึงไม่มีค่า ADMIN
+ * และต้องส่ง role = null มาพร้อม roleName เป็น string แทน
+ * ตอนนี้ยุบเป็นตารางเดียวแล้ว role จึงมีค่าจริงทุกกรณี
+ * (คง roleName ไว้เพื่อไม่ให้ client เก่าพัง — ค่าเดียวกันทั้งคู่)
+ */
+type BeRole = "BUYER" | "SELLER" | "ADMIN";
 
 interface BeAuth {
   token: string;
@@ -219,13 +227,13 @@ interface BeArtworkSummary {
 interface BeArtworkDetail extends BeArtworkSummary {
   artworkMediums: string | null;
   artworkMaterial: string | null;
-  artworkSize: number | null;
   description: string | null;
   copyrightPrice: number | null;
   copyrightAutoPrice?: boolean;
   /** true = ลิขสิทธิ์ถูกโอนให้ผู้อื่นไปแล้ว ขอซื้อไม่ได้อีก */
   copyrightSold?: boolean | null;
-  shippingCost: number | null;
+  /** ค่าส่ง "ประเมิน" ของชิ้นงาน — ห้ามใช้คิดเงิน ค่าจริงอยู่ที่ BeOrderItem.shippingCost */
+  shippingCostEstimate: number | null;
   shippingCompany: ShippingCompanyCode | null;
   shippingCompanyName: string | null;
   weight: number | null;
@@ -313,7 +321,7 @@ interface BePayment {
   grandTotal: number;
   shippingCost: number;
   slipTransfer?: string | null;
-  transferStatus: BePaymentStatus;
+  paymentStatus: BePaymentStatus;
   orderDate?: string | null;
   confirmDateTime?: string | null;
   orderStatus?: "PENDING" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | null;
@@ -365,8 +373,8 @@ interface BeTransfer {
   nationalNo: string;
   transferStatus: "PENDING" | "SIGNED" | "COMPLETED" | "REJECTED";
   transferDate: string;
-  /** ข้อตกลงที่ผู้ซื้อระบุตอนยื่นคำขอ */
-  agreement: string | null;
+  /** ข้อตกลงที่ผู้ซื้อระบุตอนยื่นคำขอ — ชื่อเดิมคือ agreement เฉยๆ ซึ่งชวนเข้าใจว่าเป็นตัวสัญญา */
+  buyerAgreementDetail: string | null;
   /** คำตอบ/เหตุผลของผู้ขาย — null จนกว่าผู้ขายจะตอบ */
   sellerResponseDetail: string | null;
   documentFile: string | null;
@@ -401,7 +409,7 @@ interface BeCopyrightPayment {
   copyrightPaymentId: number;
   copyrightId: number;
   amount: number;
-  transferStatus: BePaymentStatus;
+  paymentStatus: BePaymentStatus;
   paymentDate: string;
   slipTransfer: string | null;
   artworkId: number | null;
@@ -547,7 +555,6 @@ function mapArtworkSummary(a: BeArtworkSummary): Artwork {
     artworkStyle: a.artworkStyle ?? "",
     artworkMediums: "",
     artworkMaterial: "",
-    artworkSize: "",
     description: "",
     price: a.price,
     publishDate: "",
@@ -569,14 +576,13 @@ function mapArtworkDetail(a: BeArtworkDetail): Artwork {
     ...mapArtworkSummary(a),
     artworkMediums: a.artworkMediums ?? "",
     artworkMaterial: a.artworkMaterial ?? "",
-    artworkSize: a.artworkSize != null ? String(a.artworkSize) : "",
     width: a.width ?? undefined,
     length: a.length ?? undefined,
     height: a.height ?? undefined,
     weight: a.weight ?? undefined,
     shippingCompany: a.shippingCompany ?? undefined,
     shippingCompanyName: a.shippingCompanyName ?? undefined,
-    shippingCost: a.shippingCost ?? undefined,
+    shippingCostEstimate: a.shippingCostEstimate ?? undefined,
     description: a.description ?? "",
     publishDate: a.publishDate ?? "",
     // ขายไปแล้ว = ไม่ว่างขายอีก ไม่ว่าราคาจะยังค้างอยู่หรือไม่
@@ -756,7 +762,7 @@ function mapPayment(p: BePayment): Payment {
     shippingCost: p.shippingCost ?? 0,
     grandTotal: p.grandTotal ?? 0,
     slipTransfer: p.slipTransfer ?? undefined,
-    status: mapPaymentStatus(p.transferStatus),
+    status: mapPaymentStatus(p.paymentStatus),
     // ใช้วันที่สั่งซื้อจริงจาก backend ถ้ามี (เดิมยัด "เวลาปัจจุบัน" ทำให้เรียงตามเวลาไม่ได้)
     createdAt: p.orderDate ?? new Date().toISOString(),
   };
@@ -841,7 +847,7 @@ function mapTransfer(t: BeTransfer): CopyrightTransfer {
     },
     // ข้อตกลงของผู้ซื้อ กับคำตอบของผู้ขาย เป็นคนละข้อความกัน
     // (เดิม fallback ไปใช้ sellerResponseDetail ทำให้ช่องนี้ว่างจนกว่าผู้ขายจะตอบ)
-    agreement: t.agreement ?? "",
+    agreement: t.buyerAgreementDetail ?? "",
     responseDetail: t.sellerResponseDetail ?? undefined,
     documentFile: t.documentFile ?? undefined,
     transferStatus: TRANSFER_STATUS_MAP[t.transferStatus],
@@ -866,8 +872,12 @@ export type SessionPrincipal =
  * ลอง login เป็น user ก่อน ถ้าไม่ผ่านค่อยลองเป็น admin
  *
  * backend แยก endpoint ไว้คนละตัว (/api/auth/login กับ /api/admin/login)
- * เพราะ SRS กำหนดให้ Admin อยู่คนละตารางกับ User
  * แต่ frontend มีช่อง login ช่องเดียว จึงต้องลองทีละอันที่นี่
+ *
+ * ตอนนี้ผู้ดูแลระบบอยู่ในตาราง users แล้ว (role = ADMIN) แต่ยังแยก endpoint ไว้
+ * เพราะ /api/auth/login ปฏิเสธบัญชี ADMIN โดยตั้งใจ — เซสชันฝั่งแอดมิน
+ * กับฝั่งผู้ซื้อเป็นคนละชนิดกันใน AuthContext และหน้าผู้ซื้อคาดหวังว่า
+ * ต้องมี buyer record รองรับเสมอ ซึ่งบัญชีแอดมินไม่มี
  */
 export async function loginUser(
   usernameOrEmail: string,
@@ -1305,9 +1315,9 @@ export async function addArtwork(
       artworkStyle: input.artworkStyle,
       artworkMediums: input.artworkMediums,
       artworkMaterial: input.artworkMaterial,
-      // artworkSize เป็นคอลัมน์ตัวเลขตัวเดียวที่ backend บังคับให้ > 0 (@Positive)
-      // จึงใช้ด้านกว้างเป็นค่าตัวแทน แล้วเก็บมิติจริงลง width/height ต่างหาก
-      artworkSize: input.width ?? parseSize(input.artworkSize),
+      // width บังคับกรอกฝั่ง backend (@NotNull @Positive) เพราะเป็นทั้งตัวคำนวณค่าส่ง
+      // และตัวกรอง "ช่วงขนาด" ในหน้าค้นหา — เดิมมีคอลัมน์ artworkSize แยกไว้ทำหน้าที่หลัง
+      // แล้วโค้ดตรงนี้ต้องคอยเซ็ตให้เท่ากับ width ตลอด ตอนนี้ตัดออกแล้ว
       width: input.width ?? null,
       height: input.height ?? null,
       length: input.length ?? null,
@@ -1323,11 +1333,6 @@ export async function addArtwork(
     }),
   });
   return mapArtworkDetail(a);
-}
-
-function parseSize(size: string | undefined): number {
-  const n = Number.parseFloat(String(size ?? "").replace(/[^\d.]/g, ""));
-  return Number.isFinite(n) && n > 0 ? n : 1;
 }
 
 export async function updateArtwork(
@@ -1350,18 +1355,11 @@ export async function updateArtwork(
   if (patch.artworkStyle !== undefined) body.artworkStyle = patch.artworkStyle;
   if (patch.artworkMediums !== undefined) body.artworkMediums = patch.artworkMediums;
   if (patch.artworkMaterial !== undefined) body.artworkMaterial = patch.artworkMaterial;
-  if (patch.width !== undefined) {
-    body.width = patch.width;
-    // artworkSize ต้องขยับตามด้านกว้างเสมอ ไม่งั้นตัวกรองช่วงขนาดจะอ้างอิงค่าเก่า
-    if (patch.width) body.artworkSize = patch.width;
-  }
+  if (patch.width !== undefined) body.width = patch.width;
   if (patch.height !== undefined) body.height = patch.height;
   if (patch.length !== undefined) body.length = patch.length;
   if (patch.weight !== undefined) body.weight = patch.weight;
   if (patch.shippingCompany !== undefined) body.shippingCompany = patch.shippingCompany;
-  if (patch.artworkSize !== undefined && patch.width === undefined) {
-    body.artworkSize = parseSize(patch.artworkSize);
-  }
   if (patch.description !== undefined) body.description = patch.description;
   if (patch.price !== undefined) body.price = patch.price;
   /*
@@ -1429,7 +1427,6 @@ export async function listCart(
           artworkStyle: "",
           artworkMediums: "",
           artworkMaterial: "",
-          artworkSize: "",
           description: "",
           price: i.priceAtAdd,
           publishDate: "",
@@ -1682,7 +1679,7 @@ export async function sendCopyrightTransfer(input: {
       district: input.address.district,
       province: input.address.province,
       postalCode: input.address.postalCode,
-      agreement: input.agreement,
+      buyerAgreementDetail: input.agreement,
     }),
   });
   return mapTransfer(t);
@@ -1768,7 +1765,7 @@ function mapCopyrightPayment(p: BeCopyrightPayment): CopyrightPayment {
     id: String(p.copyrightPaymentId),
     copyrightId: String(p.copyrightId),
     amount: p.amount ?? 0,
-    status: mapPaymentStatus(p.transferStatus),
+    status: mapPaymentStatus(p.paymentStatus),
     paymentDate: p.paymentDate,
     slipTransfer: p.slipTransfer ?? undefined,
     artworkId: String(p.artworkId ?? ""),

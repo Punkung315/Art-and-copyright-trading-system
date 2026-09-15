@@ -34,5 +34,5 @@ public interface CopyrightPaymentRepository extends JpaRepository<CopyrightPayme
             """)
     List<CopyrightPayment> findAllForAdmin();
 
-    long countByTransferStatus(PaymentStatus status);
+    long countByPaymentStatus(PaymentStatus status);
 }

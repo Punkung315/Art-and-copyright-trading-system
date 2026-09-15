@@ -128,9 +128,13 @@ public class CopyrightTransfer {
      * เดิมไม่มีคอลัมน์นี้ ข้อความที่ผู้ซื้อพิมพ์จึงถูกทิ้งไปตั้งแต่ชั้น DTO
      * ทำให้หน้าสัญญาทั้งฝั่งผู้ซื้อและผู้ขายแสดงหัวข้อ "รายละเอียดข้อตกลง" แบบว่างเปล่า
      * (คนละตัวกับ sellerResponseDetail ด้านล่าง ซึ่งเป็นคำตอบของ "ผู้ขาย")
+     *
+     * ชื่อเดิมคือ agreement เฉยๆ ซึ่งอ่านแล้วเหมือนเป็น "ตัวสัญญา" ทั้งที่เป็นแค่
+     * หมายเหตุของฝั่งผู้ซื้อ ตัวข้อความสัญญาจริงอยู่ที่ termsVersion ต่างหาก
+     * เปลี่ยนชื่อให้เข้าคู่กับ sellerResponseDetail ที่มีอยู่แล้ว
      */
-    @Column(length = 1000)
-    private String agreement;
+    @Column(name = "buyer_agreement_detail", length = 1000)
+    private String buyerAgreementDetail;
 
     // ---- เพิ่มเติม: คำตอบ/เหตุผลจากผู้ขายตอน Receive Copyright Transfer ----
     @Column(length = 1000)

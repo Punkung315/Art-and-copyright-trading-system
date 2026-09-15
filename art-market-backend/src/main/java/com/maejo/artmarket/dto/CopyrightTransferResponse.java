@@ -37,7 +37,7 @@ public class CopyrightTransferResponse {
     private String nationalNo;
 
     /** รายละเอียดข้อตกลงที่ผู้ซื้อระบุตอนยื่นคำขอ — คนละตัวกับ sellerResponseDetail */
-    private String agreement;
+    private String buyerAgreementDetail;
 
     private CopyrightTransferStatus transferStatus;
 
@@ -93,9 +93,9 @@ public class CopyrightTransferResponse {
 
     public static CopyrightTransferResponse from(CopyrightTransfer ct, CopyrightPayment payment) {
         return baseFrom(ct)
-                .copyrightPaymentStatus(payment != null ? payment.getTransferStatus() : null)
+                .copyrightPaymentStatus(payment != null ? payment.getPaymentStatus() : null)
                 .copyrightPaidAmount(payment != null ? payment.getAmount() : null)
-                .copyrightPaid(payment != null && payment.getTransferStatus() == PaymentStatus.COMPLETED)
+                .copyrightPaid(payment != null && payment.getPaymentStatus() == PaymentStatus.COMPLETED)
                 .build();
     }
 
@@ -114,7 +114,7 @@ public class CopyrightTransferResponse {
                 .province(ct.getProvince())
                 .postalCode(ct.getPostalCode())
                 .nationalNo(ct.getNationalNo())
-                .agreement(ct.getAgreement())
+                .buyerAgreementDetail(ct.getBuyerAgreementDetail())
                 .artworkId(ct.getArtwork().getArtworkId())
                 .artworkName(ct.getArtwork().getArtworkName())
                 .buyerId(ct.getBuyer().getBuyerId())

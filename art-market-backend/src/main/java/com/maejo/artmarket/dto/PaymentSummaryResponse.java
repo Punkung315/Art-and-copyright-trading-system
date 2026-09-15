@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 /**
  * DTO สำหรับ List Payment (ยูสเคส 3.1.27)
  * SRS ระบุ field: orderId, buyerId, sellerId, totalPrice
- * เพิ่ม paymentId และ transferStatus เพื่อให้ Admin กด Confirm ได้
+ * เพิ่ม paymentId และ paymentStatus เพื่อให้ Admin กด Confirm ได้
  */
 @Data
 @Builder
@@ -40,7 +40,7 @@ public class PaymentSummaryResponse {
      */
     private Double        totalPrice;
 
-    private PaymentStatus transferStatus;
+    private PaymentStatus paymentStatus;
 
     /** ข้อมูลคำสั่งซื้อที่ผูกอยู่ — ใช้แสดงในตารางรายการและตารางสรุปของ Admin */
     private LocalDateTime orderDate;
@@ -61,7 +61,7 @@ public class PaymentSummaryResponse {
                 .grandTotal(p.getGrandTotal())
                 .shippingCost(p.getShippingCost())
                 .totalPrice(items.stream().mapToDouble(i -> i.getPrice() != null ? i.getPrice() : 0).sum())
-                .transferStatus(p.getTransferStatus())
+                .paymentStatus(p.getPaymentStatus())
                 .orderDate(p.getOrder().getOrderDate())
                 .orderStatus(p.getOrder().getOrderStatus())
                 .itemCount(items.size())

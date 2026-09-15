@@ -39,7 +39,10 @@ public class AdminService {
 
     @Transactional(readOnly = true)
     public ApiResponse<List<UserSummaryResponse>> listUsers() {
-        List<User> users = userRepository.findAll();
+        // ตัดบัญชี ADMIN ออก — หน้านี้มีไว้จัดการผู้ซื้อ/ผู้ขาย
+        // ตั้งแต่ยุบตาราง admin เข้ามาอยู่ใน users ถ้าไม่กรองไว้
+        // ผู้ดูแลระบบจะเห็นบัญชีตัวเองอยู่ในรายการพร้อมปุ่มจัดการบัญชี
+        List<User> users = userRepository.findByRoleNot(Role.ADMIN);
         return ApiResponse.ok(
                 users.isEmpty() ? "ไม่พบข้อมูลผู้ใช้งาน" : "พบผู้ใช้งาน " + users.size() + " ราย",
                 users.stream().map(UserSummaryResponse::from).toList());
@@ -190,18 +193,18 @@ public class AdminService {
         if (paymentOpt.isEmpty()) return ApiResponse.error("ไม่พบคำการโอนเงิน");
 
         Payment payment = paymentOpt.get();
-        if (payment.getTransferStatus() != PaymentStatus.PENDING_CONFIRMATION) {
+        if (payment.getPaymentStatus() != PaymentStatus.PENDING_CONFIRMATION) {
             return ApiResponse.error("รายการนี้ถูกดำเนินการแล้ว");
         }
 
         try {
             if (req.getApproved()) {
-                payment.setTransferStatus(PaymentStatus.COMPLETED);
+                payment.setPaymentStatus(PaymentStatus.COMPLETED);
                 // อัปเดต order → COMPLETED ด้วย
                 payment.getOrder().setOrderStatus(OrderStatus.COMPLETED);
                 ordersRepository.save(payment.getOrder());
             } else {
-                payment.setTransferStatus(PaymentStatus.REJECTED);
+                payment.setPaymentStatus(PaymentStatus.REJECTED);
             }
             paymentRepository.save(payment);
             return ApiResponse.ok(

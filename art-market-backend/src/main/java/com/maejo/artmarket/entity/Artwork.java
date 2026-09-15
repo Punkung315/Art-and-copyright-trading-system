@@ -6,6 +6,8 @@ import com.maejo.artmarket.enums.ShippingCompany;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDate;
+
 @Entity
 @Table(name = "artwork")
 @Getter
@@ -27,7 +29,6 @@ public class Artwork {
     private String artworkStyle;
     private String artworkMediums;
     private String artworkMaterial;
-    private Double artworkSize;
 
     @Column(length = 1000)
     private String description;
@@ -59,8 +60,13 @@ public class Artwork {
      * ห้ามใช้ตัวนี้คิดเงิน — ค่าส่งจริงอยู่ที่ order_item.shipping_cost ซึ่งล็อกไว้
      * ตอนยืนยันคำสั่งซื้อเมื่อรู้ปลายทางแล้ว เหตุผลเดียวกับที่ order_item.price
      * แยกจาก artwork.price คือผู้ขายแก้ค่านี้ทีหลังได้ ออเดอร์เก่าต้องไม่กระทบ
+     *
+     * ชื่อคอลัมน์มีคำว่า _estimate ต่อท้ายโดยตั้งใจ ของเดิมชื่อ shipping_cost เฉยๆ
+     * ซึ่งเหมือนกับ order_item.shipping_cost ที่เป็นยอดคิดเงินจริงเป๊ะ
+     * อ่านโค้ดแล้วแยกไม่ออกว่ากำลังหยิบตัวไหนอยู่ จึงเคยมีบั๊กอ่านผิดตัวมาแล้ว
      */
-    private Double shippingCost;
+    @Column(name = "shipping_cost_estimate")
+    private Double shippingCostEstimate;
 
     /** ขนส่งที่ผู้ขายเลือกใช้ส่งชิ้นงานนี้ เลือกได้เจ้าเดียว */
     @Enumerated(EnumType.STRING)
@@ -72,8 +78,16 @@ public class Artwork {
     private Double length;
     private Double height;
 
+    /**
+     * วันที่ลงขาย — เปลี่ยนจาก String เป็น LocalDate แล้ว
+     *
+     * ของเดิมเก็บเป็น varchar ทำให้เรียงลำดับตามวันที่ไม่ได้ (เรียงแบบ string
+     * "2569-1-5" มาก่อน "2569-10-1") ArtworkService จึงต้องหลบไปเรียงด้วย artworkId
+     * แทน ซึ่งให้ผลผิดทันทีที่มีการแก้วันลงขายย้อนหลัง
+     * และ varchar ยังรับค่าอะไรก็ได้ เช่น "เร็วๆ นี้" โดยไม่มีใครรู้จนกว่าจะพัง
+     */
     @Column(nullable = false)
-    private String publishDate;
+    private LocalDate publishDate;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

@@ -5,7 +5,6 @@ import com.maejo.artmarket.dto.*;
 import com.maejo.artmarket.entity.*;
 import com.maejo.artmarket.enums.Role;
 import com.maejo.artmarket.dto.AdminLoginRequest;
-import com.maejo.artmarket.entity.Admin;
 import com.maejo.artmarket.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -34,7 +33,6 @@ public class AuthService {
     private final PasswordEncoder    passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final UserDetailsService userDetailsService;
-    private final AdminRepository    adminRepository;
     private final JwtUtil            jwtUtil;
 
     // =========================================================================
@@ -82,6 +80,14 @@ public class AuthService {
         if (user == null) {
             // Alternate Flow 5.1.1 — "ไม่พบข้อมูลผู้ใช้"
             return ApiResponse.error("ไม่พบข้อมูลผู้ใช้");
+        }
+
+        // ผู้ดูแลระบบต้องเข้าทางหน้า login ของแอดมินเท่านั้น
+        // ตอนที่ admin ยังอยู่คนละตาราง endpoint นี้หาไม่เจออยู่แล้วโดยปริยาย
+        // พอยุบมารวมใน users จึงต้องกันเองที่นี่ ไม่งั้นบัญชีแอดมินจะหลุดเข้า
+        // หน้าผู้ซื้อซึ่งไม่มีทั้ง buyer และ seller record รองรับ
+        if (user.getRole() == Role.ADMIN) {
+            return ApiResponse.error("บัญชีผู้ดูแลระบบ กรุณาเข้าสู่ระบบผ่านหน้าสำหรับผู้ดูแลระบบ");
         }
 
         // Basic Flow ข้อ 5 — ตรวจสอบ username + password กับ DB
@@ -149,28 +155,30 @@ public class AuthService {
     // =========================================================================
 
     public ApiResponse<AuthResponse> loginAdmin(AdminLoginRequest req) {
-        Admin admin = adminRepository.findByUsername(req.getUsername()).orElse(null);
-        if (admin == null) {
-            return ApiResponse.error("ไม่พบข้อมูล Admin");
+        // ผู้ดูแลระบบเป็นแถวใน users ที่ role = ADMIN แล้ว ไม่ใช่ตารางแยก
+        User admin = userRepository.findByUsername(req.getUsername()).orElse(null);
+
+        // ข้อความเดียวกันทั้งกรณี "ไม่มีบัญชีนี้" และ "ไม่ใช่ผู้ดูแลระบบ"
+        // ไม่งั้นหน้า login ฝั่งแอดมินจะกลายเป็นเครื่องมือเดาว่า username ไหนมีอยู่จริง
+        if (admin == null || admin.getRole() != Role.ADMIN) {
+            return ApiResponse.error("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
         }
 
-        // ตรวจสอบ password
         if (!passwordEncoder.matches(req.getPassword(), admin.getPassword())) {
             return ApiResponse.error("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
         }
 
-        // สร้าง token พร้อม role ADMIN
         UserDetails userDetails = userDetailsService.loadUserByUsername(admin.getUsername());
-        String token = jwtUtil.generateToken(userDetails, "ADMIN");
+        String token = jwtUtil.generateToken(userDetails, Role.ADMIN.name());
 
         return ApiResponse.ok("เข้าสู่ระบบสำเร็จ", AuthResponse.builder()
                 .token(token)
                 .userId(admin.getUserId())
                 .username(admin.getUsername())
-                .email(null)
-                .role(null)          // enum Role ไม่มีค่า ADMIN — ใช้ roleName แทน
-                .roleName("ADMIN")
-                .fullName(admin.getUsername())
+                .email(admin.getEmail())
+                .role(Role.ADMIN)
+                .roleName(Role.ADMIN.name())
+                .fullName(admin.getFullName())
                 .build());
     }
 

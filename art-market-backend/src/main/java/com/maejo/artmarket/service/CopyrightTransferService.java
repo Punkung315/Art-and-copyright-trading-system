@@ -182,9 +182,11 @@ public class CopyrightTransferService {
                     .nationalNo(req.getNationalNo())
                     // เก็บข้อความข้อตกลงที่ผู้ซื้อยอมรับไว้เป็น snapshot ของสัญญาฉบับนี้
                     // ถ้า client เก่าไม่ส่งมา ใช้ข้อความมาตรฐานแทนเพื่อไม่ให้สัญญาว่างเปล่า
-                    .agreement(req.getAgreement() != null && !req.getAgreement().isBlank()
-                            ? req.getAgreement().trim()
-                            : DEFAULT_AGREEMENT)
+                    .buyerAgreementDetail(
+                            req.getBuyerAgreementDetail() != null
+                                    && !req.getBuyerAgreementDetail().isBlank()
+                                    ? req.getBuyerAgreementDetail().trim()
+                                    : DEFAULT_AGREEMENT)
                     // ล็อกราคา ณ วินาทีที่ยื่นคำขอ — ตั้งแต่จุดนี้ผู้ขายแก้ราคาลิขสิทธิ์
                     // ของงานได้ตามใจ แต่ไม่กระทบสัญญาฉบับที่ยื่นไปแล้ว
                     .agreedPrice(artwork.getCopyrightPrice())
@@ -283,9 +285,9 @@ public class CopyrightTransferService {
         if (payment == null) {
             return ApiResponse.error("กรุณาชำระค่าลิขสิทธิ์ก่อนลงนามสัญญา");
         }
-        if (payment.getTransferStatus() != PaymentStatus.COMPLETED) {
+        if (payment.getPaymentStatus() != PaymentStatus.COMPLETED) {
             return ApiResponse.error(
-                    payment.getTransferStatus() == PaymentStatus.REJECTED
+                    payment.getPaymentStatus() == PaymentStatus.REJECTED
                             ? "หลักฐานการชำระเงินถูกปฏิเสธ กรุณาอัปโหลดสลิปใหม่อีกครั้ง"
                             : "รอผู้ดูแลระบบตรวจสอบหลักฐานการชำระเงินก่อนจึงจะลงนามได้");
         }
