@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { FacetValue } from "@/lib/api";
+import { PriceRangeSlider } from "./PriceRangeSlider";
 
 /**
  * กล่องตัวกรองหนึ่งหมวด — พับเก็บได้ และซ่อนตัวเลือกส่วนเกินไว้หลังปุ่ม "แสดงเพิ่มเติม"
@@ -124,15 +125,7 @@ export interface RangeOption {
   max?: number;
 }
 
-/** ช่วงราคา (บาท) — ครอบคลุมช่วงราคางานศิลปะทั่วไปในระบบ */
-export const PRICE_RANGES: RangeOption[] = [
-  { label: "ต่ำกว่า ฿5,000", max: 5000 },
-  { label: "฿5,000 - ฿10,000", min: 5000, max: 10000 },
-  { label: "฿10,000 - ฿20,000", min: 10000, max: 20000 },
-  { label: "มากกว่า ฿20,000", min: 20000 },
-];
-
-/** ช่วงขนาดผลงาน — อ้างอิงความกว้าง (artwork.width) ที่ผู้ขายกรอกตอนลงงาน */
+/** ช่วงขนาดผลงาน — อ้างอิงค่า artworkSize ที่ผู้ขายกรอกตอนลงงาน */
 export const SIZE_RANGES: RangeOption[] = [
   { label: "เล็ก (น้อยกว่า 40)", max: 40 },
   { label: "กลาง (40 - 60)", min: 40, max: 60 },
@@ -144,7 +137,9 @@ export interface FilterState {
   artworkType: string;
   artworkStyle: string;
   artworkMediums: string;
-  priceIndex: number; // -1 = ไม่กรอง
+  /** ช่วงราคาที่ผู้ใช้ลากเอง — null = ไม่จำกัดด้านนั้น */
+  minPrice: number | null;
+  maxPrice: number | null;
   sizeIndex: number; // -1 = ไม่กรอง
 }
 
@@ -155,7 +150,14 @@ export function FilterSidebar({
   onReset,
   activeCount,
 }: {
-  facets: { types: FacetValue[]; styles: FacetValue[]; mediums: FacetValue[] };
+  facets: {
+    types: FacetValue[];
+    styles: FacetValue[];
+    mediums: FacetValue[];
+    /** ขอบล่าง/บนของสไลเดอร์ — มาจากราคาจริงที่มีอยู่ในฐานข้อมูล */
+    minPrice: number | null;
+    maxPrice: number | null;
+  };
   value: FilterState;
   onChange: (patch: Partial<FilterState>) => void;
   onReset: () => void;
@@ -225,21 +227,18 @@ export function FilterSidebar({
       </FilterGroup>
 
       <FilterGroup title="ช่วงราคา">
-        <RadioOption
-          name="price"
-          label="ทุกช่วงราคา"
-          checked={value.priceIndex === -1}
-          onChange={() => onChange({ priceIndex: -1 })}
+        {/*
+          ขอบสไลเดอร์มาจากราคาจริงในฐานข้อมูล ไม่ใช่ค่าที่ hardcode ไว้
+          ถ้าผู้ขายลงงานราคาสูงกว่าเพดานเดิม สไลเดอร์จะขยายตามเอง
+          เริ่มที่ 0 เสมอเพื่อให้ตัวเลขใต้รางอ่านง่ายและลากกลับมาสุดซ้ายได้
+        */}
+        <PriceRangeSlider
+          floor={0}
+          ceiling={facets.maxPrice ?? 100000}
+          min={value.minPrice}
+          max={value.maxPrice}
+          onChange={(next) => onChange({ minPrice: next.min, maxPrice: next.max })}
         />
-        {PRICE_RANGES.map((r, i) => (
-          <RadioOption
-            key={r.label}
-            name="price"
-            label={r.label}
-            checked={value.priceIndex === i}
-            onChange={() => onChange({ priceIndex: i })}
-          />
-        ))}
       </FilterGroup>
     </aside>
   );

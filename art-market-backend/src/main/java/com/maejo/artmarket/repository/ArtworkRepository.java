@@ -22,14 +22,22 @@ public interface ArtworkRepository extends JpaRepository<Artwork, Integer> {
     List<Artwork> findBySeller_User_UserIdAndPublishStatus(Integer userId, PublishStatus publishStatus);
 
     /**
-     * Search Art (ยูสเคส 3.1.1) — ค้นหาเฉพาะงานที่ PUBLISHED
+     * Search Art (ยูสเคส 3.1.1) — ค้นหาเฉพาะงานที่ PUBLISHED และยังขายได้
      * ทุก param optional: ถ้าส่ง null จะข้ามเงื่อนไขนั้น
      * JOIN FETCH ป้องกัน N+1 query problem
+     *
+     * ตัดงานที่ SOLD ออก เพราะงานต้นฉบับมีชิ้นเดียว ขายไปแล้วก็ซื้อไม่ได้อีก
+     * การปล่อยให้ค้างอยู่ในผลการค้นหาทำให้ผู้ซื้อเสียเวลากดเข้าไปแล้วเจอปุ่มที่กดไม่ได้
+     * งานที่ขายแล้วยังดูได้จากหน้าโปรไฟล์ของศิลปินในฐานะผลงานเก่า
+     *
+     * ส่วน RESERVED (อยู่ในคำสั่งซื้อของคนอื่น) ยังแสดงอยู่ เพราะถ้าผู้ขายแจ้ง
+     * ไม่พร้อมจำหน่ายหรือคำสั่งซื้อถูกยกเลิก งานจะกลับมาขายได้อีก
      */
     @Query("SELECT a FROM Artwork a " +
            "JOIN FETCH a.seller s " +
            "JOIN FETCH s.user u " +
            "WHERE a.publishStatus = 'PUBLISHED' " +
+           "AND a.artworkStatus <> 'SOLD' " +
            "AND (:keyword IS NULL OR LOWER(a.artworkName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
            "                      OR LOWER(u.fullName)    LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
            "AND (:artworkType IS NULL OR a.artworkType = :artworkType) " +
@@ -62,22 +70,28 @@ public interface ArtworkRepository extends JpaRepository<Artwork, Integer> {
     // ใช้กับ nested static class ได้ยุ่งยากกว่า จึง map เป็น DTO ใน service แทน
     // =========================================================================
 
+    // ทุก facet ต้องตัด SOLD ออกเหมือน searchArtworks ไม่งั้นตัวเลขข้างตัวกรอง
+    // จะบอกว่ามี 5 ชิ้น แต่พอกดแล้วขึ้นมาแค่ 3
     @Query("SELECT a.artworkType, COUNT(a) FROM Artwork a " +
-           "WHERE a.publishStatus = 'PUBLISHED' AND a.artworkType IS NOT NULL " +
+           "WHERE a.publishStatus = 'PUBLISHED' AND a.artworkStatus <> 'SOLD' " +
+           "AND a.artworkType IS NOT NULL " +
            "GROUP BY a.artworkType ORDER BY COUNT(a) DESC, a.artworkType ASC")
     List<Object[]> countByType();
 
     @Query("SELECT a.artworkStyle, COUNT(a) FROM Artwork a " +
-           "WHERE a.publishStatus = 'PUBLISHED' AND a.artworkStyle IS NOT NULL " +
+           "WHERE a.publishStatus = 'PUBLISHED' AND a.artworkStatus <> 'SOLD' " +
+           "AND a.artworkStyle IS NOT NULL " +
            "GROUP BY a.artworkStyle ORDER BY COUNT(a) DESC, a.artworkStyle ASC")
     List<Object[]> countByStyle();
 
     @Query("SELECT a.artworkMediums, COUNT(a) FROM Artwork a " +
-           "WHERE a.publishStatus = 'PUBLISHED' AND a.artworkMediums IS NOT NULL " +
+           "WHERE a.publishStatus = 'PUBLISHED' AND a.artworkStatus <> 'SOLD' " +
+           "AND a.artworkMediums IS NOT NULL " +
            "GROUP BY a.artworkMediums ORDER BY COUNT(a) DESC, a.artworkMediums ASC")
     List<Object[]> countByMediums();
 
-    @Query("SELECT MIN(a.price), MAX(a.price) FROM Artwork a WHERE a.publishStatus = 'PUBLISHED'")
+    @Query("SELECT MIN(a.price), MAX(a.price) FROM Artwork a " +
+           "WHERE a.publishStatus = 'PUBLISHED' AND a.artworkStatus <> 'SOLD'")
     List<Object[]> priceRange();
 
     // =========================================================================

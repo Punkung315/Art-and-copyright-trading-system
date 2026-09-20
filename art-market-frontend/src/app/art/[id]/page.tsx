@@ -100,6 +100,35 @@ export default function ArtDetailPage({ params }: { params: Promise<{ id: string
 
         <p className="text-3xl font-bold text-stone-900">฿{artwork.price.toLocaleString()}</p>
 
+        {/*
+          แถบสถานะ — ขึ้นเฉพาะตอนที่ซื้อไม่ได้ ไม่มีแถบ "พร้อมจำหน่าย"
+          เพราะการติดป้ายให้ทุกงานทำให้ป้ายหมดความหมาย งานที่ซื้อไม่ได้จริง ๆ จะไม่สะดุดตา
+
+          วางไว้ใต้ราคาเพราะเป็นจุดที่สายตาหยุดอยู่แล้ว ป้ายเล็ก ๆ ข้างชื่อผลงาน
+          อ่านไม่ทันถ้าไม่ตั้งใจมอง แต่แถบเต็มความกว้างมองข้ามไม่ได้
+        */}
+        {!isAvailable && (
+          <div
+            role="status"
+            className={`rounded-lg border px-4 py-3 ${
+              isSold ? "border-stone-300 bg-stone-100" : "border-amber-200 bg-amber-50"
+            }`}
+          >
+            <p
+              className={`text-sm font-semibold ${
+                isSold ? "text-stone-900" : "text-amber-900"
+              }`}
+            >
+              {isSold ? "ผลงานชิ้นนี้ขายไปแล้ว" : "ผลงานชิ้นนี้อยู่ในคำสั่งซื้อของผู้ซื้อรายอื่น"}
+            </p>
+            <p className={`mt-0.5 text-sm ${isSold ? "text-stone-600" : "text-amber-800"}`}>
+              {isSold
+                ? "หน้านี้แสดงไว้เป็นผลงานเก่าของศิลปิน ไม่เปิดขายอีกและไม่ปรากฏในหน้าค้นหาแล้ว"
+                : "หากผู้ขายแจ้งว่าไม่พร้อมจำหน่าย หรือคำสั่งซื้อถูกยกเลิก ผลงานจะกลับมาเปิดขายอีกครั้ง"}
+            </p>
+          </div>
+        )}
+
         <Card className="grid grid-cols-2 gap-4 p-4 text-sm">
           {FIELD_LABELS.map(([key, label]) => (
             <div key={key}>
@@ -183,14 +212,6 @@ export default function ArtDetailPage({ params }: { params: Promise<{ id: string
               )}
             </div>
 
-            {/* บอกเหตุผลที่กดไม่ได้ ไม่ใช่ปล่อยปุ่มเทาไว้เฉยๆ ให้เดาเอง */}
-            {!isAvailable && (
-              <p className="rounded-lg bg-stone-100 px-3 py-2 text-sm text-stone-600">
-                {isSold
-                  ? "ผลงานชิ้นนี้ขายไปแล้ว จึงสั่งซื้อไม่ได้"
-                  : "ผลงานชิ้นนี้อยู่ในคำสั่งซื้อของผู้ซื้อรายอื่นอยู่ หากผู้ขายแจ้งว่าไม่พร้อมจำหน่าย ผลงานจะกลับมาเปิดขายอีกครั้ง"}
-              </p>
-            )}
           </div>
         )}
         {isOwnArtwork && (

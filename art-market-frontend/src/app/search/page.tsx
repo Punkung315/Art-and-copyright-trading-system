@@ -10,12 +10,7 @@ import {
 } from "@/lib/api";
 import { Artwork } from "@/types";
 import { ArtCard } from "@/components/ArtCard";
-import {
-  FilterSidebar,
-  FilterState,
-  PRICE_RANGES,
-  SIZE_RANGES,
-} from "@/components/FilterSidebar";
+import { FilterSidebar, FilterState, SIZE_RANGES } from "@/components/FilterSidebar";
 import { Button, Container, EmptyState, Input, Select, Spinner } from "@/components/ui";
 
 const SORT_OPTIONS: { value: ArtworkSort; label: string }[] = [
@@ -29,9 +24,17 @@ const EMPTY_FILTERS: FilterState = {
   artworkType: "",
   artworkStyle: "",
   artworkMediums: "",
-  priceIndex: -1,
+  minPrice: null,
+  maxPrice: null,
   sizeIndex: -1,
 };
+
+/** อ่านตัวเลขจาก URL — คืน null ถ้าไม่มีหรือไม่ใช่ตัวเลข */
+function numParam(raw: string | null): number | null {
+  if (raw === null || raw.trim() === "") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
 
 function SearchContent() {
   const router = useRouter();
@@ -47,7 +50,8 @@ function SearchContent() {
     artworkType: params.get("type") ?? "",
     artworkStyle: params.get("style") ?? "",
     artworkMediums: params.get("mediums") ?? "",
-    priceIndex: Number(params.get("price") ?? -1),
+    minPrice: numParam(params.get("minPrice")),
+    maxPrice: numParam(params.get("maxPrice")),
     sizeIndex: Number(params.get("size") ?? -1),
   });
 
@@ -63,14 +67,13 @@ function SearchContent() {
     if (filters.artworkType) n++;
     if (filters.artworkStyle) n++;
     if (filters.artworkMediums) n++;
-    if (filters.priceIndex >= 0) n++;
+    if (filters.minPrice !== null || filters.maxPrice !== null) n++;
     if (filters.sizeIndex >= 0) n++;
     return n;
   }, [filters]);
 
   // ยิงค้นหาใหม่ทุกครั้งที่ตัวกรอง/คำค้น/การเรียงเปลี่ยน แล้วอัปเดต URL ให้ตรงกัน
   useEffect(() => {
-    const price = filters.priceIndex >= 0 ? PRICE_RANGES[filters.priceIndex] : undefined;
     const size = filters.sizeIndex >= 0 ? SIZE_RANGES[filters.sizeIndex] : undefined;
 
     let active = true;
@@ -80,8 +83,8 @@ function SearchContent() {
       artworkType: filters.artworkType || undefined,
       artworkStyle: filters.artworkStyle || undefined,
       artworkMediums: filters.artworkMediums || undefined,
-      minPrice: price?.min,
-      maxPrice: price?.max,
+      minPrice: filters.minPrice ?? undefined,
+      maxPrice: filters.maxPrice ?? undefined,
       minSize: size?.min,
       maxSize: size?.max,
       sort,
@@ -94,7 +97,8 @@ function SearchContent() {
     if (filters.artworkType) sp.set("type", filters.artworkType);
     if (filters.artworkStyle) sp.set("style", filters.artworkStyle);
     if (filters.artworkMediums) sp.set("mediums", filters.artworkMediums);
-    if (filters.priceIndex >= 0) sp.set("price", String(filters.priceIndex));
+    if (filters.minPrice !== null) sp.set("minPrice", String(filters.minPrice));
+    if (filters.maxPrice !== null) sp.set("maxPrice", String(filters.maxPrice));
     if (filters.sizeIndex >= 0) sp.set("size", String(filters.sizeIndex));
     if (sort !== "newest") sp.set("sort", sort);
     // scroll: false กันหน้าเด้งกลับไปบนสุดทุกครั้งที่ติ๊กตัวกรอง
@@ -148,7 +152,7 @@ function SearchContent() {
 
       <div className="flex flex-col gap-8 lg:flex-row">
         <FilterSidebar
-          facets={facets ?? { types: [], styles: [], mediums: [] }}
+          facets={facets ?? { types: [], styles: [], mediums: [], minPrice: null, maxPrice: null }}
           value={filters}
           onChange={patchFilters}
           onReset={() => setFilters(EMPTY_FILTERS)}

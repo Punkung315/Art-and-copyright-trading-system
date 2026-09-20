@@ -27,6 +27,76 @@ body {
 }
 
 /* ---------------------------------------------------------------------------
+ * สไลเดอร์ช่วงราคา (components/PriceRangeSlider.tsx)
+ *
+ * ต้องเขียนเป็น CSS ธรรมดาเพราะ Tailwind แต่ง ::-webkit-slider-thumb ไม่ได้
+ * โดยไม่ลง plugin เพิ่ม
+ *
+ * ตัว input ทั้งเส้นถูกทำให้โปร่งใสและปิด pointer-events ไว้ เปิดเฉพาะหัวจับ
+ * เพื่อให้หัวจับสองอันที่ซ้อนกันอยู่กดโดนคนละอันได้จริง
+ * ------------------------------------------------------------------------- */
+.price-range {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 100%;
+  height: 20px;
+  margin: 0;
+  background: transparent;
+  pointer-events: none;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.price-range:focus {
+  outline: none;
+}
+
+.price-range::-webkit-slider-thumb {
+  pointer-events: auto;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  border: 2px solid #1c1917;
+  background: #fff;
+  cursor: grab;
+  transition: box-shadow 0.15s ease;
+}
+
+.price-range::-moz-range-thumb {
+  pointer-events: auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  border: 2px solid #1c1917;
+  background: #fff;
+  cursor: grab;
+  transition: box-shadow 0.15s ease;
+}
+
+/* วงแหวนรอบหัวจับตอนโฟกัส — บอกว่าตอนนี้ลูกศรซ้าย/ขวาจะขยับหัวไหน */
+.price-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 6px rgb(28 25 23 / 0.12);
+}
+
+.price-range:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 6px rgb(28 25 23 / 0.12);
+}
+
+.price-range::-webkit-slider-thumb:active {
+  cursor: grabbing;
+  box-shadow: 0 0 0 6px rgb(28 25 23 / 0.12);
+}
+
+.price-range::-moz-range-track {
+  background: transparent;
+}
+
+/* ---------------------------------------------------------------------------
  * การพิมพ์เอกสาร
  *
  * ระบบมีหน้าที่ตั้งใจให้พิมพ์ออกมาเป็นเอกสารจริงอยู่ 3 หน้า:

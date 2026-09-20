@@ -2,7 +2,21 @@ import Link from "next/link";
 import Image from "next/image";
 import { Artwork } from "@/types";
 
+/**
+ * ป้ายบอกสถานะบนการ์ด — ขึ้นเฉพาะตอนที่ "ซื้อไม่ได้"
+ *
+ * จงใจไม่มีป้าย "พร้อมจำหน่าย" เพราะงานส่วนใหญ่ในระบบพร้อมขายอยู่แล้ว
+ * ถ้าติดป้ายให้ทุกใบ ป้ายจะกลายเป็นสิ่งที่ตาข้ามไป แล้วใบที่ซื้อไม่ได้จริง ๆ
+ * ก็จะไม่สะดุดตาอีกต่อไป — ป้ายมีค่าก็ต่อเมื่อมันเป็นข้อยกเว้น
+ */
+const SALES_BADGE: Record<string, { label: string; className: string }> = {
+  sold: { label: "ขายแล้ว", className: "bg-stone-900 text-white" },
+  reserved: { label: "อยู่ในคำสั่งซื้อแล้ว", className: "bg-amber-500 text-white" },
+};
+
 export function ArtCard({ artwork }: { artwork: Artwork }) {
+  const badge = SALES_BADGE[artwork.salesStatus ?? "available"];
+
   return (
     <Link
       href={`/art/${artwork.id}`}
@@ -16,11 +30,28 @@ export function ArtCard({ artwork }: { artwork: Artwork }) {
           unoptimized
           className="object-cover transition duration-300 group-hover:scale-105"
         />
-        {artwork.copyrightAvailable && (
-          <span className="absolute left-2 top-2 rounded-full bg-white/90 px-2 py-1 text-[11px] font-medium text-stone-700 shadow">
-            รับซื้อลิขสิทธิ์ได้
-          </span>
+        {/*
+          ผลงานที่ขายแล้วจะจางลง เพื่อให้แยกออกจากงานที่ยังซื้อได้ตั้งแต่ยังไม่ทันอ่านป้าย
+          (เห็นชัดเป็นพิเศษในหน้าโปรไฟล์ศิลปินที่งานเก่ากับงานใหม่อยู่ปนกัน)
+        */}
+        {artwork.salesStatus === "sold" && (
+          <div className="absolute inset-0 z-10 bg-white/45" aria-hidden="true" />
         )}
+
+        <div className="absolute left-2 top-2 z-20 flex flex-col items-start gap-1">
+          {badge && (
+            <span
+              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold shadow-sm ${badge.className}`}
+            >
+              {badge.label}
+            </span>
+          )}
+          {artwork.copyrightAvailable && (
+            <span className="rounded-full bg-white/90 px-2 py-1 text-[11px] font-medium text-stone-700 shadow">
+              รับซื้อลิขสิทธิ์ได้
+            </span>
+          )}
+        </div>
       </div>
       <div className="flex flex-1 flex-col gap-1 p-3">
         <p className="line-clamp-1 text-sm font-semibold text-stone-900">{artwork.artworkName}</p>
