@@ -9,6 +9,7 @@ import { Container, EmptyState, Input, Spinner } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
 import { SummaryTable } from "@/components/SummaryTable";
 import { FilterChips } from "@/components/FilterChips";
+import { PendingBadge } from "@/components/PendingBadge";
 
 type PaymentFilter = "all" | PaymentStatus;
 type KindFilter = "all" | "artwork" | "copyright";
@@ -33,6 +34,10 @@ type Row = {
   amount: number;
   status: PaymentStatus;
   href: string;
+  /** ผู้ขายที่ส่งของสำเร็จครบแล้ว รอผู้ดูแลระบบโอนเงินให้ (เฉพาะค่าชิ้นงาน) */
+  payoutReady: number;
+  /** โอนให้ผู้ขายครบทุกคนแล้ว */
+  payoutDone: boolean;
   /** ใช้ค้นหา */
   searchable: string[];
 };
@@ -78,6 +83,9 @@ function AdminPaymentsContent() {
           amount: p.grandTotal,
           status: p.status,
           href: `/admin/payments/${p.id}`,
+          payoutReady: p.payoutReadyCount ?? 0,
+          payoutDone:
+            (p.payoutSellerCount ?? 0) > 0 && p.payoutPaidCount === p.payoutSellerCount,
           searchable: [p.buyerName, p.sellerName, `#${p.id}`, `#${p.orderId}`, p.id, p.orderId],
         })),
         ...copyrights.map<Row>((p) => ({
@@ -92,6 +100,8 @@ function AdminPaymentsContent() {
           amount: p.amount,
           status: p.status,
           href: `/admin/copyright-payments/${p.id}`,
+          payoutReady: 0,
+          payoutDone: false,
           searchable: [
             p.buyerName,
             p.sellerName,
@@ -162,7 +172,13 @@ function AdminPaymentsContent() {
 
   return (
     <Container className="py-10">
-      <h1 className="mb-6 font-serif text-2xl font-bold text-stone-900">รายการโอนเงินให้ผู้ขาย</h1>
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        <h1 className="font-serif text-2xl font-bold text-stone-900">รายการโอนเงินให้ผู้ขาย</h1>
+        <PendingBadge
+          count={all.reduce((n, r) => n + r.payoutReady, 0)}
+          label="รอโอนเงินให้ผู้ขาย"
+        />
+      </div>
 
       {rows === null ? (
         <Spinner />
@@ -256,7 +272,19 @@ function AdminPaymentsContent() {
                         ฿{r.amount.toLocaleString()}
                       </td>
                       <td className="px-4 py-3">
-                        <StatusBadge status={r.status} domain="payment" />
+                        <div className="flex flex-col items-start gap-1">
+                          <StatusBadge status={r.status} domain="payment" />
+                          {r.payoutReady > 0 && (
+                            <span className="rounded-full bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700">
+                              รอโอนเงินให้ผู้ขาย {r.payoutReady} ราย
+                            </span>
+                          )}
+                          {r.payoutDone && (
+                            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                              โอนให้ผู้ขายแล้ว
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-right">
                         <Link

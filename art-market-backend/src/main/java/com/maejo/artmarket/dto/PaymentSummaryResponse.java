@@ -47,12 +47,27 @@ public class PaymentSummaryResponse {
     private OrderStatus   orderStatus;
     private Integer       itemCount;
 
+    /**
+     * สถานะการโอนเงินให้ผู้ขายของคำสั่งซื้อนี้ — ให้แอดมินเห็นจากหน้ารายการว่าใบไหนต้องโอนต่อ
+     *   payoutReadyCount = ผู้ขายที่ส่งของสำเร็จครบแล้ว รอแอดมินโอนเงิน
+     *   payoutPaidCount  = ผู้ขายที่โอนให้แล้ว
+     *   payoutSellerCount = ผู้ขายทั้งหมดที่มีชิ้นพร้อมขายในคำสั่งซื้อ
+     */
+    private Integer       payoutReadyCount;
+    private Integer       payoutPaidCount;
+    private Integer       payoutSellerCount;
+
     public static PaymentSummaryResponse from(Payment p) {
         // 1 คำสั่งซื้อ = 1 ผู้ขาย ในโมเดลปัจจุบัน จึงหยิบผู้ขายจากชิ้นแรกมาเป็นตัวแทน
         var items = p.getOrder().getOrderItems();
         var seller = items.isEmpty() ? null : items.get(0).getArtwork().getSeller();
 
+        var payouts = SellerPayoutInfo.listFor(p.getOrder());
+
         return PaymentSummaryResponse.builder()
+                .payoutReadyCount((int) payouts.stream().filter(SellerPayoutInfo::isReadyForPayout).count())
+                .payoutPaidCount((int) payouts.stream().filter(SellerPayoutInfo::isPaid).count())
+                .payoutSellerCount(payouts.size())
                 .paymentId(p.getPaymentId())
                 .orderId(p.getOrder().getOrderId())
                 .buyerId(p.getOrder().getBuyer().getBuyerId())

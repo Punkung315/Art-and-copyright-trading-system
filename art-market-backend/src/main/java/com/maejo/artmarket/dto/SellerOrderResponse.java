@@ -36,6 +36,9 @@ public class SellerOrderResponse {
     private PaymentStatus paymentStatus;   // null = ผู้ซื้อยังไม่ได้อัปสลิป
     private List<SellerOrderItemDetail> items;
 
+    /** สถานะการโอนเงินให้ผู้ขายคนนี้ (null = ไม่มีชิ้นที่พร้อมขาย) */
+    private SellerPayoutInfo payout;
+
     @Data
     @Builder
     public static class SellerOrderItemDetail {
@@ -47,6 +50,14 @@ public class SellerOrderResponse {
         private AvailabilityStatus availabilityStatus;
         private ShippingStatus     shippingStatus;
 
+        /** หลักฐานการจัดส่งที่ผู้ขายแนบไว้ */
+        private String        packingImage;
+        private LocalDateTime packedAt;
+        private String        trackingNumber;
+        private LocalDateTime shippedAt;
+        private LocalDateTime deliveredAt;
+        private String        deliveryConfirmedBy;
+
         public static SellerOrderItemDetail from(OrderItem item) {
             return SellerOrderItemDetail.builder()
                     .orderItemId(item.getOrderItemId())
@@ -56,6 +67,12 @@ public class SellerOrderResponse {
                     .price(item.getPrice())
                     .availabilityStatus(item.getAvailabilityStatus())
                     .shippingStatus(item.getShippingStatus())
+                    .packingImage(item.getPackingImage())
+                    .packedAt(item.getPackedAt())
+                    .trackingNumber(item.getTrackingNumber())
+                    .shippedAt(item.getShippedAt())
+                    .deliveredAt(item.getDeliveredAt())
+                    .deliveryConfirmedBy(item.getDeliveryConfirmedBy())
                     .build();
         }
     }
@@ -80,6 +97,7 @@ public class SellerOrderResponse {
                 .orderStatus(order.getOrderStatus())
                 .totalAmount(totalAmount)
                 .items(sellerItems.stream().map(SellerOrderItemDetail::from).toList())
+                .payout(SellerPayoutInfo.forSeller(order, sellerId))
                 .build();
     }
 }

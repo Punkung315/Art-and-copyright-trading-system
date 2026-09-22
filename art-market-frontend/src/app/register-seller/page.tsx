@@ -14,6 +14,12 @@ import {
   validatePostalCode,
 } from "@/lib/validation";
 import { registerSeller, ApiError } from "@/lib/api";
+import {
+  BankAccountFields,
+  BankAccountDraft,
+  EMPTY_BANK_DRAFT,
+  validateBankDraft,
+} from "@/components/BankAccountFields";
 
 function RegisterSellerContent() {
   const { user, refresh } = useAuth();
@@ -30,6 +36,8 @@ function RegisterSellerContent() {
   const [district, setDistrict] = useState("");
   const [province, setProvince] = useState("");
   const [postalCode, setPostalCode] = useState("");
+  const [bank, setBank] = useState<BankAccountDraft>(EMPTY_BANK_DRAFT);
+  const [bankErrors, setBankErrors] = useState<Record<string, string | null>>({});
   const [errors, setErrors] = useState<Record<string, string | null>>({});
   const [submitting, setSubmitting] = useState(false);
 
@@ -64,8 +72,10 @@ function RegisterSellerContent() {
       province: validateNotEmpty(province, "จังหวัด"),
       postalCode: validatePostalCode(postalCode),
     };
+    const nextBankErrors = validateBankDraft(bank, false);
     setErrors(nextErrors);
-    if (Object.values(nextErrors).some(Boolean)) {
+    setBankErrors(nextBankErrors);
+    if (Object.values(nextErrors).some(Boolean) || Object.values(nextBankErrors).some(Boolean)) {
       notify("กรุณากรอกข้อมูลให้ถูกต้อง", "error");
       return;
     }
@@ -83,6 +93,7 @@ function RegisterSellerContent() {
         district,
         province,
         postalCode,
+        bankAccount: bank,
       });
       await refresh();
       notify("ส่งคำขอสมัครเป็นผู้ขายสำเร็จ กรุณารอผู้ดูแลระบบตรวจสอบ", "success");
@@ -133,6 +144,24 @@ function RegisterSellerContent() {
           <Field label="รหัสไปรษณีย์ (postalCode)" error={errors.postalCode}>
             <Input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="5 หลัก" />
           </Field>
+
+          {/*
+            บัญชีรับเงิน — ผู้ดูแลระบบโอนค่าผลงานให้ผ่านบัญชีนี้หลังผู้ซื้อได้รับสินค้า
+            บังคับตั้งแต่สมัคร ไม่งั้นมีคนซื้อแล้วแอดมินจะไม่รู้ว่าต้องโอนเงินเข้าบัญชีไหน
+          */}
+          <div className="mt-2 border-t border-stone-100 pt-5 sm:col-span-2">
+            <h2 className="font-serif text-lg font-bold text-stone-900">บัญชีธนาคารสำหรับรับเงิน</h2>
+            <p className="mb-4 mt-1 text-sm text-stone-500">
+              เมื่อผู้ซื้อได้รับสินค้าแล้ว ผู้ดูแลระบบจะโอนค่าผลงานพร้อมค่าจัดส่งเข้าบัญชีนี้
+              แก้ไขภายหลังได้ที่หน้าโปรไฟล์
+            </p>
+            <BankAccountFields
+              value={bank}
+              onChange={setBank}
+              errors={bankErrors}
+              onImageError={(m) => notify(m, "error")}
+            />
+          </div>
 
           <Button type="submit" disabled={submitting} className="mt-2 sm:col-span-2">
             {submitting ? "กำลังส่งคำขอ..." : "ส่งคำขอสมัครเป็นผู้ขาย"}

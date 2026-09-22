@@ -26,6 +26,9 @@ public class SellerVerifyResponse {
     // ที่อยู่ทั้งหมดของผู้สมัคร
     private List<AddressResponse> addresses;
 
+    /** บัญชีรับเงิน (null = ยังไม่ได้ตั้ง) — แอดมินตรวจชื่อบัญชีเทียบกับชื่อผู้สมัคร */
+    private BankAccountResponse bankAccount;
+
     @Data
     @Builder
     public static class AddressResponse {
@@ -69,6 +72,7 @@ public class SellerVerifyResponse {
                 .nationalNo(seller.getUser().getNationalNo())
                 .verified(seller.isVerified())
                 .addresses(addresses)
+                .bankAccount(BankAccountResponse.from(seller))
                 .build();
     }
 }

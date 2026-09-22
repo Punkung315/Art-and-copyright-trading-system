@@ -93,3 +93,19 @@ export function validateImageFile(file: File | null): string | null {
   }
   return null;
 }
+
+/**
+ * เลขบัญชีธนาคาร — ต้องตรงกับ SellerBankAccountService.apply ฝั่ง backend
+ * ตัดขีดและช่องว่างก่อนนับ (คนมักคัดลอกมาในรูป 123-4-56789-0)
+ * ส่วนใหญ่ยาว 10 หลัก แต่ออมสิน/ธ.ก.ส. ยาว 12 หลัก
+ */
+export function normalizeBankAccountNumber(value: string): string {
+  return value.replace(/[\s-]/g, "");
+}
+
+export function validateBankAccountNumber(value: string): string | null {
+  const digits = normalizeBankAccountNumber(value);
+  if (!digits) return "กรุณากรอกเลขบัญชี";
+  if (!/^[0-9]{10,12}$/.test(digits)) return "เลขบัญชีต้องเป็นตัวเลข 10–12 หลัก";
+  return null;
+}

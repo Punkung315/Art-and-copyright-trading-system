@@ -147,6 +147,57 @@ export interface OrderItem {
   /** ค่าจัดส่งของชิ้นนี้ ล็อกไว้ตอนยืนยันคำสั่งซื้อ */
   shippingCost?: number;
   shippingCompanyName?: string;
+  /** สถานะการจัดส่ง "รายชิ้น" — ผู้ขายแต่ละคนส่งของไม่พร้อมกัน */
+  shippingStatus?: ShippingStatus;
+  /** หลักฐานการจัดส่ง — ผู้ซื้อและผู้ดูแลระบบเปิดดูเพื่อตรวจสอบได้ */
+  packingImage?: string;
+  packedAt?: string;
+  trackingNumber?: string;
+  shippedAt?: string;
+  deliveredAt?: string;
+  /** buyer = ผู้ซื้อกดยืนยันเอง / auto = ระบบยืนยันให้เมื่อครบกำหนด */
+  deliveryConfirmedBy?: "buyer" | "auto";
+}
+
+/**
+ * บัญชีรับเงินของผู้ขาย — backend ส่งให้เฉพาะเจ้าของบัญชีและผู้ดูแลระบบ
+ * ห้ามนำไปแสดงในหน้าที่ผู้ซื้อหรือคนทั่วไปเห็น
+ */
+export interface BankAccount {
+  bankCode: string;
+  bankName: string;
+  /** ตัวเลขล้วน (backend ตัดขีดออกแล้ว) */
+  accountNumber: string;
+  accountName: string;
+  bankBookImage?: string;
+  updatedAt?: string;
+}
+
+/** การโอนเงินจากแพลตฟอร์มให้ผู้ขาย 1 คน ใน 1 คำสั่งซื้อ */
+export interface SellerPayout {
+  /** รหัสผู้ขาย (seller_id ซึ่งเท่ากับ userId) — ใช้ส่งกลับไปตอนบันทึกการโอน */
+  sellerId: string;
+  sellerName: string;
+  sellerEmail?: string;
+  sellerPhone?: string;
+  /** ราคาผลงาน + ค่าจัดส่ง ของชิ้นที่พร้อมขาย (backend คำนวณ) */
+  amount: number;
+  itemCount: number;
+  deliveredCount: number;
+  /** จัดส่งสำเร็จครบแล้วและยังไม่ได้โอน */
+  readyForPayout: boolean;
+  paid: boolean;
+  paidAt?: string;
+  slipTransfer?: string;
+  /**
+   * บัญชีปลายทาง — ยังไม่โอน: บัญชีปัจจุบันของผู้ขาย / โอนแล้ว: สำเนาบัญชี ณ ตอนโอน
+   */
+  hasBankAccount: boolean;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankAccountName?: string;
+  /** รูปหน้าสมุดบัญชี (มีเฉพาะก่อนโอน ให้แอดมินตรวจ) */
+  bankBookImage?: string;
 }
 
 export interface Order {
@@ -177,6 +228,13 @@ export interface Order {
   shippingAddress?: string;
   /** จังหวัดปลายทาง — เป็นตัวกำหนดโซนค่าจัดส่ง */
   shippingProvince?: string;
+  /** วันที่ผู้ดูแลระบบยืนยันการชำระเงิน */
+  paymentConfirmedAt?: string;
+  /** ชิ้นที่จัดส่งแล้วแต่ผู้ซื้อยังไม่ยืนยัน จะถูกยืนยันอัตโนมัติวันนี้ */
+  autoDeliveryConfirmAt?: string;
+  autoDeliveryConfirmDays?: number;
+  /** มีเฉพาะตอนผู้ขายเปิดดู — สถานะการโอนเงินให้ผู้ขายคนนั้น */
+  sellerPayout?: SellerPayout;
 }
 
 export type TransferStatus =
@@ -271,4 +329,8 @@ export interface Payment {
   slipTransfer?: string;
   status: PaymentStatus;
   createdAt: string;
+  /** ผู้ขายที่ส่งของสำเร็จครบแล้ว รอผู้ดูแลระบบโอนเงินให้ */
+  payoutReadyCount?: number;
+  payoutPaidCount?: number;
+  payoutSellerCount?: number;
 }

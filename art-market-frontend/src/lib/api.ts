@@ -36,6 +36,8 @@ import {
   OrderStatus,
   Payment,
   PaymentStatus,
+  BankAccount,
+  SellerPayout,
   ShippingCompanyCode,
   ShippingOption,
   ShippingStatus,
@@ -264,6 +266,63 @@ interface BeOrderItem {
   /** ค่าจัดส่งรายชิ้น ล็อกไว้ตอนยืนยันคำสั่งซื้อ */
   shippingCost?: number | null;
   shippingCompanyName?: string | null;
+  /** หลักฐานการจัดส่ง */
+  packingImage?: string | null;
+  packedAt?: string | null;
+  trackingNumber?: string | null;
+  shippedAt?: string | null;
+  deliveredAt?: string | null;
+  deliveryConfirmedBy?: "BUYER" | "AUTO" | null;
+}
+
+interface BeSellerPayout {
+  sellerId: number;
+  sellerUserId: number | null;
+  sellerName: string | null;
+  sellerEmail?: string | null;
+  sellerPhone?: string | null;
+  amount: number;
+  itemCount: number;
+  deliveredCount: number;
+  readyForPayout: boolean;
+  paid: boolean;
+  paidAt?: string | null;
+  slipTransfer?: string | null;
+  hasBankAccount?: boolean;
+  bankName?: string | null;
+  bankAccountNumber?: string | null;
+  bankAccountName?: string | null;
+  bankBookImage?: string | null;
+}
+
+interface BeBankAccount {
+  bankCode: string;
+  bankName: string;
+  accountNumber: string;
+  accountName: string;
+  bankBookImage: string | null;
+  updatedAt: string | null;
+}
+
+function mapBankAccount(b: BeBankAccount | null | undefined): BankAccount | undefined {
+  if (!b) return undefined;
+  return {
+    bankCode: b.bankCode,
+    bankName: b.bankName,
+    accountNumber: b.accountNumber,
+    accountName: b.accountName,
+    bankBookImage: b.bankBookImage ?? undefined,
+    updatedAt: b.updatedAt ?? undefined,
+  };
+}
+
+/** ข้อมูลบัญชีที่ส่งไป backend — เลขบัญชีส่งไปตามที่กรอก backend ตัดขีดให้เอง */
+export interface BankAccountInput {
+  bankCode: string;
+  accountNumber: string;
+  accountName: string;
+  /** ว่าง = คงรูปเดิม (ตอนแก้ไข) */
+  bankBookImage?: string;
 }
 
 interface BeOrder {
@@ -290,6 +349,11 @@ interface BeOrder {
   /** ที่อยู่ปลายทาง บันทึกเป็นสำเนาตอนยืนยันคำสั่งซื้อ */
   shippingAddress?: string | null;
   shippingProvince?: string | null;
+  paymentConfirmedAt?: string | null;
+  autoDeliveryConfirmAt?: string | null;
+  autoDeliveryConfirmDays?: number | null;
+  /** มีเฉพาะตอนผู้ขายเปิดดู */
+  sellerPayout?: BeSellerPayout | null;
   items: BeOrderItem[];
 }
 
@@ -303,6 +367,7 @@ interface BeSellerOrder {
   buyerUserId: number | null;
   paymentStatus: BePaymentStatus | null;
   items: BeOrderItem[];
+  payout?: BeSellerPayout | null;
 }
 
 type BePaymentStatus =
@@ -333,6 +398,12 @@ interface BePayment {
   itemCount?: number | null;
   artworks?: BeArtworkSummary[];
   items?: BePaymentItemLine[];
+  paymentConfirmedAt?: string | null;
+  autoDeliveryConfirmAt?: string | null;
+  payouts?: BeSellerPayout[];
+  payoutReadyCount?: number | null;
+  payoutPaidCount?: number | null;
+  payoutSellerCount?: number | null;
 }
 
 interface BePaymentItemLine {
@@ -342,6 +413,16 @@ interface BePaymentItemLine {
   price: number | null;
   availabilityStatus: BeOrderItem["availabilityStatus"] | null;
   shippingStatus: BeOrderItem["shippingStatus"];
+  sellerId?: number | null;
+  sellerName?: string | null;
+  shippingCost?: number | null;
+  shippingCompanyName?: string | null;
+  packingImage?: string | null;
+  packedAt?: string | null;
+  trackingNumber?: string | null;
+  shippedAt?: string | null;
+  deliveredAt?: string | null;
+  deliveryConfirmedBy?: "BUYER" | "AUTO" | null;
 }
 
 interface BeCartItem {
@@ -443,6 +524,7 @@ interface BeUserSummary {
 
 interface BeUserDetail extends BeUserSummary {
   nationalNo: string | null;
+  bankAccount?: BeBankAccount | null;
   profileImage: string | null;
   buyerId: number | null;
   addresses: BeAddress[] | null;
@@ -622,7 +704,11 @@ function rollupAvailability(items: BeOrderItem[]): AvailabilityStatus {
   return "waiting";
 }
 
-function rollupShipping(items: BeOrderItem[]): ShippingStatus {
+function rollupShipping(all: BeOrderItem[]): ShippingStatus {
+  // ชิ้นที่ผู้ขายแจ้งไม่พร้อมขายไม่มีวันถูกจัดส่ง ถ้านับรวมด้วย
+  // คำสั่งซื้อที่ซื้อบางชิ้นจะไม่มีวันขึ้น "จัดส่งสำเร็จ" ทั้งที่ของที่จ่ายเงินถึงครบแล้ว
+  const available = all.filter((i) => i.availabilityStatus === "AVAILABLE");
+  const items = available.length > 0 ? available : all;
   if (items.length === 0) return "not_shipped";
   if (items.every((i) => i.shippingStatus === "DELIVERED")) return "delivered";
   if (items.some((i) => i.shippingStatus === "SHIPPED")) return "shipped";
@@ -678,6 +764,59 @@ const AVAILABILITY_LINE_MAP: Record<string, AvailabilityStatus> = {
   UNAVAILABLE: "rejected",
 };
 
+const SHIPPING_LINE_MAP: Record<string, ShippingStatus> = {
+  PREPARING: "packed",
+  SHIPPED: "shipped",
+  DELIVERED: "delivered",
+};
+
+/** หลักฐานการจัดส่งรายชิ้น ใช้ร่วมกันทั้งหน้าผู้ซื้อ/ผู้ขาย และหน้าผู้ดูแลระบบ */
+function mapShippingEvidence(i: {
+  shippingStatus: BeOrderItem["shippingStatus"];
+  packingImage?: string | null;
+  packedAt?: string | null;
+  trackingNumber?: string | null;
+  shippedAt?: string | null;
+  deliveredAt?: string | null;
+  deliveryConfirmedBy?: "BUYER" | "AUTO" | null;
+}) {
+  return {
+    shippingStatus: SHIPPING_LINE_MAP[i.shippingStatus ?? ""] ?? ("not_shipped" as ShippingStatus),
+    packingImage: i.packingImage ?? undefined,
+    packedAt: i.packedAt ?? undefined,
+    trackingNumber: i.trackingNumber ?? undefined,
+    shippedAt: i.shippedAt ?? undefined,
+    deliveredAt: i.deliveredAt ?? undefined,
+    deliveryConfirmedBy:
+      i.deliveryConfirmedBy === "BUYER"
+        ? ("buyer" as const)
+        : i.deliveryConfirmedBy === "AUTO"
+          ? ("auto" as const)
+          : undefined,
+  };
+}
+
+function mapSellerPayout(p: BeSellerPayout): SellerPayout {
+  return {
+    sellerId: String(p.sellerId),
+    sellerName: p.sellerName ?? "",
+    sellerEmail: p.sellerEmail ?? undefined,
+    sellerPhone: p.sellerPhone ?? undefined,
+    amount: p.amount ?? 0,
+    itemCount: p.itemCount ?? 0,
+    deliveredCount: p.deliveredCount ?? 0,
+    readyForPayout: !!p.readyForPayout,
+    paid: !!p.paid,
+    paidAt: p.paidAt ?? undefined,
+    slipTransfer: p.slipTransfer ?? undefined,
+    hasBankAccount: !!p.hasBankAccount,
+    bankName: p.bankName ?? undefined,
+    bankAccountNumber: p.bankAccountNumber ?? undefined,
+    bankAccountName: p.bankAccountName ?? undefined,
+    bankBookImage: p.bankBookImage ?? undefined,
+  };
+}
+
 function mapOrderItem(i: BeOrderItem): OrderItem {
   return {
     id: String(i.orderItemId),
@@ -691,6 +830,7 @@ function mapOrderItem(i: BeOrderItem): OrderItem {
     availabilityStatus: AVAILABILITY_LINE_MAP[i.availabilityStatus] ?? "waiting",
     shippingCost: i.shippingCost ?? undefined,
     shippingCompanyName: i.shippingCompanyName ?? undefined,
+    ...mapShippingEvidence(i),
   };
 }
 
@@ -719,6 +859,10 @@ function mapOrder(o: BeOrder): Order {
     confirmDateTime: o.confirmDateTime ?? undefined,
     shippingAddress: o.shippingAddress ?? undefined,
     shippingProvince: o.shippingProvince ?? undefined,
+    paymentConfirmedAt: o.paymentConfirmedAt ?? undefined,
+    autoDeliveryConfirmAt: o.autoDeliveryConfirmAt ?? undefined,
+    autoDeliveryConfirmDays: o.autoDeliveryConfirmDays ?? undefined,
+    sellerPayout: o.sellerPayout ? mapSellerPayout(o.sellerPayout) : undefined,
   };
 }
 
@@ -745,6 +889,7 @@ function mapSellerOrder(o: BeSellerOrder, sellerName: string): Order {
     paymentStatus: mapPaymentStatus(o.paymentStatus),
     orderDate: o.orderDate,
     confirmDateTime: undefined,
+    sellerPayout: o.payout ? mapSellerPayout(o.payout) : undefined,
   };
 }
 
@@ -770,6 +915,9 @@ function mapPayment(p: BePayment): Payment {
     status: mapPaymentStatus(p.paymentStatus),
     // ใช้วันที่สั่งซื้อจริงจาก backend ถ้ามี (เดิมยัด "เวลาปัจจุบัน" ทำให้เรียงตามเวลาไม่ได้)
     createdAt: p.orderDate ?? new Date().toISOString(),
+    payoutReadyCount: p.payoutReadyCount ?? undefined,
+    payoutPaidCount: p.payoutPaidCount ?? undefined,
+    payoutSellerCount: p.payoutSellerCount ?? undefined,
   };
 }
 
@@ -781,21 +929,31 @@ export interface AdminPaymentDetail extends Payment {
   orderDate?: string;
   confirmDateTime?: string;
   orderStatusRaw?: string;
-  items: {
+  paymentConfirmedAt?: string;
+  autoDeliveryConfirmAt?: string;
+  items: (Pick<
+    OrderItem,
+    | "packingImage"
+    | "packedAt"
+    | "trackingNumber"
+    | "shippedAt"
+    | "deliveredAt"
+    | "deliveryConfirmedBy"
+    | "shippingCompanyName"
+  > & {
     id: string;
     artworkId: string;
     artworkName: string;
     price: number;
     availabilityStatus: AvailabilityStatus;
     shippingStatus: ShippingStatus;
-  }[];
+    sellerId?: string;
+    sellerName?: string;
+    shippingCost?: number;
+  })[];
+  /** การโอนเงินต่อให้ผู้ขาย แยกรายผู้ขาย */
+  payouts: SellerPayout[];
 }
-
-const SHIPPING_LINE_MAP: Record<string, ShippingStatus> = {
-  PREPARING: "packed",
-  SHIPPED: "shipped",
-  DELIVERED: "delivered",
-};
 
 function mapPaymentDetail(p: BePayment): AdminPaymentDetail {
   return {
@@ -812,8 +970,15 @@ function mapPaymentDetail(p: BePayment): AdminPaymentDetail {
       price: i.price ?? 0,
       availabilityStatus:
         AVAILABILITY_LINE_MAP[i.availabilityStatus ?? "PENDING_CONFIRMATION"] ?? "waiting",
-      shippingStatus: SHIPPING_LINE_MAP[i.shippingStatus ?? ""] ?? "not_shipped",
+      sellerId: i.sellerId != null ? String(i.sellerId) : undefined,
+      sellerName: i.sellerName ?? undefined,
+      shippingCost: i.shippingCost ?? undefined,
+      shippingCompanyName: i.shippingCompanyName ?? undefined,
+      ...mapShippingEvidence(i),
     })),
+    paymentConfirmedAt: p.paymentConfirmedAt ?? undefined,
+    autoDeliveryConfirmAt: p.autoDeliveryConfirmAt ?? undefined,
+    payouts: (p.payouts ?? []).map(mapSellerPayout),
   };
 }
 
@@ -967,6 +1132,7 @@ export async function registerSeller(
     district: string;
     province: string;
     postalCode: string;
+    bankAccount: BankAccountInput;
   }
 ): Promise<User> {
   // backend รู้ว่าใครเป็นคนสมัครจาก JWT อยู่แล้ว จึงไม่ต้องส่ง userId ไปด้วย
@@ -985,11 +1151,28 @@ export async function registerSeller(
         province: input.province,
         postalCode: input.postalCode,
       },
+      bankAccount: input.bankAccount,
     }),
   });
   // role เปลี่ยนเป็น SELLER แล้ว token เดิมยังถือ role BUYER อยู่ → ต้องเปลี่ยนเป็นตัวใหม่
   setToken(auth.token);
   return mapAuthToUser(auth);
+}
+
+/* --------------------------- บัญชีรับเงินผู้ขาย --------------------------- */
+
+/** บัญชีรับเงินของผู้ขายที่ login อยู่ — undefined ถ้ายังไม่ได้ตั้ง */
+export async function getMyBankAccount(): Promise<BankAccount | undefined> {
+  const b = await request<BeBankAccount | null>("/seller/bank-account");
+  return mapBankAccount(b);
+}
+
+export async function updateMyBankAccount(input: BankAccountInput): Promise<BankAccount> {
+  const b = await request<BeBankAccount>("/seller/bank-account", {
+    method: "PUT",
+    body: JSON.stringify({ ...input, bankBookImage: input.bankBookImage || undefined }),
+  });
+  return mapBankAccount(b)!;
 }
 
 export async function getUser(userId: string): Promise<User | undefined> {
@@ -1153,6 +1336,8 @@ export interface AdminUserDetail extends User {
   artworkCount: number;
   copyrightSentCount: number;
   copyrightReceivedCount: number;
+  /** บัญชีรับเงินของผู้ขาย (หน้านี้เป็นของแอดมินเท่านั้น) */
+  bankAccount?: BankAccount;
 }
 
 export async function getUserDetail(userId: string): Promise<AdminUserDetail | undefined> {
@@ -1169,6 +1354,7 @@ export async function getUserDetail(userId: string): Promise<AdminUserDetail | u
       artworkCount: u.artworkCount ?? 0,
       copyrightSentCount: u.copyrightSentCount ?? 0,
       copyrightReceivedCount: u.copyrightReceivedCount ?? 0,
+      bankAccount: mapBankAccount(u.bankAccount),
     };
   } catch {
     return undefined;
@@ -1596,40 +1782,37 @@ export async function confirmAvailability(
   return updated ? mapSellerOrder(updated, "") : mapSellerOrder(target, "");
 }
 
-const SHIPPING_TO_BACKEND: Record<ShippingStatus, string | null> = {
-  not_shipped: null,
-  packed: "PREPARING",
-  shipped: "SHIPPED",
-  delivered: "DELIVERED",
-};
+/**
+ * ผู้ขายอัปเดตการจัดส่ง "ทีละชิ้น" พร้อมหลักฐาน
+ *
+ *   packed  → ต้องแนบรูปสินค้าที่แพ็คแล้ว (ครั้งแรก — ส่งซ้ำโดยไม่แนบ = ใช้รูปเดิม)
+ *   shipped → ต้องกรอกรหัสพัสดุของขนส่ง
+ *   delivered ผู้ขายตั้งเองไม่ได้ ผู้ซื้อเป็นคนยืนยัน (ดู confirmItemDelivered)
+ *
+ * เดิมอัปเดตทั้งคำสั่งซื้อทีเดียวด้วยสถานะเดียว ซึ่งใส่หลักฐานแยกรายชิ้นไม่ได้
+ * และทำให้ผู้ขายกด "จัดส่งสำเร็จ" แทนผู้ซื้อได้เอง
+ */
+export async function updateItemShipping(
+  orderItemId: string,
+  status: "packed" | "shipped",
+  evidence: { packingImage?: string; trackingNumber?: string }
+): Promise<void> {
+  await request<unknown>(`/seller/order-items/${orderItemId}/shipping`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      shippingStatus: status === "packed" ? "PREPARING" : "SHIPPED",
+      packingImage: evidence.packingImage || undefined,
+      trackingNumber: evidence.trackingNumber || undefined,
+    }),
+  });
+}
 
-export async function updateShippingStatus(
-  orderId: string,
-  status: Order["shippingStatus"]
-): Promise<Order> {
-  const beStatus = SHIPPING_TO_BACKEND[status];
-  if (!beStatus) throw new ApiError("สถานะการจัดส่งไม่ถูกต้อง");
-
-  const orders = await requestOr<BeSellerOrder[]>("/seller/orders", []);
-  const target = orders.find((o) => String(o.orderId) === String(orderId));
-  if (!target) throw new ApiError("ไม่พบรายการคำสั่งซื้อนี้");
-
-  // อัปเดตเฉพาะชิ้นที่ผู้ขายยืนยันว่าพร้อมขายแล้ว (backend ปฏิเสธชิ้นที่ยังไม่ยืนยัน)
-  const items = target.items.filter((i) => i.availabilityStatus === "AVAILABLE");
-  if (items.length === 0) {
-    throw new ApiError("ต้องยืนยันความพร้อมในการขายก่อนจึงจะอัปเดตสถานะการจัดส่งได้");
-  }
-
-  for (const item of items) {
-    await request<unknown>(`/seller/order-items/${item.orderItemId}/shipping`, {
-      method: "PATCH",
-      body: JSON.stringify({ shippingStatus: beStatus }),
-    });
-  }
-
-  const refreshed = await requestOr<BeSellerOrder[]>("/seller/orders", []);
-  const updated = refreshed.find((o) => String(o.orderId) === String(orderId));
-  return updated ? mapSellerOrder(updated, "") : mapSellerOrder(target, "");
+/** ผู้ซื้อยืนยันว่าได้รับสินค้าชิ้นนี้แล้ว (จัดส่งแล้ว → จัดส่งสำเร็จ) */
+export async function confirmItemDelivered(orderId: string, orderItemId: string): Promise<Order> {
+  const o = await request<BeOrder>(`/orders/${orderId}/items/${orderItemId}/delivered`, {
+    method: "PATCH",
+  });
+  return mapOrder(o);
 }
 
 export async function makePayment(
@@ -1681,6 +1864,22 @@ export async function confirmPayment(
     body: JSON.stringify({ approved: approve }),
   });
   return mapPayment(p);
+}
+
+/**
+ * ผู้ดูแลระบบบันทึกการโอนเงินให้ผู้ขาย พร้อมแนบสลิป
+ * ยอดเงินคำนวณที่ backend — หน้าเว็บไม่ได้ส่งตัวเลขไป
+ */
+export async function createSellerPayout(
+  orderId: string,
+  sellerId: string,
+  slipTransfer: string
+): Promise<AdminPaymentDetail> {
+  const p = await request<BePayment>(`/admin/orders/${orderId}/payouts`, {
+    method: "POST",
+    body: JSON.stringify({ sellerId: Number(sellerId), slipTransfer }),
+  });
+  return mapPaymentDetail(p);
 }
 
 /* --------------------------- Copyright Transfer -------------------------- */

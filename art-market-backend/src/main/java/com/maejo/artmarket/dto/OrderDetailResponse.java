@@ -70,6 +70,18 @@ public class OrderDetailResponse {
     private PaymentStatus paymentStatus;
     private String        slipTransfer;
 
+    /** วันที่ผู้ดูแลระบบยืนยันการชำระเงิน — จุดเริ่มนับกำหนดยืนยันการจัดส่งอัตโนมัติ */
+    private LocalDateTime paymentConfirmedAt;
+    /** ชิ้นที่จัดส่งแล้วแต่ผู้ซื้อยังไม่ยืนยัน จะถูกปิดเป็นจัดส่งสำเร็จอัตโนมัติในวันนี้ */
+    private LocalDateTime autoDeliveryConfirmAt;
+    private Integer       autoDeliveryConfirmDays;
+
+    /**
+     * หลักฐานการโอนเงินให้ผู้ขาย — มีเฉพาะตอน "ผู้ขาย" เปิดดู และเห็นแค่ของตัวเอง
+     * ผู้ซื้อไม่ได้รับส่วนนี้ (เป็นเรื่องระหว่างแพลตฟอร์มกับผู้ขาย)
+     */
+    private SellerPayoutInfo sellerPayout;
+
     private List<OrderItemDetail> items;
 
     @Data
@@ -97,6 +109,15 @@ public class OrderDetailResponse {
         private Double  shippingCost;
         private String  shippingCompanyName;
 
+        /** หลักฐานการจัดส่ง — ผู้ซื้อเปิดดูเพื่อตรวจสอบได้ */
+        private String        packingImage;
+        private LocalDateTime packedAt;
+        private String        trackingNumber;
+        private LocalDateTime shippedAt;
+        private LocalDateTime deliveredAt;
+        /** BUYER = ผู้ซื้อกดยืนยันเอง / AUTO = ระบบยืนยันให้เมื่อครบกำหนด */
+        private String        deliveryConfirmedBy;
+
         public static OrderItemDetail from(OrderItem item) {
             var seller = item.getArtwork().getSeller();
             var company = item.getShippingCompany() != null
@@ -115,6 +136,12 @@ public class OrderDetailResponse {
                     .sellerId(seller != null ? seller.getSellerId() : null)
                     .sellerUserId(seller != null ? seller.getUser().getUserId() : null)
                     .sellerName(seller != null ? seller.getUser().getFullName() : null)
+                    .packingImage(item.getPackingImage())
+                    .packedAt(item.getPackedAt())
+                    .trackingNumber(item.getTrackingNumber())
+                    .shippedAt(item.getShippedAt())
+                    .deliveredAt(item.getDeliveredAt())
+                    .deliveryConfirmedBy(item.getDeliveryConfirmedBy())
                     .build();
         }
     }
@@ -192,7 +219,17 @@ public class OrderDetailResponse {
                 .paymentId(payment != null ? payment.getPaymentId() : null)
                 .paymentStatus(payment != null ? payment.getPaymentStatus() : null)
                 .slipTransfer(payment != null ? payment.getSlipTransfer() : null)
+                .paymentConfirmedAt(payment != null ? payment.getConfirmedAt() : null)
+                .autoDeliveryConfirmAt(DeliveryPolicy.autoConfirmAt(payment))
+                .autoDeliveryConfirmDays(DeliveryPolicy.getAutoConfirmDays())
                 .items(items)
                 .build();
+    }
+
+    /** มุมมองของผู้ขาย — แนบสถานะ/หลักฐานการโอนเงินของผู้ขายคนนี้ไปด้วย */
+    public static OrderDetailResponse from(Orders order, Integer viewerSellerId) {
+        OrderDetailResponse r = from(order);
+        r.setSellerPayout(SellerPayoutInfo.forSeller(order, viewerSellerId));
+        return r;
     }
 }

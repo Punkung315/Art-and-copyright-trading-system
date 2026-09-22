@@ -4,6 +4,8 @@ import com.maejo.artmarket.enums.PaymentStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDateTime;
+
 @Entity
 @Table(name = "payment")
 @Getter
@@ -41,6 +43,14 @@ public class Payment {
     @Enumerated(EnumType.STRING)
     @Column(name = "payment_status", nullable = false)
     private PaymentStatus paymentStatus;
+
+    /**
+     * เวลาที่ผู้ดูแลระบบกดยืนยันการโอนเงิน
+     *
+     * เป็นจุดเริ่มนับกำหนดยืนยันการจัดส่งอัตโนมัติ (app.delivery.auto-confirm-days)
+     * ถ้าผู้ซื้อไม่กด "ได้รับสินค้าแล้ว" เอง ชิ้นที่จัดส่งแล้วจะถูกปิดเป็นจัดส่งสำเร็จเมื่อครบกำหนด
+     */
+    private LocalDateTime confirmedAt;
 
     @OneToOne
     @JoinColumn(name = "order_id", nullable = false, unique = true)

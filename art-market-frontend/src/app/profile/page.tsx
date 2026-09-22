@@ -44,6 +44,11 @@ function ProfileContent() {
           <Link href="/profile/edit">
             <Button variant="secondary">แก้ไขโปรไฟล์</Button>
           </Link>
+          {user.roles.includes("seller") && (
+            <Link href="/profile/bank-account">
+              <Button variant="secondary">บัญชีรับเงิน</Button>
+            </Link>
+          )}
           {!user.roles.includes("seller") && (
             <Link href="/register-seller">
               <Button variant="primary">สมัครเป็นผู้ขาย</Button>

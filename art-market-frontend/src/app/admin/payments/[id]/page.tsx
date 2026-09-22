@@ -4,7 +4,18 @@ import Link from "next/link";
 import { use, useCallback, useEffect, useState } from "react";
 import { RequireAdmin } from "@/components/RoleGuard";
 import { useToast } from "@/context/ToastContext";
-import { getPayment, confirmPayment, AdminPaymentDetail, ApiError } from "@/lib/api";
+import {
+  getPayment,
+  confirmPayment,
+  createSellerPayout,
+  AdminPaymentDetail,
+  ApiError,
+} from "@/lib/api";
+import { SellerPayout } from "@/types";
+import { ImageUploadField } from "@/components/ImageUploadField";
+import { EvidenceThumb, ShippingEvidence } from "@/components/ShippingEvidence";
+import { formatThaiDate, formatThaiDateTime } from "@/lib/format";
+import { formatBankAccountNumber } from "@/lib/banks";
 import { Button, Card, Container, EmptyState, Spinner } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -53,6 +64,10 @@ function AdminPaymentDetailContent({ paymentId }: { paymentId: string }) {
    * เก็บแยกจาก busy เพราะกล่องยืนยันต้องรู้ว่ากำลังถามเรื่องอะไรอยู่
    */
   const [pendingAction, setPendingAction] = useState<boolean | null>(null);
+  /** สลิปโอนเงินให้ผู้ขายที่เลือกไว้ แยกรายผู้ขาย: sellerId -> data URL */
+  const [payoutSlips, setPayoutSlips] = useState<Record<string, string>>({});
+  /** ผู้ขายที่กำลังจะบันทึกการโอน — รอยืนยันในกล่องถามย้ำ */
+  const [payingSeller, setPayingSeller] = useState<SellerPayout | null>(null);
 
   const load = useCallback(async () => {
     setPayment((await getPayment(paymentId)) ?? null);
@@ -67,7 +82,7 @@ function AdminPaymentDetailContent({ paymentId }: { paymentId: string }) {
     try {
       await confirmPayment(paymentId, approve);
       await load();
-      notify(approve ? "ยืนยันการโอนเงินให้ผู้ขายสำเร็จ" : "ปฏิเสธการโอนเงินแล้ว", "success");
+      notify(approve ? "ยืนยันการชำระเงินของผู้ซื้อสำเร็จ" : "ปฏิเสธการโอนเงินแล้ว", "success");
     } catch (err) {
       notify(
         err instanceof ApiError ? err.message : "ไม่สามารถแก้ไขข้อมูลได้ กรุณาลองใหม่อีกครั้ง",
@@ -76,6 +91,28 @@ function AdminPaymentDetailContent({ paymentId }: { paymentId: string }) {
     } finally {
       setBusy(false);
       setPendingAction(null);
+    }
+  }
+
+  async function handlePayout(p: SellerPayout) {
+    setBusy(true);
+    try {
+      await createSellerPayout(payment!.orderId, p.sellerId, payoutSlips[p.sellerId]);
+      setPayoutSlips((s) => {
+        const next = { ...s };
+        delete next[p.sellerId];
+        return next;
+      });
+      await load();
+      notify(`บันทึกการโอนเงินให้ ${p.sellerName || "ผู้ขาย"} แล้ว`, "success");
+    } catch (err) {
+      notify(
+        err instanceof ApiError ? err.message : "ไม่สามารถบันทึกการโอนเงินได้ กรุณาลองใหม่อีกครั้ง",
+        "error"
+      );
+    } finally {
+      setBusy(false);
+      setPayingSeller(null);
     }
   }
 
@@ -213,6 +250,133 @@ function AdminPaymentDetailContent({ paymentId }: { paymentId: string }) {
               <p className="text-sm text-stone-400">ผู้ซื้อยังไม่ได้แนบหลักฐานการโอนเงิน</p>
             )}
           </Card>
+
+          {/* หลักฐานการจัดส่งรายชิ้น — ตรวจก่อนโอนเงินต่อให้ผู้ขาย */}
+          {payment.status === "confirmed" && (
+            <Card className="p-5">
+              <h2 className="mb-1 font-serif text-base font-bold text-stone-900">หลักฐานการจัดส่ง</h2>
+              <p className="mb-4 text-sm text-stone-500">
+                ยืนยันการชำระเงินเมื่อ {formatThaiDateTime(payment.paymentConfirmedAt)}
+                {payment.autoDeliveryConfirmAt &&
+                  ` · ชิ้นที่จัดส่งแล้วจะถูกยืนยันอัตโนมัติวันที่ ${formatThaiDate(payment.autoDeliveryConfirmAt)}`}
+              </p>
+              <div className="flex flex-col gap-4">
+                {payment.items
+                  .filter((i) => i.availabilityStatus === "confirmed")
+                  .map((i) => (
+                    <div key={i.id} className="rounded-lg border border-stone-200 p-4">
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-medium text-stone-900">{i.artworkName}</p>
+                          <p className="text-xs text-stone-500">ผู้ขาย {i.sellerName || "—"}</p>
+                        </div>
+                        <StatusBadge status={i.shippingStatus} domain="shipping" />
+                      </div>
+                      <ShippingEvidence item={i} />
+                    </div>
+                  ))}
+              </div>
+            </Card>
+          )}
+
+          {/*
+            โอนเงินต่อให้ผู้ขาย — แยกรายผู้ขาย เพราะแต่ละร้านส่งของเสร็จไม่พร้อมกัน
+            ยอดมาจาก backend (ราคาผลงาน + ค่าจัดส่ง) หน้าเว็บไม่ได้คำนวณเอง
+          */}
+          {payment.status === "confirmed" && payment.payouts.length > 0 && (
+            <Card className="p-5">
+              <h2 className="mb-1 font-serif text-base font-bold text-stone-900">
+                โอนเงินให้ผู้ขาย
+              </h2>
+              <p className="mb-4 text-sm text-stone-500">
+                โอนได้เมื่อผลงานของผู้ขายรายนั้นจัดส่งสำเร็จครบทุกชิ้น แล้วแนบสลิปเป็นหลักฐาน
+                ผู้ขายจะเห็นสลิปนี้ในหน้าคำสั่งซื้อของตัวเอง
+              </p>
+              <div className="flex flex-col gap-4">
+                {payment.payouts.map((p) => (
+                  <div
+                    key={p.sellerId}
+                    className="rounded-lg border border-stone-200 p-4"
+                    data-testid={`payout-${p.sellerId}`}
+                  >
+                    <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-semibold text-stone-900">{p.sellerName || "—"}</p>
+                        <p className="text-xs text-stone-500">
+                          {[p.sellerEmail, p.sellerPhone].filter(Boolean).join(" · ") || "—"}
+                        </p>
+                        <p className="mt-1 text-xs text-stone-500">
+                          จัดส่งสำเร็จ {p.deliveredCount}/{p.itemCount} ชิ้น
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-stone-500">ยอดที่ต้องโอน</p>
+                        <p className="text-lg font-semibold text-stone-900">
+                          ฿{p.amount.toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* บัญชีปลายทาง — โอนแล้วจะเป็นสำเนาบัญชี ณ ตอนโอน */}
+                    {p.hasBankAccount ? (
+                      <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg bg-stone-50 p-3">
+                        {p.bankBookImage && (
+                          <EvidenceThumb src={p.bankBookImage} alt="รูปหน้าสมุดบัญชีผู้ขาย" />
+                        )}
+                        <div className="text-sm">
+                          <p className="text-xs text-stone-500">
+                            {p.paid ? "โอนเข้าบัญชี" : "บัญชีรับเงินของผู้ขาย"}
+                          </p>
+                          <p className="font-medium text-stone-900">{p.bankName}</p>
+                          <p className="font-mono text-base tracking-wide text-stone-900">
+                            {formatBankAccountNumber(p.bankAccountNumber)}
+                          </p>
+                          <p className="text-stone-700">ชื่อบัญชี {p.bankAccountName}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                        ผู้ขายยังไม่ได้ตั้งบัญชีธนาคารสำหรับรับเงิน — ต้องให้ผู้ขายตั้งบัญชีก่อนจึงจะโอนได้
+                        {p.sellerPhone && ` (ติดต่อ ${p.sellerPhone})`}
+                      </p>
+                    )}
+
+                    {p.paid ? (
+                      <div className="flex flex-wrap items-center gap-3">
+                        {p.slipTransfer && (
+                          <EvidenceThumb src={p.slipTransfer} alt="หลักฐานการโอนเงินให้ผู้ขาย" />
+                        )}
+                        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                          โอนเงินแล้ว · {formatThaiDateTime(p.paidAt)}
+                        </p>
+                      </div>
+                    ) : p.readyForPayout && p.hasBankAccount ? (
+                      <div className="flex flex-col gap-3">
+                        <ImageUploadField
+                          label="หลักฐานการโอนเงินให้ผู้ขาย *"
+                          value={payoutSlips[p.sellerId] ?? ""}
+                          onChange={(v) => setPayoutSlips((s) => ({ ...s, [p.sellerId]: v }))}
+                          onError={(m) => notify(m, "error")}
+                        />
+                        <div>
+                          <Button
+                            disabled={busy || !payoutSlips[p.sellerId]}
+                            onClick={() => setPayingSeller(p)}
+                          >
+                            ยืนยันการโอนเงินให้ผู้ขาย
+                          </Button>
+                        </div>
+                      </div>
+                    ) : p.readyForPayout ? null : (
+                      <p className="rounded-lg bg-stone-100 px-3 py-2 text-sm text-stone-600">
+                        รอจัดส่งสำเร็จครบทุกชิ้นก่อนจึงจะโอนเงินได้
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
         </div>
 
         <div className="flex flex-col gap-6">
@@ -318,6 +482,31 @@ function AdminPaymentDetailContent({ paymentId }: { paymentId: string }) {
                 },
               ]
         }
+      />
+
+      {/* โอนเงินออกจากแพลตฟอร์ม — ย้อนไม่ได้ จึงยืนยันสองขั้นเหมือนการยืนยันการชำระเงิน */}
+      <ConfirmDialog
+        open={payingSeller !== null}
+        busy={busy}
+        onCancel={() => setPayingSeller(null)}
+        onConfirm={() => payingSeller && handlePayout(payingSeller)}
+        steps={[
+          {
+            title: "ยืนยันการโอนเงินให้ผู้ขาย?",
+            description:
+              `ตรวจสลิปว่าโอนยอด ฿${payingSeller?.amount.toLocaleString() ?? ""} ` +
+              `เข้าบัญชี ${payingSeller?.bankName ?? ""} ${formatBankAccountNumber(payingSeller?.bankAccountNumber)} ` +
+              `(${payingSeller?.bankAccountName ?? ""}) ถูกต้องแล้วใช่ไหม`,
+            confirmLabel: "ตรวจแล้ว ไปขั้นถัดไป",
+          },
+          {
+            title: "ยืนยันครั้งสุดท้าย",
+            description:
+              `ระบบจะบันทึกว่าโอนเงิน ฿${payingSeller?.amount.toLocaleString() ?? ""} ` +
+              `ให้ ${payingSeller?.sellerName || "ผู้ขาย"} แล้ว และส่งสลิปให้ผู้ขายดู — แก้ไขไม่ได้อีก`,
+            confirmLabel: "บันทึกการโอนเงิน",
+          },
+        ]}
       />
     </Container>
   );

@@ -5,17 +5,15 @@ import Link from "next/link";
 import { RequireUser } from "@/components/RoleGuard";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
-import { getOrder, confirmAvailability, updateShippingStatus, ApiError } from "@/lib/api";
-import { Order, OrderItem, ShippingStatus } from "@/types";
-import { Button, Card, Container, Select, Spinner } from "@/components/ui";
+import { getOrder, confirmAvailability, confirmItemDelivered, ApiError } from "@/lib/api";
+import { Order, OrderItem } from "@/types";
+import { Button, Card, Container, Spinner } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
-
-const SHIPPING_OPTIONS: { value: ShippingStatus; label: string }[] = [
-  { value: "not_shipped", label: "ยังไม่จัดส่ง" },
-  { value: "packed", label: "แพ็คสินค้าแล้ว" },
-  { value: "shipped", label: "จัดส่งแล้ว" },
-  { value: "delivered", label: "จัดส่งสำเร็จ" },
-];
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { EvidenceThumb, ShippingEvidence } from "@/components/ShippingEvidence";
+import { SellerShippingControl } from "@/components/SellerShippingControl";
+import { formatThaiDate, formatThaiDateTime } from "@/lib/format";
+import { formatBankAccountNumber } from "@/lib/banks";
 
 /** นับความคืบหน้าการยืนยันของผู้ขายทุกคนในคำสั่งซื้อ */
 function availabilityProgress(items: OrderItem[]) {
@@ -36,6 +34,8 @@ function OrderDetailContent({ id }: { id: string }) {
    */
   const [answers, setAnswers] = useState<Record<string, boolean>>({});
   const [confirming, setConfirming] = useState(false);
+  /** ชิ้นที่ผู้ซื้อกำลังจะกด "ได้รับสินค้าแล้ว" — รอยืนยันในกล่องถามย้ำ */
+  const [receiving, setReceiving] = useState<OrderItem | null>(null);
 
   const load = useCallback(async () => {
     setOrder((await getOrder(id)) ?? null);
@@ -114,6 +114,12 @@ function OrderDetailContent({ id }: { id: string }) {
   const canUploadSlip =
     canPay && (order.paymentStatus === "unpaid" || order.paymentStatus === "rejected");
 
+  // หลักฐานการจัดส่งมีความหมายเฉพาะหลังยืนยันการชำระเงินแล้ว และเฉพาะชิ้นที่พร้อมขาย
+  const paid = order.paymentStatus === "confirmed";
+  const shipsItem = (i: OrderItem) => paid && i.availabilityStatus === "confirmed";
+  const myShippableItems = myItems.filter(shipsItem);
+  const awaitingReceipt = isBuyer ? order.items.filter((i) => shipsItem(i) && i.shippingStatus === "shipped") : [];
+
   return (
     <Container className="py-10">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -144,7 +150,8 @@ function OrderDetailContent({ id }: { id: string }) {
             </div>
             <div className="flex flex-col gap-3">
               {visibleItems.map((item) => (
-                <div key={item.id} className="flex items-center gap-3">
+                <div key={item.id} className="flex flex-col gap-3 border-b border-stone-100 pb-3 last:border-0 last:pb-0">
+                <div className="flex items-center gap-3">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={item.artworkImage}
@@ -176,9 +183,38 @@ function OrderDetailContent({ id }: { id: string }) {
                       </p>
                     )}
                   </div>
-                  <p className="text-sm font-medium text-stone-900">
-                    ฿{item.price.toLocaleString()}
-                  </p>
+                  <div className="flex flex-col items-end gap-1">
+                    <p className="text-sm font-medium text-stone-900">
+                      ฿{item.price.toLocaleString()}
+                    </p>
+                    {shipsItem(item) && (
+                      <StatusBadge status={item.shippingStatus ?? "not_shipped"} domain="shipping" />
+                    )}
+                  </div>
+                </div>
+
+                {/*
+                  ผู้ซื้อเห็นหลักฐานการจัดส่งรายชิ้น (รูปแพ็ค + รหัสพัสดุ) เพื่อตรวจสอบและติดตามพัสดุ
+                  ส่วนผู้ขายจัดการในแผงด้านล่าง จึงไม่แสดงซ้ำตรงนี้
+                */}
+                {isBuyer && shipsItem(item) && (
+                  <div className="ml-[68px] flex flex-col gap-3 rounded-lg bg-stone-50 p-3">
+                    <ShippingEvidence item={item} />
+                    {item.shippingStatus === "shipped" && (
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Button onClick={() => setReceiving(item)} disabled={busy}>
+                          ได้รับสินค้าแล้ว
+                        </Button>
+                        {order.autoDeliveryConfirmAt && (
+                          <span className="text-xs text-stone-500">
+                            หากไม่กดยืนยัน ระบบจะยืนยันให้อัตโนมัติวันที่{" "}
+                            {formatThaiDate(order.autoDeliveryConfirmAt)}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
                 </div>
               ))}
             </div>
@@ -350,26 +386,30 @@ function OrderDetailContent({ id }: { id: string }) {
               )}
 
               <div className="mt-5 border-t border-stone-100 pt-4">
-                <p className="mb-2 text-sm font-medium text-stone-700">สถานะการจัดส่ง</p>
-                {order.paymentStatus === "confirmed" ? (
-                  <Select
-                    value={order.shippingStatus}
-                    disabled={busy}
-                    aria-label="สถานะการจัดส่ง"
-                    onChange={(e) =>
-                      run(
-                        () => updateShippingStatus(order.id, e.target.value as ShippingStatus),
-                        "อัปเดตสถานะการจัดส่งสำเร็จ"
-                      )
-                    }
-                    className="w-full sm:w-56"
-                  >
-                    {SHIPPING_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </Select>
+                <p className="mb-1 text-sm font-medium text-stone-700">การจัดส่ง</p>
+                {paid ? (
+                  myShippableItems.length > 0 ? (
+                    <>
+                      <p className="mb-3 text-xs text-stone-500">
+                        อัปเดตทีละชิ้น: แนบรูปเมื่อแพ็คสินค้า และกรอกรหัสพัสดุเมื่อส่งของ
+                        — ผู้ซื้อและผู้ดูแลระบบจะเห็นหลักฐานนี้
+                      </p>
+                      <div className="flex flex-col gap-3">
+                        {myShippableItems.map((item) => (
+                          <SellerShippingControl
+                            key={item.id}
+                            item={item}
+                            autoDeliveryConfirmAt={order.autoDeliveryConfirmAt}
+                            onChanged={load}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="rounded-lg bg-stone-100 px-3 py-2 text-sm text-stone-600">
+                      ไม่มีผลงานที่ต้องจัดส่งในคำสั่งซื้อนี้
+                    </p>
+                  )
                 ) : (
                   // อธิบายว่าทำไมยังแก้ไม่ได้ ดีกว่าซ่อนช่องไปเฉยๆ แล้วผู้ขายหาไม่เจอ
                   <p className="rounded-lg bg-stone-100 px-3 py-2 text-sm text-stone-600">
@@ -377,6 +417,62 @@ function OrderDetailContent({ id }: { id: string }) {
                   </p>
                 )}
               </div>
+
+              {/* เงินที่ผู้ขายจะได้รับ — ผู้ดูแลระบบโอนให้หลังจัดส่งสำเร็จครบทุกชิ้นของร้านนี้ */}
+              {paid && order.sellerPayout && (
+                <div className="mt-5 border-t border-stone-100 pt-4">
+                  <p className="mb-2 text-sm font-medium text-stone-700">การรับเงินจากระบบ</p>
+                  <div className="flex flex-col gap-2 rounded-lg border border-stone-200 p-3 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-stone-500">ยอดที่จะได้รับ (ราคาผลงาน + ค่าจัดส่ง)</span>
+                      <span className="font-semibold text-stone-900">
+                        ฿{order.sellerPayout.amount.toLocaleString()}
+                      </span>
+                    </div>
+                    {order.sellerPayout.hasBankAccount ? (
+                      <p className="text-xs text-stone-500">
+                        {order.sellerPayout.paid ? "โอนเข้าบัญชี" : "จะโอนเข้าบัญชี"}{" "}
+                        {order.sellerPayout.bankName}{" "}
+                        {formatBankAccountNumber(order.sellerPayout.bankAccountNumber)} (
+                        {order.sellerPayout.bankAccountName})
+                      </p>
+                    ) : (
+                      <p className="rounded-lg bg-amber-50 px-3 py-2 text-amber-800">
+                        คุณยังไม่ได้ตั้งบัญชีรับเงิน —{" "}
+                        <Link href="/profile/bank-account" className="font-medium underline">
+                          ตั้งบัญชีรับเงิน
+                        </Link>{" "}
+                        เพื่อให้ผู้ดูแลระบบโอนเงินให้ได้
+                      </p>
+                    )}
+                    {order.sellerPayout.paid ? (
+                      <>
+                        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-emerald-800">
+                          ผู้ดูแลระบบโอนเงินให้แล้ว · {formatThaiDateTime(order.sellerPayout.paidAt)}
+                        </p>
+                        {order.sellerPayout.slipTransfer && (
+                          <div className="flex items-center gap-3">
+                            <EvidenceThumb
+                              src={order.sellerPayout.slipTransfer}
+                              alt="หลักฐานการโอนเงินให้ผู้ขาย"
+                            />
+                            <span className="text-xs text-stone-500">หลักฐานการโอนเงิน (กดเพื่อขยาย)</span>
+                          </div>
+                        )}
+                      </>
+                    ) : order.sellerPayout.readyForPayout ? (
+                      <p className="rounded-lg bg-indigo-50 px-3 py-2 text-indigo-800">
+                        จัดส่งสำเร็จครบแล้ว — รอผู้ดูแลระบบโอนเงินให้
+                      </p>
+                    ) : (
+                      <p className="rounded-lg bg-stone-100 px-3 py-2 text-stone-600">
+                        จะได้รับเงินเมื่อผลงานของร้านคุณจัดส่งสำเร็จครบทุกชิ้น (
+                        {order.sellerPayout.deliveredCount}/{order.sellerPayout.itemCount} ชิ้น)
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
             </Card>
           )}
         </div>
@@ -443,6 +539,13 @@ function OrderDetailContent({ id }: { id: string }) {
                   </Link>
                 )}
 
+                {awaitingReceipt.length > 0 && (
+                  <p className="rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-800">
+                    มีสินค้า {awaitingReceipt.length} ชิ้นที่ผู้ขายจัดส่งแล้ว — เมื่อได้รับของ
+                    กรุณากด &quot;ได้รับสินค้าแล้ว&quot; ที่รายการสินค้า
+                  </p>
+                )}
+
                 {order.paymentStatus === "rejected" && (
                   <p className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">
                     ผู้ดูแลระบบปฏิเสธหลักฐานการโอนเงิน กรุณาตรวจสอบแล้วอัปโหลดสลิปใหม่อีกครั้ง
@@ -473,6 +576,33 @@ function OrderDetailContent({ id }: { id: string }) {
           </div>
         </Card>
       </div>
+
+      {/*
+        ถามย้ำก่อนยืนยันรับของ เพราะย้อนไม่ได้ และเป็นเงื่อนไขที่ทำให้ระบบโอนเงินให้ผู้ขาย
+        ผู้ซื้อควรเปิดตรวจสินค้าก่อนกด
+      */}
+      <ConfirmDialog
+        open={receiving !== null}
+        busy={busy}
+        onCancel={() => setReceiving(null)}
+        onConfirm={() => {
+          const item = receiving;
+          if (!item) return;
+          run(
+            () => confirmItemDelivered(order.id, item.id),
+            "ยืนยันการได้รับสินค้าแล้ว"
+          ).finally(() => setReceiving(null));
+        }}
+        steps={[
+          {
+            title: "ยืนยันว่าได้รับสินค้าแล้ว?",
+            description:
+              `"${receiving?.artworkName ?? ""}" จะเปลี่ยนเป็นจัดส่งสำเร็จ และแก้ไขกลับไม่ได้ ` +
+              "กรุณาตรวจสอบสภาพสินค้าก่อนยืนยัน",
+            confirmLabel: "ได้รับสินค้าแล้ว",
+          },
+        ]}
+      />
     </Container>
   );
 }

@@ -41,6 +41,9 @@ public class UserDetailResponse {
 
     private List<SellerVerifyResponse.AddressResponse> addresses;
 
+    /** บัญชีรับเงินของผู้ขาย (null = ไม่ใช่ผู้ขาย หรือยังไม่ได้ตั้ง) — endpoint นี้แอดมินเท่านั้น */
+    private BankAccountResponse bankAccount;
+
     /** ตัวเลขสรุปกิจกรรม ใช้ให้ Admin เห็นภาพก่อนตัดสินใจอนุมัติ/ปฏิเสธ */
     private Integer orderCount;
     private Integer artworkCount;
@@ -67,6 +70,7 @@ public class UserDetailResponse {
                 .addresses(user.getAddresses().stream()
                         .map(SellerVerifyResponse.AddressResponse::from)
                         .toList())
+                .bankAccount(BankAccountResponse.from(seller))
                 .orderCount(buyer != null ? buyer.getOrders().size() : 0)
                 .artworkCount(seller != null ? seller.getArtworks().size() : 0)
                 .copyrightSentCount(buyer != null ? buyer.getCopyrightTransfers().size() : 0)

@@ -4,7 +4,12 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { RequireSeller } from "@/components/RoleGuard";
 import { useAuth } from "@/context/AuthContext";
-import { listArtworksBySeller, listOrdersBySeller, listCopyrightTransfersBySeller } from "@/lib/api";
+import {
+  getMyBankAccount,
+  listArtworksBySeller,
+  listOrdersBySeller,
+  listCopyrightTransfersBySeller,
+} from "@/lib/api";
 import { Card, Container } from "@/components/ui";
 
 function SellerDashboardContent() {
@@ -13,6 +18,8 @@ function SellerDashboardContent() {
   const [orderCount, setOrderCount] = useState(0);
   const [pendingOrders, setPendingOrders] = useState(0);
   const [copyrightCount, setCopyrightCount] = useState(0);
+  /** null = ยังไม่รู้ / false = ยังไม่ได้ตั้งบัญชีรับเงิน */
+  const [hasBank, setHasBank] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -21,6 +28,9 @@ function SellerDashboardContent() {
       setOrderCount(list.length);
       setPendingOrders(list.filter((o) => o.availabilityStatus === "waiting").length);
     });
+    getMyBankAccount()
+      .then((b) => setHasBank(!!b))
+      .catch(() => setHasBank(null));
     listCopyrightTransfersBySeller(user.id).then((list) =>
       setCopyrightCount(list.filter((t) => t.transferStatus === "requested").length)
     );
@@ -37,6 +47,21 @@ function SellerDashboardContent() {
     <Container className="py-10">
       <h1 className="mb-1 font-serif text-2xl font-bold text-stone-900">พื้นที่ผู้ขาย</h1>
       <p className="mb-6 text-sm text-stone-500">ยินดีต้อนรับ, {user?.fullName || user?.username}</p>
+
+      {/* ผู้ขายที่สมัครก่อนมีช่องบัญชีธนาคารยังไม่มีบัญชี — เผยแพร่ผลงานและรับเงินไม่ได้จนกว่าจะตั้ง */}
+      {hasBank === false && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-sm text-amber-900">
+            คุณยังไม่ได้ตั้งบัญชีธนาคารสำหรับรับเงิน — ต้องตั้งก่อนจึงจะเผยแพร่ผลงานและรับเงินค่าผลงานได้
+          </p>
+          <Link
+            href="/profile/bank-account"
+            className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-white hover:bg-stone-700"
+          >
+            ตั้งบัญชีรับเงิน
+          </Link>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {tiles.map((tile) => (

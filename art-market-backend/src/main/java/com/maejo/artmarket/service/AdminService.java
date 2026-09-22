@@ -4,6 +4,10 @@ import com.maejo.artmarket.dto.*;
 import com.maejo.artmarket.entity.Payment;
 import com.maejo.artmarket.entity.Seller;
 import com.maejo.artmarket.entity.User;
+import com.maejo.artmarket.entity.Orders;
+import com.maejo.artmarket.entity.SellerPayout;
+import com.maejo.artmarket.enums.ArtworkStatus;
+import com.maejo.artmarket.enums.AvailabilityStatus;
 import com.maejo.artmarket.enums.OrderStatus;
 import com.maejo.artmarket.enums.PaymentStatus;
 import com.maejo.artmarket.enums.Role;
@@ -13,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -32,6 +37,7 @@ public class AdminService {
     private final SellerRepository  sellerRepository;
     private final PaymentRepository paymentRepository;
     private final OrdersRepository  ordersRepository;
+    private final SellerPayoutRepository sellerPayoutRepository;
 
     // =========================================================================
     // ยูสเคส 3.1.25 List User
@@ -200,8 +206,18 @@ public class AdminService {
         try {
             if (req.getApproved()) {
                 payment.setPaymentStatus(PaymentStatus.COMPLETED);
+                // จุดเริ่มนับกำหนดยืนยันการจัดส่งอัตโนมัติ (DeliveryAutoConfirmService)
+                payment.setConfirmedAt(LocalDateTime.now());
                 // อัปเดต order → COMPLETED ด้วย
                 payment.getOrder().setOrderStatus(OrderStatus.COMPLETED);
+
+                // ปิดการขายชิ้นที่ผู้ซื้อจ่ายเงินแล้ว RESERVED → SOLD
+                // เดิมไม่มีจุดไหนตั้ง SOLD เลย งานที่ขายไปแล้วจึงค้าง "อยู่ในคำสั่งซื้อแล้ว" ตลอดไป
+                // และตัวกรองที่ซ่อนงาน SOLD ออกจากหน้าค้นหาไม่เคยทำงานจริง
+                payment.getOrder().getOrderItems().stream()
+                        .filter(i -> i.getAvailabilityStatus() == AvailabilityStatus.AVAILABLE)
+                        .forEach(i -> i.getArtwork().setArtworkStatus(ArtworkStatus.SOLD));
+
                 ordersRepository.save(payment.getOrder());
             } else {
                 payment.setPaymentStatus(PaymentStatus.REJECTED);
@@ -213,6 +229,69 @@ public class AdminService {
 
         } catch (Exception e) {
             return ApiResponse.error("ไม่สามารถแก้ไขข้อมูลได้ กรุณาลองใหม่อีกครั้ง");
+        }
+    }
+
+    // =========================================================================
+    // โอนเงินให้ผู้ขาย — หลังคำสั่งซื้อจัดส่งสำเร็จ ผู้ดูแลระบบโอนเงินต่อแล้วแนบสลิปเป็นหลักฐาน
+    // แยกรายผู้ขาย ยอด = ราคาผลงาน + ค่าจัดส่ง ของชิ้นที่พร้อมขาย (คำนวณที่ backend เท่านั้น)
+    // =========================================================================
+
+    @Transactional
+    public ApiResponse<PaymentDetailResponse> createPayout(Integer orderId, CreatePayoutRequest req) {
+
+        Optional<Orders> orderOpt = ordersRepository.findById(orderId);
+        if (orderOpt.isEmpty()) return ApiResponse.error("ไม่พบรายการคำสั่งซื้อ");
+        Orders order = orderOpt.get();
+
+        if (order.getPayment() == null
+                || order.getPayment().getPaymentStatus() != PaymentStatus.COMPLETED) {
+            return ApiResponse.error("คำสั่งซื้อนี้ยังไม่ได้ยืนยันการชำระเงินของผู้ซื้อ");
+        }
+
+        SellerPayoutInfo info = SellerPayoutInfo.forSeller(order, req.getSellerId());
+        if (info == null) {
+            return ApiResponse.error("ไม่พบผู้ขายรายนี้ในคำสั่งซื้อ หรือไม่มีผลงานที่พร้อมขาย");
+        }
+        if (info.isPaid()) {
+            return ApiResponse.error("โอนเงินให้ผู้ขายรายนี้แล้ว");
+        }
+        if (!info.isReadyForPayout()) {
+            return ApiResponse.error("ผลงานของผู้ขายรายนี้ยังจัดส่งไม่สำเร็จครบทุกชิ้น ("
+                    + info.getDeliveredCount() + "/" + info.getItemCount() + ")");
+        }
+
+        String err = ImageDataUrls.validate(req.getSlipTransfer(), "หลักฐานการโอนเงินให้ผู้ขาย");
+        if (err != null) return ApiResponse.error(err);
+
+        Seller seller = sellerRepository.findById(req.getSellerId()).orElse(null);
+        if (seller == null) return ApiResponse.error("ไม่พบข้อมูลผู้ขาย");
+        if (!seller.hasBankAccount()) {
+            return ApiResponse.error("ผู้ขายรายนี้ยังไม่ได้ตั้งบัญชีธนาคารสำหรับรับเงิน");
+        }
+
+        try {
+            SellerPayout payout = SellerPayout.builder()
+                    .order(order)
+                    .seller(seller)
+                    .amount(info.getAmount())
+                    .slipTransfer(req.getSlipTransfer())
+                    .paidAt(LocalDateTime.now())
+                    // สำเนาบัญชี ณ ตอนโอน — ผู้ขายแก้บัญชีทีหลังได้ แต่หลักฐานต้องไม่เปลี่ยนตาม
+                    .bankName(seller.getBankCode().getDisplayName())
+                    .bankAccountNumber(seller.getBankAccountNumber())
+                    .bankAccountName(seller.getBankAccountName())
+                    .build();
+            order.getSellerPayouts().add(payout);
+            // flush ในนี้ เพื่อให้ unique (order_id, seller_id) ที่ชนจากการกดซ้ำพร้อมกัน ถูก catch ด้านล่าง
+            sellerPayoutRepository.saveAndFlush(payout);
+
+            return ApiResponse.ok("บันทึกการโอนเงินให้ผู้ขายสำเร็จ",
+                    PaymentDetailResponse.from(order.getPayment()));
+        } catch (Exception e) {
+            log.error("createPayout failed (orderId={}, sellerId={}): {}",
+                    orderId, req.getSellerId(), e.getMessage(), e);
+            return ApiResponse.error("ไม่สามารถบันทึกการโอนเงินได้ กรุณาลองใหม่อีกครั้ง");
         }
     }
 }

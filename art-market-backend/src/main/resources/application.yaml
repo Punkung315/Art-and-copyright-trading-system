@@ -40,6 +40,12 @@ app:
   cors:
     allowed-origins: http://localhost:3000,http://127.0.0.1:3000
 
+  # ยืนยันการจัดส่งสำเร็จอัตโนมัติ — ชิ้นที่จัดส่งแล้ว (มีเลขพัสดุ) แต่ผู้ซื้อไม่กดยืนยันเอง
+  # จะถูกปิดเป็น "จัดส่งสำเร็จ" เมื่อครบ auto-confirm-days วันหลังผู้ดูแลระบบยืนยันการชำระเงิน
+  delivery:
+    auto-confirm-days: 14
+    auto-confirm-check-ms: 3600000   # ตรวจทุก 1 ชั่วโมง (และตอนแอปสตาร์ท)
+
   seed-admin:
     enabled: true
     username: admin

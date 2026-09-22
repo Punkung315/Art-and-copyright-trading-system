@@ -7,6 +7,8 @@ import { useToast } from "@/context/ToastContext";
 import { getUserDetail, verifySeller, AdminUserDetail, ApiError } from "@/lib/api";
 import { Button, Card, Container, EmptyState, Spinner } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
+import { EvidenceThumb } from "@/components/ShippingEvidence";
+import { formatBankAccountNumber } from "@/lib/banks";
 
 /** แถวข้อมูลหนึ่งบรรทัด — ค่าว่างแสดง "—" เพื่อให้เห็นว่าไม่มีข้อมูล ไม่ใช่แสดงพลาด */
 function Row({ label, value }: { label: string; value?: string | number | null }) {
@@ -115,6 +117,42 @@ function AdminUserDetailContent({ userId }: { userId: string }) {
           <Row label="รหัสผู้ขาย (seller_id)" value={user.sellerId} />
           <Row label="รหัสผู้ซื้อ (buyer_id)" value={user.buyerId} />
           <Row label="วันที่สมัครสมาชิก" value={formatDate(user.createdAt)} />
+
+          {isSeller && (
+            <>
+              <h2 className="mt-6 mb-3 font-serif text-base font-bold text-stone-900">
+                บัญชีธนาคารสำหรับรับเงิน
+              </h2>
+              {user.bankAccount ? (
+                <div className="flex flex-wrap items-start gap-4">
+                  <div className="min-w-[240px] flex-1">
+                    <Row label="ธนาคาร" value={user.bankAccount.bankName} />
+                    <Row
+                      label="เลขบัญชี"
+                      value={formatBankAccountNumber(user.bankAccount.accountNumber)}
+                    />
+                    <Row label="ชื่อบัญชี" value={user.bankAccount.accountName} />
+                  </div>
+                  {user.bankAccount.bankBookImage && (
+                    <EvidenceThumb src={user.bankAccount.bankBookImage} alt="รูปหน้าสมุดบัญชี" />
+                  )}
+                </div>
+              ) : (
+                <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  ผู้ขายยังไม่ได้ตั้งบัญชีรับเงิน
+                </p>
+              )}
+              {/* ชื่อบัญชีควรตรงกับชื่อผู้สมัคร ถ้าไม่ตรงควรสอบถามก่อนอนุมัติ */}
+              {user.bankAccount &&
+                user.fullName &&
+                user.bankAccount.accountName.replace(/\s+/g, "") !==
+                  user.fullName.replace(/\s+/g, "") && (
+                  <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    ชื่อบัญชีไม่ตรงกับชื่อ-นามสกุลของผู้ขาย — ตรวจสอบก่อนอนุมัติหรือโอนเงิน
+                  </p>
+                )}
+            </>
+          )}
 
           <h2 className="mt-6 mb-3 font-serif text-base font-bold text-stone-900">
             ที่อยู่ ({user.addresses.length})

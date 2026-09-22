@@ -7,11 +7,14 @@ import com.maejo.artmarket.entity.Orders;
 import com.maejo.artmarket.entity.Seller;
 import com.maejo.artmarket.enums.ArtworkStatus;
 import com.maejo.artmarket.enums.AvailabilityStatus;
+import com.maejo.artmarket.enums.PaymentStatus;
+import com.maejo.artmarket.enums.ShippingStatus;
 import com.maejo.artmarket.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -116,6 +119,19 @@ public class SellerOrderService {
     // Alternate Flow 6.1.1: "ไม่สามารถแก้ไขสถานะได้ กรุณาลองใหม่อีกครั้ง"
     // =========================================================================
 
+    /** รหัสพัสดุของขนส่งไทยทุกเจ้าที่รองรับเป็นตัวอักษรอังกฤษ/ตัวเลขล้วน เช่น EF123456789TH */
+    private static final java.util.regex.Pattern TRACKING_PATTERN =
+            java.util.regex.Pattern.compile("^[A-Z0-9-]{8,30}$");
+
+    /**
+     * ลำดับสถานะเดินหน้าอย่างเดียว:
+     *   (ยังไม่จัดส่ง) → PREPARING แพ็คสินค้าแล้ว [แนบรูปแพ็ค]
+     *                 → SHIPPED   จัดส่งแล้ว     [กรอกรหัสพัสดุ]
+     *                 → DELIVERED จัดส่งสำเร็จ   [ผู้ซื้อยืนยัน / ระบบยืนยันเมื่อครบกำหนด]
+     *
+     * ส่งสถานะเดิมซ้ำได้ เพื่อแก้หลักฐานที่แนบผิด (เปลี่ยนรูป / แก้เลขพัสดุที่พิมพ์ผิด)
+     * แต่ย้อนสถานะไม่ได้ และแก้อะไรไม่ได้อีกเมื่อจัดส่งสำเร็จแล้ว
+     */
     @Transactional
     public ApiResponse<SellerOrderResponse.SellerOrderItemDetail> updateShippingStatus(
             String username, Integer orderItemId, UpdateShippingStatusRequest req) {
@@ -139,9 +155,62 @@ public class SellerOrderService {
             return ApiResponse.error("ต้องยืนยันความพร้อมในการขายก่อนจึงจะอัปเดตสถานะการจัดส่งได้");
         }
 
+        // เดิมไม่ได้เช็คเรื่องนี้ที่ backend เลย (หน้าเว็บซ่อนช่องไว้อย่างเดียว)
+        // ยิง API ตรงๆ ก็ส่งของได้ทั้งที่ผู้ซื้อยังไม่ได้จ่ายเงิน
+        var payment = item.getOrder().getPayment();
+        if (payment == null || payment.getPaymentStatus() != PaymentStatus.COMPLETED) {
+            return ApiResponse.error("อัปเดตการจัดส่งได้หลังผู้ดูแลระบบยืนยันการโอนเงินของผู้ซื้อแล้ว");
+        }
+
+        ShippingStatus current = item.getShippingStatus();
+        ShippingStatus target  = req.getShippingStatus();
+
+        if (current == ShippingStatus.DELIVERED) {
+            return ApiResponse.error("รายการนี้จัดส่งสำเร็จแล้ว ไม่สามารถแก้ไขสถานะได้");
+        }
+        if (target == ShippingStatus.DELIVERED) {
+            return ApiResponse.error("สถานะจัดส่งสำเร็จต้องให้ผู้ซื้อเป็นผู้ยืนยันเมื่อได้รับสินค้า");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+
+        if (target == ShippingStatus.PREPARING) {
+            if (current == ShippingStatus.SHIPPED) {
+                return ApiResponse.error("จัดส่งสินค้าไปแล้ว ย้อนกลับเป็นแพ็คสินค้าไม่ได้");
+            }
+            // ครั้งแรกต้องแนบรูป ส่วนการส่งซ้ำไม่แนบมาได้ (คงรูปเดิมไว้)
+            boolean hasNewImage = req.getPackingImage() != null && !req.getPackingImage().isBlank();
+            if (!hasNewImage && item.getPackingImage() == null) {
+                return ApiResponse.error("กรุณาแนบรูปภาพสินค้าที่แพ็คแล้ว");
+            }
+            if (hasNewImage) {
+                String err = ImageDataUrls.validate(req.getPackingImage(), "รูปภาพสินค้าที่แพ็คแล้ว");
+                if (err != null) return ApiResponse.error(err);
+                item.setPackingImage(req.getPackingImage());
+            }
+            if (item.getPackedAt() == null) item.setPackedAt(now);
+        }
+
+        if (target == ShippingStatus.SHIPPED) {
+            // ข้ามขั้นแพ็คไม่ได้ — ผู้ซื้อ/แอดมินต้องมีรูปแพ็คไว้ตรวจสอบทุกชิ้น
+            if (current == null || item.getPackingImage() == null) {
+                return ApiResponse.error("กรุณาอัปเดตเป็นแพ็คสินค้าแล้วพร้อมแนบรูปก่อนจัดส่ง");
+            }
+            String tracking = req.getTrackingNumber() == null ? ""
+                    : req.getTrackingNumber().replaceAll("\\s+", "").toUpperCase();
+            if (tracking.isEmpty()) {
+                return ApiResponse.error("กรุณากรอกรหัสพัสดุ (Tracking number) ของขนส่ง");
+            }
+            if (!TRACKING_PATTERN.matcher(tracking).matches()) {
+                return ApiResponse.error("รหัสพัสดุต้องเป็นตัวอักษรภาษาอังกฤษหรือตัวเลข 8–30 ตัว");
+            }
+            item.setTrackingNumber(tracking);
+            if (item.getShippedAt() == null) item.setShippedAt(now);
+        }
+
         try {
             // Basic Flow ข้อ 6.1
-            item.setShippingStatus(req.getShippingStatus());
+            item.setShippingStatus(target);
             orderItemRepository.save(item);
             return ApiResponse.ok("อัปเดตสถานะการจัดส่งสำเร็จ",
                     SellerOrderResponse.SellerOrderItemDetail.from(item));

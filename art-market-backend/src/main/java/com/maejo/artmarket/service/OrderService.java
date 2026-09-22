@@ -7,6 +7,8 @@ import com.maejo.artmarket.entity.Address;
 import com.maejo.artmarket.entity.Seller;
 import com.maejo.artmarket.entity.Buyer;
 import com.maejo.artmarket.entity.Orders;
+import com.maejo.artmarket.entity.OrderItem;
+import com.maejo.artmarket.enums.ShippingStatus;
 import com.maejo.artmarket.repository.BuyerRepository;
 import com.maejo.artmarket.repository.OrdersRepository;
 import com.maejo.artmarket.repository.SellerRepository;
@@ -14,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -85,7 +88,58 @@ public class OrderService {
             return ApiResponse.error("ไม่มีสิทธิ์ดูคำสั่งซื้อนี้");
         }
 
-        return ApiResponse.ok("ดึงข้อมูลคำสั่งซื้อสำเร็จ", OrderDetailResponse.from(order));
+        // ผู้ขายเห็นหลักฐานการโอนเงินเฉพาะของตัวเอง ผู้ซื้อไม่เห็นส่วนนี้
+        return ApiResponse.ok("ดึงข้อมูลคำสั่งซื้อสำเร็จ", isSellerInOrder && !isOwnerBuyer
+                ? OrderDetailResponse.from(order, seller.getSellerId())
+                : OrderDetailResponse.from(order));
+    }
+
+    // =========================================================================
+    // ผู้ซื้อยืนยันว่าได้รับสินค้าแล้ว (จัดส่งแล้ว → จัดส่งสำเร็จ) ทีละชิ้น
+    //
+    // ยืนยันรายชิ้นเพราะคำสั่งซื้อหนึ่งใบมีงานจากหลายร้าน แต่ละร้านส่งถึงไม่พร้อมกัน
+    // ถ้าผู้ซื้อไม่กด ระบบจะยืนยันให้เองเมื่อครบกำหนด (DeliveryAutoConfirmService)
+    // =========================================================================
+
+    @Transactional
+    public ApiResponse<OrderDetailResponse> confirmDelivered(String username, Integer orderId, Integer orderItemId) {
+
+        Buyer buyer = buyerRepository.findByUser_Username(username).orElse(null);
+        if (buyer == null) {
+            return ApiResponse.error("ไม่พบข้อมูลผู้ซื้อ");
+        }
+
+        Optional<Orders> orderOpt = ordersRepository.findById(orderId);
+        if (orderOpt.isEmpty()) {
+            return ApiResponse.error("ไม่พบรายการคำสั่งซื้อ");
+        }
+        Orders order = orderOpt.get();
+
+        // ผู้ขายเปิดดูคำสั่งซื้อได้ แต่ยืนยันการรับของแทนผู้ซื้อไม่ได้
+        if (!order.getBuyer().getBuyerId().equals(buyer.getBuyerId())) {
+            return ApiResponse.error("ไม่มีสิทธิ์ยืนยันการรับสินค้าของคำสั่งซื้อนี้");
+        }
+
+        OrderItem item = order.getOrderItems().stream()
+                .filter(i -> i.getOrderItemId().equals(orderItemId))
+                .findFirst().orElse(null);
+        if (item == null) {
+            return ApiResponse.error("ไม่พบรายการสินค้านี้ในคำสั่งซื้อ");
+        }
+
+        if (item.getShippingStatus() == ShippingStatus.DELIVERED) {
+            return ApiResponse.error("รายการนี้ยืนยันการได้รับสินค้าไปแล้ว");
+        }
+        if (item.getShippingStatus() != ShippingStatus.SHIPPED) {
+            return ApiResponse.error("ยืนยันการได้รับสินค้าได้หลังผู้ขายจัดส่งสินค้าแล้วเท่านั้น");
+        }
+
+        item.setShippingStatus(ShippingStatus.DELIVERED);
+        item.setDeliveredAt(LocalDateTime.now());
+        item.setDeliveryConfirmedBy(DeliveryAutoConfirmService.CONFIRMED_BY_BUYER);
+        ordersRepository.save(order);
+
+        return ApiResponse.ok("ยืนยันการได้รับสินค้าสำเร็จ", OrderDetailResponse.from(order));
     }
 
     // =========================================================================

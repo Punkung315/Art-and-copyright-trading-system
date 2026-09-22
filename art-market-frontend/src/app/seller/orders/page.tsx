@@ -140,6 +140,11 @@ function SellerOrdersContent() {
                         <StatusBadge status={order.availabilityStatus} domain="availability" />
                         <StatusBadge status={order.paymentStatus} domain="payment" />
                         <StatusBadge status={order.shippingStatus} domain="shipping" />
+                        {order.sellerPayout?.paid && (
+                          <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800">
+                            ได้รับเงินแล้ว
+                          </span>
+                        )}
                         <span className="text-stone-400" aria-hidden>
                           ›
                         </span>

@@ -113,6 +113,13 @@ public class AuthService {
             return ApiResponse.error("คุณเป็นผู้ขายอยู่แล้ว");
         }
 
+        // ตรวจบัญชีรับเงินก่อนแตะข้อมูลใดๆ — ถ้าบัญชีไม่ผ่าน ต้องไม่เหลือสถานะสมัครค้างครึ่งทาง
+        Seller seller = Seller.builder().user(user).verified(false).build();
+        String bankErr = SellerBankAccountService.apply(seller, req.getBankAccount());
+        if (bankErr != null) {
+            return ApiResponse.error(bankErr);
+        }
+
         // อัปเดต fullName และ phoneNumber ใน User
         user.setFullName(req.getFullName());
         user.setPhoneNumber(req.getPhoneNumber());
@@ -129,8 +136,7 @@ public class AuthService {
             buyerRepository.save(Buyer.builder().user(user).build());
         }
 
-        // บันทึก Seller (verified=false รอ Admin ตรวจสอบ)
-        Seller seller = Seller.builder().user(user).verified(false).build();
+        // บันทึก Seller (verified=false รอ Admin ตรวจสอบ) พร้อมบัญชีรับเงินที่ตรวจแล้วด้านบน
         sellerRepository.save(seller);
 
         // บันทึกที่อยู่

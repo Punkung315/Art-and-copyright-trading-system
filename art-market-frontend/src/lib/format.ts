@@ -35,3 +35,31 @@ export function calcCopyrightPrice(price: number | undefined): number {
   if (!price || !Number.isFinite(price) || price <= 0) return 0;
   return Math.round(price * COPYRIGHT_PRICE_MULTIPLIER * 100) / 100;
 }
+
+/** วันเวลาแบบไทย เช่น "21 ก.ย. 2569 14:05" — คืน "—" ถ้าไม่มีค่าหรือแปลงไม่ได้ */
+export function formatThaiDateTime(iso?: string): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
+}
+
+/** วันที่แบบไทย ไม่มีเวลา */
+export function formatThaiDate(iso?: string): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("th-TH", { dateStyle: "long" });
+}
+
+/**
+ * รหัสพัสดุ — ต้องตรงกับ TRACKING_PATTERN ใน SellerOrderService.java
+ * ตัดช่องว่างและทำเป็นตัวพิมพ์ใหญ่ก่อนตรวจ (คนมักคัดลอกมาพร้อมช่องว่าง)
+ */
+export function normalizeTrackingNumber(raw: string): string {
+  return raw.replace(/\s+/g, "").toUpperCase();
+}
+
+export function isValidTrackingNumber(raw: string): boolean {
+  return /^[A-Z0-9-]{8,30}$/.test(normalizeTrackingNumber(raw));
+}

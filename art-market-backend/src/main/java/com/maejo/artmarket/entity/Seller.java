@@ -1,7 +1,10 @@
 package com.maejo.artmarket.entity;
 
+import com.maejo.artmarket.enums.ThaiBank;
 import jakarta.persistence.*;
 import lombok.*;
+
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -40,6 +43,34 @@ public class Seller {
     @Column(nullable = false)
     @Builder.Default
     private boolean verified = false;
+
+    // ---------------------------------------------------------------------
+    // บัญชีรับเงิน — ผู้ดูแลระบบใช้โอนค่าผลงานให้ผู้ขายหลังจัดส่งสำเร็จ
+    // nullable ทั้งหมดเพราะผู้ขายที่สมัครก่อนมีฟีเจอร์นี้ยังไม่มีข้อมูล
+    // (ระบบบังคับให้กรอกก่อนเผยแพร่ผลงาน และก่อนแอดมินโอนเงินให้)
+    // ---------------------------------------------------------------------
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    private ThaiBank bankCode;
+
+    /** เลขบัญชี เก็บเฉพาะตัวเลข (ตัดขีด/ช่องว่างออกแล้ว) */
+    @Column(length = 20)
+    private String bankAccountNumber;
+
+    /** ชื่อบัญชีตามหน้าสมุด — แอดมินเทียบกับชื่อผู้ขายก่อนโอน */
+    @Column(length = 150)
+    private String bankAccountName;
+
+    /** รูปหน้าสมุดบัญชี (data URL) ไว้ยืนยันว่าบัญชีเป็นของผู้ขายจริง */
+    @Column(columnDefinition = "LONGTEXT")
+    private String bankBookImage;
+
+    private LocalDateTime bankUpdatedAt;
+
+    public boolean hasBankAccount() {
+        return bankCode != null && bankAccountNumber != null && bankAccountName != null;
+    }
 
     @OneToMany(mappedBy = "seller", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default

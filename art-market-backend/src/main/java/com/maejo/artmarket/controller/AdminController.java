@@ -23,6 +23,7 @@ import java.util.List;
  * GET  /api/admin/payments            List Payment    (ยูสเคส 3.1.27)
  * GET  /api/admin/payments/{id}       ดูรายละเอียด Payment
  * PATCH /api/admin/payments/{id}/confirm Confirm Payment (ยูสเคส 3.1.28)
+ * POST /api/admin/orders/{orderId}/payouts  โอนเงินให้ผู้ขาย + แนบสลิป (แยกรายผู้ขาย)
  * GET  /api/admin/copyright-payments            รายการชำระค่าลิขสิทธิ์
  * GET  /api/admin/copyright-payments/{id}       ดูรายละเอียด + สลิป
  * PATCH /api/admin/copyright-payments/{id}/confirm อนุมัติ/ปฏิเสธสลิปค่าลิขสิทธิ์
@@ -187,5 +188,18 @@ public class AdminController {
             @PathVariable Integer id,
             @Valid @RequestBody ConfirmPaymentRequest request) {
         return ResponseEntity.ok(adminService.confirmPayment(id, request));
+    }
+
+    /**
+     * POST /api/admin/orders/{orderId}/payouts
+     * Body: { "sellerId": 5, "slipTransfer": "data:image/png;base64,..." }
+     * ยอดเงินคำนวณที่ backend (ราคาผลงาน + ค่าจัดส่ง ของชิ้นที่พร้อมขายของผู้ขายคนนั้น)
+     * โอนได้เมื่อทุกชิ้นของผู้ขายคนนั้นจัดส่งสำเร็จแล้ว และโอนได้ครั้งเดียว
+     */
+    @PostMapping("/orders/{orderId}/payouts")
+    public ResponseEntity<ApiResponse<PaymentDetailResponse>> createPayout(
+            @PathVariable Integer orderId,
+            @Valid @RequestBody CreatePayoutRequest request) {
+        return ResponseEntity.ok(adminService.createPayout(orderId, request));
     }
 }

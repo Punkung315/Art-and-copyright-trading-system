@@ -63,6 +63,13 @@ public class PaymentDetailResponse {
      */
     private List<OrderItemLine> items;
 
+    /** วันที่ผู้ดูแลระบบยืนยันการชำระเงิน และวันที่ระบบจะยืนยันการจัดส่งให้อัตโนมัติ */
+    private LocalDateTime paymentConfirmedAt;
+    private LocalDateTime autoDeliveryConfirmAt;
+
+    /** การโอนเงินต่อให้ผู้ขาย แยกรายผู้ขาย (ดูกฎใน SellerPayoutInfo) */
+    private List<SellerPayoutInfo> payouts;
+
     @Data
     @Builder
     public static class OrderItemLine {
@@ -73,7 +80,24 @@ public class PaymentDetailResponse {
         private AvailabilityStatus availabilityStatus;
         private ShippingStatus     shippingStatus;
 
+        /** ผู้ขายของชิ้นนี้ — ใช้จับคู่กับรายการโอนเงินให้ผู้ขาย (payouts) */
+        private Integer            sellerId;
+        private String             sellerName;
+        private Double             shippingCost;
+
+        /** หลักฐานการจัดส่ง — ผู้ดูแลระบบตรวจก่อนโอนเงินให้ผู้ขาย */
+        private String        packingImage;
+        private LocalDateTime packedAt;
+        private String        trackingNumber;
+        private String        shippingCompanyName;
+        private LocalDateTime shippedAt;
+        private LocalDateTime deliveredAt;
+        private String        deliveryConfirmedBy;
+
         public static OrderItemLine from(OrderItem i) {
+            var seller = i.getArtwork().getSeller();
+            var company = i.getShippingCompany() != null
+                    ? i.getShippingCompany() : i.getArtwork().getShippingCompany();
             return OrderItemLine.builder()
                     .orderItemId(i.getOrderItemId())
                     .artworkId(i.getArtwork().getArtworkId())
@@ -81,6 +105,16 @@ public class PaymentDetailResponse {
                     .price(i.getPrice())
                     .availabilityStatus(i.getAvailabilityStatus())
                     .shippingStatus(i.getShippingStatus())
+                    .sellerId(seller != null ? seller.getSellerId() : null)
+                    .sellerName(seller != null ? seller.getUser().getFullName() : null)
+                    .shippingCost(SellerPayoutInfo.shippingOf(i))
+                    .packingImage(i.getPackingImage())
+                    .packedAt(i.getPackedAt())
+                    .trackingNumber(i.getTrackingNumber())
+                    .shippingCompanyName(company != null ? company.getDisplayName() : null)
+                    .shippedAt(i.getShippedAt())
+                    .deliveredAt(i.getDeliveredAt())
+                    .deliveryConfirmedBy(i.getDeliveryConfirmedBy())
                     .build();
         }
     }
@@ -116,6 +150,9 @@ public class PaymentDetailResponse {
                         .map(item -> ArtworkSummaryResponse.from(item.getArtwork()))
                         .toList())
                 .items(orderItems.stream().map(OrderItemLine::from).toList())
+                .paymentConfirmedAt(p.getConfirmedAt())
+                .autoDeliveryConfirmAt(DeliveryPolicy.autoConfirmAt(p))
+                .payouts(SellerPayoutInfo.listFor(order))
                 .build();
     }
 }

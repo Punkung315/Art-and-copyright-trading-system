@@ -21,6 +21,7 @@ import java.util.List;
  * GET /api/orders                        View Order — รายการทั้งหมด (ยูสเคส 3.1.13)
  * GET /api/orders/{id}                   View Order — รายละเอียดรายการเดียว
  * GET /api/orders/{id}/payment-summary   ดูยอดที่ต้องจ่าย ก่อนเรียก POST /api/orders/{id}/payment
+ * PATCH /api/orders/{id}/items/{itemId}/delivered  ผู้ซื้อยืนยันว่าได้รับสินค้าแล้ว
  *
  * endpoint ชำระเงินจริง (POST) อยู่ใน PaymentController เพื่อแยกความรับผิดชอบ
  */
@@ -76,5 +77,17 @@ public class OrderController {
             @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable Integer id) {
         return ResponseEntity.ok(orderService.getQuotation(userDetails.getUsername(), id));
+    }
+
+    /**
+     * ผู้ซื้อยืนยันว่าได้รับสินค้าแล้ว (จัดส่งแล้ว → จัดส่งสำเร็จ) ทีละชิ้น
+     * PATCH /api/orders/{id}/items/{itemId}/delivered
+     */
+    @PatchMapping("/{id}/items/{itemId}/delivered")
+    public ResponseEntity<ApiResponse<OrderDetailResponse>> confirmDelivered(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable Integer id,
+            @PathVariable Integer itemId) {
+        return ResponseEntity.ok(orderService.confirmDelivered(userDetails.getUsername(), id, itemId));
     }
 }

@@ -50,6 +50,15 @@ public class RegisterSellerRequest {
     @NotNull(message = "กรุณากรอกข้อมูลที่อยู่")
     private AddressRequest address;
 
+    /**
+     * บัญชีธนาคารสำหรับรับเงิน — ผู้ดูแลระบบโอนค่าผลงานให้ผู้ขายผ่านบัญชีนี้
+     * บังคับตั้งแต่สมัคร ไม่งั้นแอดมินจะโอนเงินให้ไม่ได้เมื่อมีคำสั่งซื้อจัดส่งสำเร็จ
+     * (รายละเอียดการตรวจอยู่ที่ SellerBankAccountService.apply)
+     */
+    @Valid
+    @NotNull(message = "กรุณากรอกข้อมูลบัญชีธนาคารสำหรับรับเงิน")
+    private BankAccountRequest bankAccount;
+
     @Data
     public static class AddressRequest {
         private String houseNo;

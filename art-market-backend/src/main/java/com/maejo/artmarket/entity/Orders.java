@@ -49,6 +49,11 @@ public class Orders {
     @Builder.Default
     private List<CopyrightTransfer> copyrightTransfers = new ArrayList<>();
 
+    /** หลักฐานการโอนเงินให้ผู้ขาย — แยกรายผู้ขาย เพราะคำสั่งซื้อหนึ่งใบมีงานจากหลายร้านได้ */
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<SellerPayout> sellerPayouts = new ArrayList<>();
+
     @PrePersist
     protected void onCreate() { this.orderDate = LocalDateTime.now(); }
 }
