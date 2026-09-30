@@ -1,12 +1,13 @@
 "use client";
 
-import { FormEvent, use, useEffect, useState } from "react";
+import { FormEvent, use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { RequireSeller } from "@/components/RoleGuard";
 import { useToast } from "@/context/ToastContext";
 import {
   getArtwork,
+  getArtworkFacets,
   updateArtwork,
   publishArtwork,
   unpublishArtwork,
@@ -20,6 +21,15 @@ import { ImageUploadField } from "@/components/ImageUploadField";
 import { ShippingPicker } from "@/components/ShippingPicker";
 import { CopyrightPriceField } from "@/components/CopyrightPriceField";
 import { validateNotEmpty } from "@/lib/validation";
+import { Combobox } from "@/components/Combobox";
+import {
+  ARTWORK_TYPES,
+  ARTWORK_STYLES,
+  ARTWORK_MEDIUMS,
+  ARTWORK_MATERIALS,
+  mergeOptions,
+  normalizeOption,
+} from "@/lib/artworkOptions";
 
 function EditArtContent({ id }: { id: string }) {
   const { notify } = useToast();
@@ -31,12 +41,37 @@ function EditArtContent({ id }: { id: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [publishing, setPublishing] = useState(false);
 
+  const [dataStyles, setDataStyles] = useState<string[]>([]);
+  const [dataMediums, setDataMediums] = useState<string[]>([]);
+
   useEffect(() => {
     getArtwork(id).then((a) => {
       setArtwork(a ?? null);
       if (a) setForm(a);
     });
   }, [id]);
+
+  // รายการแนะนำ = ค่าตั้งต้นในโค้ด + ค่าที่มีอยู่จริงในระบบ (เดียวกับตัวกรองหน้าค้นหา)
+  useEffect(() => {
+    getArtworkFacets()
+      .then((f) => {
+        setDataStyles(f.styles.map((v) => v.value));
+        setDataMediums(f.mediums.map((v) => v.value));
+      })
+      .catch(() => {});
+  }, []);
+
+  const styleOptions = useMemo(() => mergeOptions(ARTWORK_STYLES, dataStyles), [dataStyles]);
+  const mediumOptions = useMemo(() => mergeOptions(ARTWORK_MEDIUMS, dataMediums), [dataMediums]);
+  const materialOptions = useMemo(() => mergeOptions(ARTWORK_MATERIALS), []);
+  /*
+    ผลงานเดิมอาจมีประเภทที่ไม่อยู่ในรายการปัจจุบัน (ข้อมูลเก่า หรือรายการถูกแก้ทีหลัง)
+    ต้องใส่ค่าเดิมเข้าไปในตัวเลือกด้วย ไม่งั้น <select> จะเด้งไปค่าแรกแล้วเขียนทับของเดิมตอนกดบันทึก
+  */
+  const typeOptions = useMemo(
+    () => mergeOptions(ARTWORK_TYPES, form.artworkType ? [form.artworkType] : []),
+    [form.artworkType]
+  );
 
   if (artwork === undefined) return <Spinner />;
   if (artwork === null) {
@@ -72,7 +107,13 @@ function EditArtContent({ id }: { id: string }) {
     }
     setSubmitting(true);
     try {
-      const updated = await updateArtwork(id, form);
+      // ล้างช่องว่างส่วนเกินของค่าที่ถูกนำไปสร้างตัวกรองในหน้าค้นหา
+      const updated = await updateArtwork(id, {
+        ...form,
+        artworkStyle: normalizeOption(form.artworkStyle ?? ""),
+        artworkMediums: normalizeOption(form.artworkMediums ?? ""),
+        artworkMaterial: normalizeOption(form.artworkMaterial ?? ""),
+      });
       setArtwork(updated);
       notify("แก้ไขรายการงานศิลปะสำเร็จ", "success");
     } catch (err) {
@@ -184,32 +225,51 @@ function EditArtContent({ id }: { id: string }) {
         <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <ImageUploadField
-              label="รูปผลงาน (artworkImage)"
+              label="รูปผลงาน"
               value={form.artworkImage}
               onChange={(dataUrl) => set("artworkImage", dataUrl)}
               onError={(message) => notify(message, "error")}
             />
           </div>
 
-          <Field label="ชื่อผลงาน (artworkName)" error={errors.artworkName}>
+          <Field label="ชื่อผลงาน" error={errors.artworkName}>
             <Input value={form.artworkName ?? ""} onChange={(e) => set("artworkName", e.target.value)} />
           </Field>
-          <Field label="ประเภทงานศิลปะ (artworkType)">
+          <Field label="ประเภทงานศิลปะ">
             <Select value={form.artworkType ?? ""} onChange={(e) => set("artworkType", e.target.value)}>
-              <option>Painting</option>
-              <option>Digital Art</option>
-              <option>Photography</option>
-              <option>Sculpture</option>
+              {typeOptions.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
             </Select>
           </Field>
-          <Field label="สไตล์งานศิลปะ (artworkStyle)">
-            <Input value={form.artworkStyle ?? ""} onChange={(e) => set("artworkStyle", e.target.value)} />
+          <Field label="สไตล์งานศิลปะ">
+            <Combobox
+              value={form.artworkStyle ?? ""}
+              onChange={(v) => set("artworkStyle", v)}
+              options={styleOptions}
+              ariaLabel="สไตล์งานศิลปะ"
+              placeholder="เลือกหรือพิมพ์เอง"
+            />
           </Field>
-          <Field label="เทคนิคงานศิลปะ (artworkMediums)">
-            <Input value={form.artworkMediums ?? ""} onChange={(e) => set("artworkMediums", e.target.value)} />
+          <Field label="เทคนิคงานศิลปะ">
+            <Combobox
+              value={form.artworkMediums ?? ""}
+              onChange={(v) => set("artworkMediums", v)}
+              options={mediumOptions}
+              ariaLabel="เทคนิคงานศิลปะ"
+              placeholder="เลือกหรือพิมพ์เอง"
+            />
           </Field>
-          <Field label="วัสดุงานศิลปะ (artworkMaterial)">
-            <Input value={form.artworkMaterial ?? ""} onChange={(e) => set("artworkMaterial", e.target.value)} />
+          <Field label="วัสดุงานศิลปะ">
+            <Combobox
+              value={form.artworkMaterial ?? ""}
+              onChange={(v) => set("artworkMaterial", v)}
+              options={materialOptions}
+              ariaLabel="วัสดุงานศิลปะ"
+              placeholder="เลือกหรือพิมพ์เอง"
+            />
           </Field>
           <Field label="ความกว้าง (ซม.)" error={errors.width}>
             <Input
@@ -248,7 +308,7 @@ function EditArtContent({ id }: { id: string }) {
               onChange={(e) => set("weight", e.target.value === "" ? undefined : Number(e.target.value))}
             />
           </Field>
-          <Field label="ราคา (price)" error={errors.price}>
+          <Field label="ราคา (บาท])" error={errors.price}>
             <Input
               type="number"
               min={0}

@@ -3,9 +3,11 @@ spring:
     name: artmarket
 
   datasource:
-    url: jdbc:mysql://localhost:3306/artandcopyright_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Bangkok
-    username: root
-    password: 1234
+    # ค่าเชื่อมต่อฐานข้อมูลอ่านจาก environment variable ก่อน ถ้าไม่ตั้งไว้ใช้ค่าหลัง ':' เป็นค่าเริ่มต้น
+    # ย้ายเครื่อง/เปลี่ยนรหัส MySQL แล้วไม่ต้องแก้ไฟล์นี้ เช่น  set DB_PASSWORD=mypassword  ก่อนสั่งรัน
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:artandcopyright_db}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Bangkok
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:1234}
 
   jpa:
     hibernate:
@@ -22,7 +24,7 @@ spring:
       max-request-size: 10MB
 
 server:
-  port: 8080
+  port: ${SERVER_PORT:8081}
 
 # หมายเหตุ: เอา top-level "jwt:" อันเก่าออกแล้ว เหลือแค่ "app.jwt" อันเดียว
 # เพราะ JwtUtil.java อ่านจาก ${app.jwt.secret} / ${app.jwt.expiration-ms} เท่านั้น

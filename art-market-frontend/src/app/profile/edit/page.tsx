@@ -137,23 +137,23 @@ function EditProfileContent() {
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="ชื่อผู้ใช้ (username)" error={errors.username}>
+              <Field label="ชื่อผู้ใช้" error={errors.username}>
                 <Input value={username} onChange={(e) => setUsername(e.target.value)} />
               </Field>
-              <Field label="ชื่อ-นามสกุล (fullName)" error={errors.fullName}>
+              <Field label="ชื่อ-นามสกุล" error={errors.fullName}>
                 <Input value={fullName} onChange={(e) => setFullName(e.target.value)} />
               </Field>
-              <Field label="อีเมล (email)" error={errors.email}>
+              <Field label="อีเมล" error={errors.email}>
                 <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
               </Field>
-              <Field label="เบอร์โทรศัพท์ (ไม่บังคับ)" error={errors.phoneNumber}>
+              <Field label="เบอร์โทรศัพท์" error={errors.phoneNumber}>
                 <Input
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
                   placeholder="ตัวเลข 10 หลัก"
                 />
               </Field>
-              <Field label="เลขบัตรประชาชน (ไม่บังคับ)" error={errors.nationalNo}>
+              <Field label="เลขบัตรประชาชน" error={errors.nationalNo}>
                 <Input
                   value={nationalNo}
                   onChange={(e) => setNationalNo(e.target.value)}

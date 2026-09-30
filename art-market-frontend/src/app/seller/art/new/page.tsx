@@ -1,17 +1,26 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RequireSeller } from "@/components/RoleGuard";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
-import { addArtwork, ApiError } from "@/lib/api";
+import { addArtwork, getArtworkFacets, ApiError } from "@/lib/api";
 import { ShippingCompanyCode } from "@/types";
 import { Button, Card, Container, Field, Input, Select, Textarea } from "@/components/ui";
 import { ImageUploadField } from "@/components/ImageUploadField";
 import { ShippingPicker } from "@/components/ShippingPicker";
 import { CopyrightPriceField } from "@/components/CopyrightPriceField";
 import { validateNotEmpty } from "@/lib/validation";
+import { Combobox } from "@/components/Combobox";
+import {
+  ARTWORK_TYPES,
+  ARTWORK_STYLES,
+  ARTWORK_MEDIUMS,
+  ARTWORK_MATERIALS,
+  mergeOptions,
+  normalizeOption,
+} from "@/lib/artworkOptions";
 
 function AddArtContent() {
   const { user } = useAuth();
@@ -20,7 +29,7 @@ function AddArtContent() {
 
   const [artworkName, setArtworkName] = useState("");
   const [artworkImage, setArtworkImage] = useState("");
-  const [artworkType, setArtworkType] = useState("Painting");
+  const [artworkType, setArtworkType] = useState<string>(ARTWORK_TYPES[0]);
   const [artworkStyle, setArtworkStyle] = useState("");
   const [artworkMediums, setArtworkMediums] = useState("");
   const [artworkMaterial, setArtworkMaterial] = useState("");
@@ -38,6 +47,27 @@ function AddArtContent() {
   const [copyrightPrice, setCopyrightPrice] = useState("");
   const [errors, setErrors] = useState<Record<string, string | null>>({});
   const [submitting, setSubmitting] = useState(false);
+  /*
+    รายการแนะนำของสไตล์/เทคนิค เอาค่าที่ผู้ขายคนอื่นเคยกรอกไว้จริงมารวมด้วย
+    (endpoint เดียวกับตัวกรองในหน้าค้นหา) รายการจึงโตตามข้อมูลจริงโดยไม่ต้องแก้โค้ด
+  */
+  const [dataStyles, setDataStyles] = useState<string[]>([]);
+  const [dataMediums, setDataMediums] = useState<string[]>([]);
+
+  useEffect(() => {
+    getArtworkFacets()
+      .then((f) => {
+        setDataStyles(f.styles.map((s) => s.value));
+        setDataMediums(f.mediums.map((m) => m.value));
+      })
+      .catch(() => {
+        /* ดึงไม่ได้ก็ใช้รายการตั้งต้นในโค้ดไปก่อน ไม่ต้องรบกวนผู้ใช้ */
+      });
+  }, []);
+
+  const styleOptions = useMemo(() => mergeOptions(ARTWORK_STYLES, dataStyles), [dataStyles]);
+  const mediumOptions = useMemo(() => mergeOptions(ARTWORK_MEDIUMS, dataMediums), [dataMediums]);
+  const materialOptions = useMemo(() => mergeOptions(ARTWORK_MATERIALS), []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -73,9 +103,10 @@ function AddArtContent() {
         artworkName,
         artworkImage,
         artworkType,
-        artworkStyle,
-        artworkMediums,
-        artworkMaterial,
+        // ล้างช่องว่างส่วนเกินก่อนบันทึก ค่าเหล่านี้ถูกนำไปสร้างตัวกรองในหน้าค้นหาโดยตรง
+        artworkStyle: normalizeOption(artworkStyle),
+        artworkMediums: normalizeOption(artworkMediums),
+        artworkMaterial: normalizeOption(artworkMaterial),
         width: Number(width),
         height: Number(height),
         length: Number(length),
@@ -128,20 +159,39 @@ function AddArtContent() {
           </Field>
           <Field label="ประเภทงานศิลปะ (artworkType)" error={errors.artworkType}>
             <Select value={artworkType} onChange={(e) => setArtworkType(e.target.value)}>
-              <option>Painting</option>
-              <option>Digital Art</option>
-              <option>Photography</option>
-              <option>Sculpture</option>
+              {ARTWORK_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
             </Select>
           </Field>
           <Field label="สไตล์งานศิลปะ (artworkStyle)" error={errors.artworkStyle}>
-            <Input value={artworkStyle} onChange={(e) => setArtworkStyle(e.target.value)} placeholder="เช่น Impressionism" />
+            <Combobox
+              value={artworkStyle}
+              onChange={setArtworkStyle}
+              options={styleOptions}
+              ariaLabel="สไตล์งานศิลปะ"
+              placeholder="เลือกหรือพิมพ์เอง เช่น ล้านนาร่วมสมัย"
+            />
           </Field>
           <Field label="เทคนิคงานศิลปะ (artworkMediums)" error={errors.artworkMediums}>
-            <Input value={artworkMediums} onChange={(e) => setArtworkMediums(e.target.value)} placeholder="เช่น Oil on canvas" />
+            <Combobox
+              value={artworkMediums}
+              onChange={setArtworkMediums}
+              options={mediumOptions}
+              ariaLabel="เทคนิคงานศิลปะ"
+              placeholder="เลือกหรือพิมพ์เอง เช่น สีอะคริลิกผสมใบไม้แห้ง"
+            />
           </Field>
           <Field label="วัสดุงานศิลปะ (artworkMaterial)">
-            <Input value={artworkMaterial} onChange={(e) => setArtworkMaterial(e.target.value)} placeholder="เช่น Canvas" />
+            <Combobox
+              value={artworkMaterial}
+              onChange={setArtworkMaterial}
+              options={materialOptions}
+              ariaLabel="วัสดุงานศิลปะ"
+              placeholder="เลือกหรือพิมพ์เอง เช่น ผ้าใบขึงเฟรมไม้สัก"
+            />
           </Field>
           <Field label="ความกว้าง (ซม.)" error={errors.width}>
             <Input
