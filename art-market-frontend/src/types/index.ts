@@ -334,3 +334,54 @@ export interface Payment {
   payoutPaidCount?: number;
   payoutSellerCount?: number;
 }
+
+/**
+ * ใบเสนอราคาของคำสั่งซื้อ (ยูสเคส 3.1.14 View Quotation)
+ *
+ * แยกชนิดจาก Order เพราะเป็นคนละเอกสารกัน — ใบเสนอราคาบันทึก "ข้อมูลติดต่อของสองฝ่าย
+ * ณ ตอนออกเอกสาร" ซึ่ง Order ไม่ได้เก็บไว้ (เบอร์/อีเมล/ที่อยู่ผู้ขาย)
+ */
+export interface QuotationItem {
+  no: number;
+  artworkName: string;
+  sellerName?: string;
+  /** งานศิลปะเป็นงานชิ้นเดียว ระบบล็อกไว้ที่ 1 เสมอ */
+  quantity: number;
+  price: number;
+  amount: number;
+  shippingCost: number;
+  shippingCompanyName?: string;
+  availabilityStatus: AvailabilityStatus;
+}
+
+export interface Quotation {
+  orderId: string;
+  /** วันที่ออกเอกสาร (เวลาที่เปิดดู) */
+  issuedAt: string;
+  orderDate: string;
+  confirmDateTime?: string;
+
+  sellerName: string;
+  sellerAddress?: string;
+  sellerTel?: string;
+  sellerEmail?: string;
+
+  buyerName: string;
+  buyerAddress?: string;
+  buyerTel?: string;
+  buyerEmail?: string;
+  /** เลขประจำตัวผู้เสียภาษี (บุคคลธรรมดาใช้เลขบัตรประชาชน) */
+  buyerTaxId?: string;
+  shippingAddress?: string;
+
+  totalAmount: number;
+  shippingCost: number;
+  grandTotal: number;
+  payableTotalAmount: number;
+  payableShippingCost: number;
+  payableGrandTotal: number;
+  /** true = มีชิ้นที่ผู้ขายแจ้งไม่พร้อมจำหน่าย ยอดที่ต้องชำระจึงน้อยกว่ายอดเต็ม */
+  partial: boolean;
+
+  items: QuotationItem[];
+}

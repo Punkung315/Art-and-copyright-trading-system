@@ -36,6 +36,7 @@ import {
   OrderStatus,
   Payment,
   PaymentStatus,
+  Quotation,
   BankAccount,
   SellerPayout,
   ShippingCompanyCode,
@@ -355,6 +356,44 @@ interface BeOrder {
   /** มีเฉพาะตอนผู้ขายเปิดดู */
   sellerPayout?: BeSellerPayout | null;
   items: BeOrderItem[];
+}
+
+/** ใบเสนอราคา — GET /orders/{id}/quotation (ยูสเคส 3.1.14) */
+interface BeQuotationItem {
+  no: number | null;
+  artworkName: string | null;
+  sellerName: string | null;
+  quantity: number | null;
+  price: number | null;
+  amount: number | null;
+  shippingCost: number | null;
+  shippingCompanyName: string | null;
+  availabilityStatus: BeOrderItem["availabilityStatus"] | null;
+}
+
+interface BeQuotation {
+  orderId: number;
+  dateTimeNow: string;
+  orderDate: string | null;
+  confirmDateTime: string | null;
+  sellerName: string | null;
+  sellerAddress: string | null;
+  sellerTel: string | null;
+  sellerEmail: string | null;
+  buyerName: string | null;
+  buyerAddress: string | null;
+  buyerTel: string | null;
+  buyerEmail: string | null;
+  buyerTaxId: string | null;
+  shippingAddress: string | null;
+  totalAmount: number | null;
+  shippingCost: number | null;
+  grandTotal: number | null;
+  payableTotalAmount: number | null;
+  payableShippingCost: number | null;
+  payableGrandTotal: number | null;
+  partial: boolean | null;
+  items: BeQuotationItem[];
 }
 
 interface BeSellerOrder {
@@ -1732,6 +1771,59 @@ export async function getOrder(orderId: string): Promise<Order | undefined> {
   try {
     const o = await request<BeOrder>(`/orders/${orderId}`);
     return mapOrder(o);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * ใบเสนอราคาของคำสั่งซื้อ (ยูสเคส 3.1.14)
+ *
+ * backend เปิดให้เฉพาะ "ผู้ซื้อของคำสั่งซื้อนั้น" เรียกได้ — ผู้ขาย/แอดมินจะได้ error
+ * ซึ่งตรงกับหน้าเว็บที่ซ่อนปุ่มใบเสนอราคาไว้จากคนอื่นอยู่แล้ว
+ */
+export async function getQuotation(orderId: string): Promise<Quotation | undefined> {
+  try {
+    const q = await request<BeQuotation>(`/orders/${orderId}/quotation`);
+    const items = q.items ?? [];
+    const totalAmount = q.totalAmount ?? 0;
+    const shippingCost = q.shippingCost ?? 0;
+    return {
+      orderId: String(q.orderId),
+      issuedAt: q.dateTimeNow,
+      orderDate: q.orderDate ?? q.dateTimeNow,
+      confirmDateTime: q.confirmDateTime ?? undefined,
+      sellerName: q.sellerName ?? "",
+      sellerAddress: q.sellerAddress ?? undefined,
+      sellerTel: q.sellerTel ?? undefined,
+      sellerEmail: q.sellerEmail ?? undefined,
+      buyerName: q.buyerName ?? "",
+      buyerAddress: q.buyerAddress ?? undefined,
+      buyerTel: q.buyerTel ?? undefined,
+      buyerEmail: q.buyerEmail ?? undefined,
+      buyerTaxId: q.buyerTaxId ?? undefined,
+      shippingAddress: q.shippingAddress ?? undefined,
+      totalAmount,
+      shippingCost,
+      grandTotal: q.grandTotal ?? totalAmount + shippingCost,
+      // fallback ไปยอดเต็ม เผื่อ backend เวอร์ชันเก่าที่ยังไม่ส่ง field ยอด payable
+      payableTotalAmount: q.payableTotalAmount ?? totalAmount,
+      payableShippingCost: q.payableShippingCost ?? shippingCost,
+      payableGrandTotal: q.payableGrandTotal ?? totalAmount + shippingCost,
+      partial: !!q.partial,
+      items: items.map((i, index) => ({
+        no: i.no ?? index + 1,
+        artworkName: i.artworkName ?? "",
+        sellerName: i.sellerName ?? undefined,
+        quantity: i.quantity ?? 1,
+        price: i.price ?? 0,
+        amount: i.amount ?? (i.price ?? 0) * (i.quantity ?? 1),
+        shippingCost: i.shippingCost ?? 0,
+        shippingCompanyName: i.shippingCompanyName ?? undefined,
+        availabilityStatus:
+          AVAILABILITY_LINE_MAP[i.availabilityStatus ?? "PENDING_CONFIRMATION"] ?? "waiting",
+      })),
+    };
   } catch {
     return undefined;
   }

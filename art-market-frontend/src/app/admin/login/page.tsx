@@ -53,10 +53,6 @@ export default function AdminLoginPage() {
           </Button>
         </form>
 
-        <div className="mt-6 rounded-lg bg-stone-50 p-3 text-xs text-stone-500">
-          <p className="font-medium text-stone-600">บัญชีทดสอบ</p>
-          <p>admin / Admin1234!</p>
-        </div>
       </Card>
     </Container>
   );

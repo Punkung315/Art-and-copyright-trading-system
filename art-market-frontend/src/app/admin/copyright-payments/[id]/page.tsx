@@ -9,6 +9,7 @@ import { CopyrightPayment } from "@/types";
 import { Button, Card, Container, EmptyState, Spinner } from "@/components/ui";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { ZoomableImage } from "@/components/ZoomableImage";
 
 function Row({ label, value }: { label: string; value?: string | number | null }) {
   const empty = value === null || value === undefined || value === "";
@@ -29,7 +30,7 @@ function formatDate(iso?: string) {
 }
 
 /** เหมือนหน้าโอนค่าชิ้นงาน — ข้อมูลตัวอย่างเก็บสลิปเป็นชื่อไฟล์ ไม่ใช่ data URL */
-function isDisplayableImage(src?: string) {
+function isDisplayableImage(src?: string): src is string {
   return !!src && (src.startsWith("data:") || src.startsWith("http"));
 }
 
@@ -110,12 +111,12 @@ function AdminCopyrightPaymentContent({ paymentId }: { paymentId: string }) {
               หลักฐานการโอนเงิน
             </h2>
             {isDisplayableImage(payment.slipTransfer) ? (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src={payment.slipTransfer}
-                alt="หลักฐานการโอนเงิน"
-                className="max-h-96 w-full rounded-lg border border-stone-200 object-contain"
-              />
+              /*
+                ใช้ ZoomableImage ไม่ใช่ <img> เฉย ๆ — สลิปธนาคารมีตัวเลขเล็กมาก
+                (ยอดเงิน เวลา เลขอ้างอิง) ที่ผู้ดูแลระบบต้องอ่านให้ออกก่อนกดยืนยัน
+                ย่อลงมาในกรอบแล้วอ่านไม่ออก ต้องกดขยายเต็มจอได้
+              */
+              <ZoomableImage src={payment.slipTransfer} alt="หลักฐานการโอนเงิน" />
             ) : payment.slipTransfer ? (
               <p className="rounded-lg bg-stone-50 p-3 text-sm text-stone-600">
                 มีหลักฐานแนบไว้ในชื่อ{" "}

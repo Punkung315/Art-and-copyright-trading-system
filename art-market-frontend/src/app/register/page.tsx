@@ -54,13 +54,13 @@ export default function RegisterBuyerPage() {
         </p>
 
         <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
-          <Field label="ชื่อผู้ใช้ (username)" error={errors.username}>
+          <Field label="ชื่อผู้ใช้" error={errors.username}>
             <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="ชื่อผู้ใช้" />
           </Field>
-          <Field label="อีเมล (email)" error={errors.email}>
+          <Field label="อีเมล" error={errors.email}>
             <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
           </Field>
-          <Field label="รหัสผ่าน (password)" error={errors.password}>
+          <Field label="รหัสผ่าน" error={errors.password}>
             <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="รหัสผ่าน" />
           </Field>
 

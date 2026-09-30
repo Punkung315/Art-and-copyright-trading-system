@@ -114,34 +114,34 @@ function RegisterSellerContent() {
         </p>
 
         <form onSubmit={handleSubmit} className="mt-6 grid gap-4 sm:grid-cols-2">
-          <Field label="ชื่อ-นามสกุล (fullName)" error={errors.fullName}>
+          <Field label="ชื่อ-นามสกุล" error={errors.fullName}>
             <Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Firstname Lastname" />
           </Field>
-          <Field label="เบอร์โทรศัพท์ (phoneNumber)" error={errors.phoneNumber}>
+          <Field label="เบอร์โทรศัพท์" error={errors.phoneNumber}>
             <Input value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="0812345678" />
           </Field>
-          <Field label="เลขบัตรประชาชน (nationalNo)" error={errors.nationalNo}>
+          <Field label="เลขบัตรประชาชน" error={errors.nationalNo}>
             <Input value={nationalNo} onChange={(e) => setNationalNo(e.target.value)} placeholder="13 หลัก" />
           </Field>
-          <Field label="บ้านเลขที่ (houseNo)" error={errors.houseNo}>
+          <Field label="บ้านเลขที่" error={errors.houseNo}>
             <Input value={houseNo} onChange={(e) => setHouseNo(e.target.value)} />
           </Field>
-          <Field label="หมู่ที่ (villageNo)">
+          <Field label="หมู่ที่">
             <Input value={villageNo} onChange={(e) => setVillageNo(e.target.value)} />
           </Field>
-          <Field label="ถนน (thoroughfare)">
+          <Field label="ถนน">
             <Input value={thoroughfare} onChange={(e) => setThoroughfare(e.target.value)} />
           </Field>
-          <Field label="ตำบล (sub-district)" error={errors.subDistrict}>
+          <Field label="ตำบล" error={errors.subDistrict}>
             <Input value={subDistrict} onChange={(e) => setSubDistrict(e.target.value)} />
           </Field>
-          <Field label="อำเภอ (district)" error={errors.district}>
+          <Field label="อำเภอ" error={errors.district}>
             <Input value={district} onChange={(e) => setDistrict(e.target.value)} />
           </Field>
-          <Field label="จังหวัด (province)" error={errors.province}>
+          <Field label="จังหวัด" error={errors.province}>
             <Input value={province} onChange={(e) => setProvince(e.target.value)} />
           </Field>
-          <Field label="รหัสไปรษณีย์ (postalCode)" error={errors.postalCode}>
+          <Field label="รหัสไปรษณีย์" error={errors.postalCode}>
             <Input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="5 หลัก" />
           </Field>
 

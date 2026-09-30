@@ -8,6 +8,7 @@ import com.maejo.artmarket.entity.Seller;
 import com.maejo.artmarket.entity.Buyer;
 import com.maejo.artmarket.entity.Orders;
 import com.maejo.artmarket.entity.OrderItem;
+import com.maejo.artmarket.enums.AvailabilityStatus;
 import com.maejo.artmarket.enums.ShippingStatus;
 import com.maejo.artmarket.repository.BuyerRepository;
 import com.maejo.artmarket.repository.OrdersRepository;
@@ -175,27 +176,68 @@ public class OrderService {
         // ใช้ seller ของชิ้นงานแรกเป็นตัวแทน (ดูหมายเหตุข้อจำกัดของโมเดลใน QuotationResponse)
         Seller seller = order.getOrderItems().get(0).getArtwork().getSeller();
 
-        double totalAmount = order.getOrderItems().stream()
-                .mapToDouble(com.maejo.artmarket.entity.OrderItem::getPrice)
-                .sum();
+        List<OrderItem> orderItems = order.getOrderItems();
 
-        // ที่อยู่ผู้ซื้อ/ผู้ขาย — ใช้ที่อยู่แรกที่มีในระบบของแต่ละฝ่าย (ถ้ามี)
-        Address buyerAddr  = buyer.getUser().getAddresses().isEmpty()  ? null : buyer.getUser().getAddresses().get(0);
-        Address sellerAddr = seller.getUser().getAddresses().isEmpty() ? null : seller.getUser().getAddresses().get(0);
+        // ยอดของทั้งใบ
+        double totalAmount  = orderItems.stream().mapToDouble(OrderItem::getPrice).sum();
+        double shippingCost = orderItems.stream().mapToDouble(QuotationResponse::shippingOf).sum();
+
+        // ยอดที่ต้องชำระจริง — เฉพาะชิ้นที่ผู้ขายยืนยันว่าพร้อมขาย
+        // ตรรกะเดียวกับ OrderDetailResponse เพื่อให้ใบเสนอราคากับหน้าชำระเงินบอกยอดตรงกัน
+        List<OrderItem> payableItems = orderItems.stream()
+                .filter(i -> i.getAvailabilityStatus() == AvailabilityStatus.AVAILABLE)
+                .toList();
+        double payableTotal    = payableItems.stream().mapToDouble(OrderItem::getPrice).sum();
+        double payableShipping = payableItems.stream().mapToDouble(QuotationResponse::shippingOf).sum();
+
+        // ที่อยู่ผู้ซื้อ — ใช้ที่อยู่แรกในสมุดที่อยู่ (ถ้ามี)
+        Address buyerAddr = buyer.getUser().getAddresses().isEmpty()
+                ? null : buyer.getUser().getAddresses().get(0);
+
+        // ที่อยู่ผู้ขาย — เอาที่อยู่ต้นทางส่งของก่อน เพราะนั่นคือที่ที่งานถูกส่งออกมาจริง
+        // ถ้าไม่ได้ตั้งไว้ค่อยตกมาที่ที่อยู่แรกในสมุด
+        Address sellerAddr = seller.getUser().getAddresses().stream()
+                .filter(Address::isPickupAddress)
+                .findFirst()
+                .orElseGet(() -> seller.getUser().getAddresses().isEmpty()
+                        ? null : seller.getUser().getAddresses().get(0));
+
+        List<QuotationResponse.QuotationItem> items = new java.util.ArrayList<>();
+        for (int i = 0; i < orderItems.size(); i++) {
+            items.add(QuotationResponse.QuotationItem.from(orderItems.get(i), i + 1));
+        }
 
         QuotationResponse quotation = QuotationResponse.builder()
                 .orderId(order.getOrderId())
                 .dateTimeNow(java.time.LocalDateTime.now())
+                .orderDate(order.getOrderDate())
+                .confirmDateTime(order.getConfirmDateTime())
                 .sellerName(seller.getUser().getFullName())
                 .sellerAddress(QuotationResponse.formatAddress(sellerAddr))
                 .sellerTel(seller.getUser().getPhoneNumber())
                 .sellerEmail(seller.getUser().getEmail())
                 .buyerName(buyer.getUser().getFullName())
                 .buyerAddress(QuotationResponse.formatAddress(buyerAddr))
+                .buyerTel(buyer.getUser().getPhoneNumber())
+                .buyerEmail(buyer.getUser().getEmail())
+                .buyerTaxId(buyer.getUser().getNationalNo())
+                .shippingAddress(order.getShippingAddress() != null
+                        ? order.getShippingAddress().toDisplayString() : null)
                 .totalAmount(totalAmount)
-                .items(order.getOrderItems().stream()
-                        .map(QuotationResponse.QuotationItem::from)
-                        .toList())
+                .shippingCost(shippingCost)
+                .grandTotal(totalAmount + shippingCost)
+                .payableTotalAmount(payableTotal)
+                .payableShippingCost(payableShipping)
+                .payableGrandTotal(payableTotal + payableShipping)
+                /*
+                 * partial = "มีชิ้นที่ผู้ขายแจ้งว่าไม่พร้อมจำหน่าย" เท่านั้น
+                 * ห้ามนิยามว่า payableItems.size() != orderItems.size() เพราะตอนที่ผู้ขาย
+                 * ยังไม่ตอบ ทุกชิ้นเป็น PENDING_CONFIRMATION → payable = 0 ทั้งใบ
+                 * ใบเสนอราคาจะกลายเป็นยอด 0 บาท ทั้งที่ยังไม่มีใครปฏิเสธอะไรเลย
+                 */
+                .partial(orderItems.stream()
+                        .anyMatch(i -> i.getAvailabilityStatus() == AvailabilityStatus.UNAVAILABLE))
+                .items(items)
                 .build();
 
         return ApiResponse.ok("ดึงข้อมูลใบเสนอราคาสำเร็จ", quotation);
