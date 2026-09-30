@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { RequireAdmin } from "@/components/RoleGuard";
 import { listUsers } from "@/lib/api";
 import { User } from "@/types";
@@ -11,6 +12,13 @@ import { SummaryTable } from "@/components/SummaryTable";
 import { FilterChips } from "@/components/FilterChips";
 
 type UserFilter = "all" | "pending" | "approved" | "none";
+
+const USER_FILTERS: UserFilter[] = ["all", "pending", "approved", "none"];
+
+/** แปลงค่าใน URL (?filter=) เป็นตัวกรองที่รู้จัก ค่าแปลกปลอมให้ตกเป็น "ทั้งหมด" */
+function parseFilter(raw: string | null): UserFilter {
+  return USER_FILTERS.includes(raw as UserFilter) ? (raw as UserFilter) : "all";
+}
 
 const FILTER_LABEL: Record<Exclude<UserFilter, "all">, string> = {
   pending: "ผู้ขาย — รออนุมัติ",
@@ -26,8 +34,25 @@ function formatDate(iso?: string) {
 
 function AdminUsersContent() {
   const [users, setUsers] = useState<User[] | null>(null);
-  const [filter, setFilter] = useState<UserFilter>("all");
   const [keyword, setKeyword] = useState("");
+
+  /*
+    ตัวกรองเก็บไว้ที่ URL (?filter=pending) ไม่ใช่ state ในหน้า
+    เพื่อให้ลิงก์จากแดชบอร์ดพาเข้ามาที่กลุ่มที่กดได้โดยตรง และปุ่มย้อนกลับของเบราว์เซอร์ทำงานถูก
+  */
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const filter = parseFilter(searchParams.get("filter"));
+
+  const setFilter = useCallback(
+    (next: string) => {
+      const value = parseFilter(next);
+      // "ทั้งหมด" ไม่ต้องมี query string ให้รกลิงก์
+      router.replace(value === "all" ? pathname : `${pathname}?filter=${value}`, { scroll: false });
+    },
+    [pathname, router]
+  );
 
   useEffect(() => {
     listUsers().then(setUsers);
@@ -192,7 +217,10 @@ function AdminUsersContent() {
 export default function AdminUsersPage() {
   return (
     <RequireAdmin>
-      <AdminUsersContent />
+      {/* useSearchParams ต้องอยู่ใต้ Suspense ตามข้อกำหนดของ Next.js App Router */}
+      <Suspense fallback={<Spinner />}>
+        <AdminUsersContent />
+      </Suspense>
     </RequireAdmin>
   );
 }

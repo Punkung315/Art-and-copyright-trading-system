@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { RequireSeller } from "@/components/RoleGuard";
 import { useAuth } from "@/context/AuthContext";
 import { listOrdersBySeller } from "@/lib/api";
@@ -13,6 +14,13 @@ import { FilterChips } from "@/components/FilterChips";
 import { PendingBadge } from "@/components/PendingBadge";
 
 type OrderFilter = "all" | "waiting" | "to_ship" | "done";
+
+const ORDER_FILTERS: OrderFilter[] = ["all", "waiting", "to_ship", "done"];
+
+/** อ่านตัวกรองจาก URL (?filter=) — ค่าแปลกปลอมให้ตกเป็น "ทั้งหมด" */
+function parseFilter(raw: string | null): OrderFilter {
+  return ORDER_FILTERS.includes(raw as OrderFilter) ? (raw as OrderFilter) : "all";
+}
 
 /**
  * จัดกลุ่มคำสั่งซื้อตาม "สิ่งที่ผู้ขายต้องทำต่อ" ไม่ใช่ตามสถานะดิบ
@@ -33,7 +41,23 @@ const BUCKET_LABEL: Record<Exclude<OrderFilter, "all">, string> = {
 function SellerOrdersContent() {
   const { user } = useAuth();
   const [orders, setOrders] = useState<Order[] | null>(null);
-  const [filter, setFilter] = useState<OrderFilter>("all");
+
+  /*
+    ตัวกรองอยู่ที่ URL (?filter=waiting) เพื่อให้การ์ดบนหน้าพื้นที่ผู้ขายลิงก์เข้ามาที่กลุ่มนั้นได้ตรงๆ
+    และปุ่มย้อนกลับของเบราว์เซอร์ทำงานถูกต้อง
+  */
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const filter = parseFilter(searchParams.get("filter"));
+
+  const setFilter = useCallback(
+    (next: string) => {
+      const value = parseFilter(next);
+      router.replace(value === "all" ? pathname : `${pathname}?filter=${value}`, { scroll: false });
+    },
+    [pathname, router]
+  );
 
   useEffect(() => {
     if (user) listOrdersBySeller(user.id).then(setOrders);
@@ -164,7 +188,10 @@ function SellerOrdersContent() {
 export default function SellerOrdersPage() {
   return (
     <RequireSeller>
-      <SellerOrdersContent />
+      {/* useSearchParams ต้องอยู่ใต้ Suspense ตามข้อกำหนดของ Next.js App Router */}
+      <Suspense fallback={<Spinner />}>
+        <SellerOrdersContent />
+      </Suspense>
     </RequireSeller>
   );
 }

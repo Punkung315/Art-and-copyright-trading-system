@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { RequireAdmin } from "@/components/RoleGuard";
 import { listCopyrightPayments, listPayments } from "@/lib/api";
 import { PaymentStatus } from "@/types";
@@ -13,6 +14,18 @@ import { PendingBadge } from "@/components/PendingBadge";
 
 type PaymentFilter = "all" | PaymentStatus;
 type KindFilter = "all" | "artwork" | "copyright";
+
+const PAYMENT_FILTERS: PaymentFilter[] = ["all", "unpaid", "submitted", "confirmed", "rejected"];
+const KIND_FILTERS: KindFilter[] = ["all", "artwork", "copyright"];
+
+/** อ่านค่าตัวกรองจาก URL — ค่าแปลกปลอมให้ตกเป็น "ทั้งหมด" */
+function parseStatus(raw: string | null): PaymentFilter {
+  return PAYMENT_FILTERS.includes(raw as PaymentFilter) ? (raw as PaymentFilter) : "all";
+}
+
+function parseKind(raw: string | null): KindFilter {
+  return KIND_FILTERS.includes(raw as KindFilter) ? (raw as KindFilter) : "all";
+}
 
 /**
  * แถวเดียวของตาราง ไม่ว่าจะเป็นการโอนค่าชิ้นงานหรือค่าลิขสิทธิ์
@@ -64,9 +77,37 @@ function formatDate(iso?: string) {
 
 function AdminPaymentsContent() {
   const [rows, setRows] = useState<Row[] | null>(null);
-  const [filter, setFilter] = useState<PaymentFilter>("all");
-  const [kind, setKind] = useState<KindFilter>("all");
   const [keyword, setKeyword] = useState("");
+
+  /*
+    สถานะและประเภทเก็บไว้ที่ URL (?status=submitted&kind=artwork)
+    ลิงก์จากแดชบอร์ดจึงพาเข้ามาที่กลุ่มที่กดได้ตรงๆ และปุ่มย้อนกลับของเบราว์เซอร์ทำงานถูก
+  */
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const filter = parseStatus(searchParams.get("status"));
+  const kind = parseKind(searchParams.get("kind"));
+
+  const pushQuery = useCallback(
+    (nextStatus: PaymentFilter, nextKind: KindFilter) => {
+      const params = new URLSearchParams();
+      if (nextStatus !== "all") params.set("status", nextStatus);
+      if (nextKind !== "all") params.set("kind", nextKind);
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [pathname, router]
+  );
+
+  const setFilter = useCallback(
+    (next: string) => pushQuery(parseStatus(next), kind),
+    [pushQuery, kind]
+  );
+  const setKind = useCallback(
+    (next: string) => pushQuery(filter, parseKind(next)),
+    [pushQuery, filter]
+  );
 
   useEffect(() => {
     Promise.all([listPayments(), listCopyrightPayments()]).then(([orders, copyrights]) => {
@@ -309,7 +350,10 @@ function AdminPaymentsContent() {
 export default function AdminPaymentsPage() {
   return (
     <RequireAdmin>
-      <AdminPaymentsContent />
+      {/* useSearchParams ต้องอยู่ใต้ Suspense ตามข้อกำหนดของ Next.js App Router */}
+      <Suspense fallback={<Spinner />}>
+        <AdminPaymentsContent />
+      </Suspense>
     </RequireAdmin>
   );
 }

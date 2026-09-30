@@ -36,10 +36,11 @@ function SellerDashboardContent() {
     );
   }, [user]);
 
+  // กดการ์ดไหนให้เข้าไปที่กลุ่มนั้นเลย ไม่ใช่เข้าไปที่รายการทั้งหมดทุกครั้ง
   const tiles = [
     { label: "ผลงานศิลปะทั้งหมด", value: artworkCount, href: "/seller/art" },
     { label: "คำสั่งซื้อทั้งหมด", value: orderCount, href: "/seller/orders" },
-    { label: "รอยืนยันความพร้อม", value: pendingOrders, href: "/seller/orders" },
+    { label: "รอยืนยันความพร้อม", value: pendingOrders, href: "/seller/orders?filter=waiting" },
     { label: "คำขอโอนลิขสิทธิ์รอตอบ", value: copyrightCount, href: "/seller/copyright" },
   ];
 

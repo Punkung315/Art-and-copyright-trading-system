@@ -108,15 +108,20 @@ function AdminDashboardContent() {
         linkLabel="ไปที่รายการผู้ใช้งาน →"
         pending={pendingSellers}
       >
+        {/* กดการ์ดไหนให้เข้าไปที่กลุ่มนั้นเลย ไม่ใช่เข้าไปที่รายการทั้งหมดทุกครั้ง */}
         <Tile label="ผู้ใช้งานทั้งหมด" value={users.length} href="/admin/users" />
         <Tile
           label="คำร้องขอเป็นผู้ขาย (รออนุมัติ)"
           value={pendingSellers}
-          href="/admin/users"
+          href="/admin/users?filter=pending"
           highlight
         />
-        <Tile label="ผู้ขายที่อนุมัติแล้ว" value={approvedSellers} href="/admin/users" />
-        <Tile label="ผู้ซื้อ (ไม่ได้สมัครขาย)" value={buyersOnly} href="/admin/users" />
+        <Tile
+          label="ผู้ขายที่อนุมัติแล้ว"
+          value={approvedSellers}
+          href="/admin/users?filter=approved"
+        />
+        <Tile label="ผู้ซื้อ (ไม่ได้สมัครขาย)" value={buyersOnly} href="/admin/users?filter=none" />
       </Section>
 
       <Section
@@ -126,15 +131,31 @@ function AdminDashboardContent() {
         linkLabel="ไปที่รายการการโอนเงิน →"
         pending={pendingPayments.length}
       >
-        <Tile label="รายการโอนเงินทั้งหมด" value={payments.length} href="/admin/payments" />
+        {/*
+          ตัวเลขบนการ์ดนับเฉพาะการโอนค่าชิ้นงาน (listPayments ไม่รวมค่าลิขสิทธิ์)
+          จึงต้องส่ง kind=artwork ไปด้วย ไม่งั้นจำนวนในหน้ารายการจะไม่ตรงกับที่เห็นบนการ์ด
+        */}
+        <Tile
+          label="รายการโอนเงินทั้งหมด"
+          value={payments.length}
+          href="/admin/payments?kind=artwork"
+        />
         <Tile
           label="รอตรวจสอบการโอนเงิน"
           value={pendingPayments.length}
-          href="/admin/payments"
+          href="/admin/payments?kind=artwork&status=submitted"
           highlight
         />
-        <Tile label="ยืนยันแล้ว" value={confirmedPayments.length} href="/admin/payments" />
-        <Tile label="ปฏิเสธ" value={rejectedPayments.length} href="/admin/payments" />
+        <Tile
+          label="ยืนยันแล้ว"
+          value={confirmedPayments.length}
+          href="/admin/payments?kind=artwork&status=confirmed"
+        />
+        <Tile
+          label="ปฏิเสธ"
+          value={rejectedPayments.length}
+          href="/admin/payments?kind=artwork&status=rejected"
+        />
       </Section>
 
       <p className="text-sm text-stone-500">
