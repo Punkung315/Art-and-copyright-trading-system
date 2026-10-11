@@ -16,12 +16,25 @@ import { Button, Card, Container, Field, Spinner, Textarea } from "@/components/
 import { StatusBadge } from "@/components/StatusBadge";
 import { fileToDataUrl } from "@/lib/storage";
 import { SignaturePad } from "@/components/SignaturePad";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 function CopyrightDetailContent({ id }: { id: string }) {
   const { user } = useAuth();
   const { notify } = useToast();
   const [transfer, setTransfer] = useState<CopyrightTransfer | null | undefined>(undefined);
-  const [responseDetail, setResponseDetail] = useState("");
+  /** เหตุผล — ใช้เฉพาะตอนปฏิเสธ (ตอบรับไม่ต้องมี) */
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectReasonError, setRejectReasonError] = useState<string | null>(null);
+  /** true = ผู้ขายกดปฏิเสธแล้ว กำลังอยู่ในขั้นกรอกเหตุผลก่อนยืนยัน */
+  const [rejecting, setRejecting] = useState(false);
+  /**
+   * การตัดสินใจที่รอยืนยันในกล่องยืนยัน — null = ยังไม่ได้กดอะไร
+   * true = กำลังจะตอบรับ / false = กำลังจะปฏิเสธ
+   *
+   * ทั้งสองทางย้อนกลับไม่ได้: ตอบรับ = ลงนามในสัญญาโอนลิขสิทธิ์แต่เพียงผู้เดียว
+   * ปฏิเสธ = ปิดคำขอฉบับนั้นถาวร จึงถามซ้ำอีกครั้งก่อนบันทึกทั้งคู่
+   */
+  const [pendingAction, setPendingAction] = useState<boolean | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   /** ลายเซ็นของ "ผู้ที่กำลังดูหน้านี้" — ผู้ขายใช้ตอนตอบรับ ผู้ซื้อใช้ตอนลงนาม */
   const [signature, setSignature] = useState("");
@@ -48,17 +61,41 @@ function CopyrightDetailContent({ id }: { id: string }) {
   const isBuyer = user?.id === transfer.buyerId;
   const isSeller = user?.id === transfer.sellerId;
 
-  async function handleRespond(accept: boolean) {
+  /**
+   * ตรวจข้อมูลให้ครบก่อน แล้วค่อยเปิดกล่องยืนยัน
+   * ไม่เอาการตรวจไปไว้ในกล่องยืนยัน เพราะคนจะเจอ error หลังกดยืนยันไปแล้ว
+   * ซึ่งอ่านเหมือนว่า "กดยืนยันแล้วแต่ระบบไม่ทำให้"
+   */
+  function askRespond(accept: boolean) {
     // ตอบรับ = ลงนามในฐานะผู้โอน จึงต้องมีลายมือชื่อ (พ.ร.บ. ลิขสิทธิ์ ม.17)
     // ปฏิเสธไม่ต้องเซ็น เพราะไม่มีการโอนเกิดขึ้น
     if (accept && !signature) {
       setSignatureError("กรุณาแนบลายมือชื่อเพื่อยืนยันการตอบรับ");
       return;
     }
+    /*
+     * ปฏิเสธต้องบอกเหตุผล ตอบรับไม่ต้อง — ผู้ซื้อที่ถูกปฏิเสธต้องรู้ว่าเพราะอะไร
+     * จะได้แก้แล้วยื่นใหม่ได้ ส่วนการตอบรับนั้นลายมือชื่อคือคำตอบอยู่แล้ว
+     * (backend บังคับกฎเดียวกัน ไม่ได้เชื่อหน้าเว็บอย่างเดียว)
+     */
+    if (!accept && !rejectReason.trim()) {
+      setRejectReasonError("กรุณาระบุเหตุผลที่ปฏิเสธคำขอ");
+      return;
+    }
+    setPendingAction(accept);
+  }
+
+  async function handleRespond(accept: boolean) {
     setSubmitting(true);
     try {
-      await respondCopyrightTransfer(transfer!.id, accept, responseDetail, accept ? signature : undefined);
+      await respondCopyrightTransfer(
+        transfer!.id,
+        accept,
+        accept ? undefined : rejectReason.trim(),
+        accept ? signature : undefined
+      );
       await load();
+      setPendingAction(null);
       notify(accept ? "ยอมรับคำขอโอนลิขสิทธิ์แล้ว" : "ปฏิเสธคำขอโอนลิขสิทธิ์แล้ว", "success");
     } catch (err) {
       notify(err instanceof ApiError ? err.message : "ไม่สามารถบันทึกข้อมูลการต่อรองได้ กรุณาลองใหม่อีกครั้ง", "error");
@@ -148,45 +185,90 @@ function CopyrightDetailContent({ id }: { id: string }) {
 
         {transfer.responseDetail && (
           <div className="mt-4 rounded-lg bg-amber-50 p-3">
-            <p className="text-xs font-medium text-amber-800">ผู้ขายตอบกลับ</p>
+            <p className="text-xs font-medium text-amber-800">
+              {transfer.transferStatus === "rejected" ? "เหตุผลที่ผู้ขายปฏิเสธ" : "ผู้ขายตอบกลับ"}
+            </p>
             <p className="text-sm text-amber-700">{transfer.responseDetail}</p>
           </div>
         )}
 
         {isSeller && transfer.transferStatus === "requested" && (
           <div className="mt-6 flex flex-col gap-3 border-t border-stone-200 pt-5">
-            <Field label="เหตุผล / รายละเอียดการตอบกลับ">
-              <Textarea
-                rows={3}
-                value={responseDetail}
-                onChange={(e) => setResponseDetail(e.target.value)}
-                placeholder="ระบุเหตุผลในการยอมรับหรือปฏิเสธคำขอ"
-              />
-            </Field>
-            {/*
-              ลายมือชื่อผู้โอน — จำเป็นเฉพาะตอนตอบรับ
-              ตอนปฏิเสธไม่ต้องเซ็นเพราะไม่มีการโอนเกิดขึ้น
-            */}
-            <SignaturePad
-              label="ลายมือชื่อผู้โอน (จำเป็นเมื่อยอมรับคำขอ)"
-              hint="สัญญาโอนลิขสิทธิ์ต้องมีลายมือชื่อทั้งผู้โอนและผู้รับโอน"
-              value={signature}
-              onChange={(v) => {
-                setSignature(v);
-                if (v) setSignatureError(null);
-              }}
-              disabled={submitting}
-            />
-            {signatureError && <p className="text-xs text-rose-600">{signatureError}</p>}
+            {rejecting ? (
+              /*
+                ขั้นกรอกเหตุผลก่อนยืนยันการปฏิเสธ — แยกเป็นคนละขั้นกับการตอบรับ
+                ไม่ใช่ช่องเดียวที่โผล่ค้างไว้ให้ทั้งสองปุ่มใช้ร่วมกันเหมือนเดิม
+                เพราะช่องร่วมทำให้ไม่รู้ว่าตกลงต้องกรอกหรือไม่ต้องกรอกกันแน่
+              */
+              <>
+                <Field label="เหตุผลที่ปฏิเสธคำขอ" error={rejectReasonError}>
+                  <Textarea
+                    rows={3}
+                    value={rejectReason}
+                    onChange={(e) => {
+                      setRejectReason(e.target.value);
+                      if (e.target.value.trim()) setRejectReasonError(null);
+                    }}
+                    placeholder="เช่น ยังไม่ต้องการขายลิขสิทธิ์ของผลงานชิ้นนี้ / ราคาที่เสนอมายังไม่ตรงกับที่ตั้งใจไว้"
+                  />
+                </Field>
+                <p className="text-xs text-stone-500">
+                  ผู้ซื้อจะเห็นเหตุผลนี้ และนำไปใช้ตัดสินใจว่าจะยื่นคำขอใหม่หรือไม่
+                </p>
+                <div className="flex gap-3">
+                  <Button
+                    variant="danger"
+                    onClick={() => askRespond(false)}
+                    disabled={submitting}
+                    className="flex-1"
+                  >
+                    {submitting ? "กำลังบันทึก..." : "ยืนยันการปฏิเสธ"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setRejecting(false);
+                      setRejectReasonError(null);
+                    }}
+                    disabled={submitting}
+                  >
+                    ย้อนกลับ
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                {/*
+                  ลายมือชื่อผู้โอน — จำเป็นเฉพาะตอนตอบรับ
+                  ตอนปฏิเสธไม่ต้องเซ็นเพราะไม่มีการโอนเกิดขึ้น
+                */}
+                <SignaturePad
+                  label="ลายมือชื่อผู้โอน"
+                  hint="สัญญาโอนลิขสิทธิ์ต้องมีลายมือชื่อทั้งผู้โอนและผู้รับโอน — ตอบรับได้เมื่อลงลายมือชื่อแล้ว"
+                  value={signature}
+                  onChange={(v) => {
+                    setSignature(v);
+                    if (v) setSignatureError(null);
+                  }}
+                  disabled={submitting}
+                />
+                {signatureError && <p className="text-xs text-rose-600">{signatureError}</p>}
 
-            <div className="flex gap-3">
-              <Button onClick={() => handleRespond(true)} disabled={submitting} className="flex-1">
-                ยอมรับและลงนาม
-              </Button>
-              <Button variant="danger" onClick={() => handleRespond(false)} disabled={submitting} className="flex-1">
-                ปฏิเสธคำขอ
-              </Button>
-            </div>
+                <div className="flex gap-3">
+                  <Button onClick={() => askRespond(true)} disabled={submitting} className="flex-1">
+                    ยอมรับและลงนาม
+                  </Button>
+                  <Button
+                    variant="danger"
+                    onClick={() => setRejecting(true)}
+                    disabled={submitting}
+                    className="flex-1"
+                  >
+                    ปฏิเสธคำขอ
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -294,6 +376,40 @@ function CopyrightDetailContent({ id }: { id: string }) {
           </div>
         )}
       </Card>
+
+      {/*
+        ถามซ้ำก่อนบันทึกทั้งสองทาง — ทั้งคู่ย้อนกลับไม่ได้
+        ข้อความสรุป "ผลที่จะเกิดขึ้น" ไม่ใช่ถามซ้ำด้วยคำเดิม ไม่งั้นคนจะกดผ่านโดยไม่อ่าน
+      */}
+      <ConfirmDialog
+        open={pendingAction !== null}
+        destructive={pendingAction === false}
+        busy={submitting}
+        onCancel={() => setPendingAction(null)}
+        onConfirm={() => handleRespond(pendingAction === true)}
+        steps={
+          pendingAction
+            ? [
+                {
+                  title: "ยืนยันการตอบรับคำขอโอนลิขสิทธิ์?",
+                  description:
+                    `คุณกำลังลงนามโอนลิขสิทธิ์ของ "${transfer.artworkName}" ให้ ${transfer.buyerName} ` +
+                    `ในราคา ฿${transfer.price.toLocaleString()} — เป็นการโอนแต่เพียงผู้เดียวตลอดอายุการคุ้มครอง ` +
+                    "งานชิ้นนี้จะขายลิขสิทธิ์ให้ผู้อื่นอีกไม่ได้ และยกเลิกการตอบรับภายหลังไม่ได้",
+                  confirmLabel: "ยืนยันการตอบรับ",
+                },
+              ]
+            : [
+                {
+                  title: "ยืนยันการปฏิเสธคำขอ?",
+                  description:
+                    `คำขอของ ${transfer.buyerName} จะถูกปิดและเปลี่ยนเป็นสถานะปฏิเสธ ` +
+                    "ผู้ซื้อจะเห็นเหตุผลที่คุณระบุไว้ และต้องยื่นคำขอใหม่ถ้ายังต้องการซื้อลิขสิทธิ์ชิ้นนี้",
+                  confirmLabel: "ยืนยันการปฏิเสธ",
+                },
+              ]
+        }
+      />
     </Container>
   );
 }

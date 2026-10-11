@@ -27,9 +27,18 @@ export default function LoginPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await login(usernameOrEmail, password);
+      const loggedIn = await login(usernameOrEmail, password);
       notify("เข้าสู่ระบบสำเร็จ", "success");
-      router.push("/");
+      /*
+       * ผู้ขายที่อนุมัติแล้วเข้ามาเพื่อจัดการร้านของตัวเอง (ตอบความพร้อมขาย อัปเดต
+       * สถานะจัดส่ง ตอบคำขอลิขสิทธิ์) ไม่ใช่เพื่อเดินดูงานในหน้าแรก จึงพาไปแดชบอร์ดเลย
+       *
+       * คนที่ยังรออนุมัติหรือถูกปฏิเสธไปหน้าแรกตามเดิม เพราะแดชบอร์ดยังใช้ไม่ได้
+       * (RequireSeller จะขึ้นเป็นกล่องบอกสถานะแทนทั้งหน้า) — เจอหน้าตันตั้งแต่เข้าระบบ
+       */
+      const toDashboard =
+        loggedIn?.roles.includes("seller") && loggedIn.sellerStatus === "approved";
+      router.push(toDashboard ? "/seller" : "/");
     } catch (err) {
       const message = err instanceof ApiError ? err.message : "ไม่พบข้อมูลผู้ใช้";
       setError(message);

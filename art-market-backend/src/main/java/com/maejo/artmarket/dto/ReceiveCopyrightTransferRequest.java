@@ -1,14 +1,18 @@
 package com.maejo.artmarket.dto;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import lombok.Data;
 
 /**
  * DTO รับการตอบกลับของผู้ขาย (ยูสเคส 3.1.22 Receive Copyright Transfer หน้า 43-44)
+ *
  * SRS ระบุว่าผู้ขาย "ตอบรับหรือปฏิเสธ...พร้อมทำการบอกเหตุผลกลับไปหาผู้ซื้อ (detail)"
- * detail จึงบังคับกรอกทั้งสองกรณี (ตอบรับก็บอกเหตุผล/เงื่อนไข ปฏิเสธก็บอกเหตุผล)
+ * แต่เหตุผลมีความหมายจริงเฉพาะตอน "ปฏิเสธ" เท่านั้น — ผู้ซื้อต้องรู้ว่าทำไมถึงไม่ได้
+ * และควรแก้อะไรถ้าจะยื่นใหม่ ส่วนการตอบรับนั้นตัวการลงนามคือคำตอบอยู่แล้ว
+ * การบังคับให้พิมพ์เหตุผลตอนตอบรับได้ผลเป็นข้อความขอไปทีอย่าง "ตกลง" ซึ่งไม่ช่วยใคร
+ *
+ * detail จึงบังคับเฉพาะตอนปฏิเสธ (ตรวจในเซอร์วิสด้วยเหตุผลเดียวกับ signature ด้านล่าง)
  */
 @Data
 public class ReceiveCopyrightTransferRequest {
@@ -16,7 +20,13 @@ public class ReceiveCopyrightTransferRequest {
     @NotNull(message = "กรุณาระบุการตัดสินใจ (true=ตอบรับ, false=ปฏิเสธ)")
     private Boolean approved;
 
-    @NotBlank(message = "กรุณากรอกรายละเอียดการต่อรอง")
+    /**
+     * เหตุผลที่ตอบกลับ — บังคับเมื่อ approved = false (ตรวจในเซอร์วิส ไม่ใช่ที่นี่)
+     *
+     * เหตุผลเดียวกับ signature: bean validation ไม่รู้จักเงื่อนไข
+     * "บังคับเฉพาะเมื่ออีก field เป็นค่าหนึ่ง" ถ้าใส่ @NotBlank ตรงนี้
+     * จะกลายเป็นบังคับทั้งสองกรณีเหมือนเดิม
+     */
     private String detail;
 
     /**

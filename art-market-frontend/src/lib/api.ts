@@ -2108,7 +2108,8 @@ export async function getCopyrightTransfer(
 export async function respondCopyrightTransfer(
   id: string,
   accept: boolean,
-  responseDetail: string,
+  /** เหตุผล — จำเป็นเมื่อปฏิเสธ ไม่ต้องส่งเมื่อตอบรับ (backend บังคับกฎเดียวกัน) */
+  responseDetail?: string,
   /** ลายมือชื่อผู้โอน — จำเป็นเมื่อตอบรับ (backend บังคับกฎเดียวกัน) */
   signature?: string
 ): Promise<CopyrightTransfer> {

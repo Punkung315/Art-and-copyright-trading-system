@@ -337,6 +337,13 @@ public class CopyrightTransferService {
             return ApiResponse.error("กรุณาแนบลายมือชื่อของผู้โอนเพื่อยืนยันการตอบรับ");
         }
 
+        // ปฏิเสธต้องบอกเหตุผลเสมอ — ผู้ซื้อจ่ายค่าลิขสิทธิ์เป็นหลักหมื่นหลักแสน
+        // การถูกปฏิเสธเฉย ๆ โดยไม่รู้สาเหตุทำให้ยื่นใหม่ให้ถูกต้องไม่ได้
+        // ส่วนการตอบรับไม่ต้องมีเหตุผล (ดูหมายเหตุใน ReceiveCopyrightTransferRequest)
+        if (!req.getApproved() && (req.getDetail() == null || req.getDetail().isBlank())) {
+            return ApiResponse.error("กรุณาระบุเหตุผลที่ปฏิเสธคำขอ");
+        }
+
         // งานชิ้นนี้ต้องยังไม่ถูกขายลิขสิทธิ์ให้ใคร — เช็คซ้ำที่นี่ด้วย
         //
         // ตอนยื่นคำขอเช็คไปแล้วรอบหนึ่ง แต่ระหว่างที่คำขอนี้รอผู้ขายตอบ
@@ -351,7 +358,10 @@ public class CopyrightTransferService {
         }
 
         try {
-            transfer.setSellerResponseDetail(req.getDetail());
+            // ตอบรับแล้วไม่มีเหตุผลก็ไม่ต้องเก็บสตริงว่างไว้ — หน้าเว็บเช็คว่า "มีข้อความไหม"
+            // เพื่อตัดสินว่าจะโชว์กล่อง "ผู้ขายตอบกลับ" ถ้าเก็บ "" ไว้กล่องจะโผล่มาว่างเปล่า
+            String detail = req.getDetail() == null || req.getDetail().isBlank() ? null : req.getDetail().trim();
+            transfer.setSellerResponseDetail(detail);
             if (req.getApproved()) {
                 transfer.setSellerSignature(req.getSignature());
                 transfer.setSellerSignedDate(LocalDateTime.now());

@@ -16,7 +16,14 @@ interface AuthContextValue {
   user: User | null;
   admin: Admin | null;
   loading: boolean;
-  login: (usernameOrEmail: string, password: string) => Promise<void>;
+  /**
+   * เข้าสู่ระบบ — คืนผู้ใช้ที่เพิ่งเข้าสู่ระบบกลับไปด้วย (null = เป็นผู้ดูแลระบบ)
+   *
+   * หน้า login ต้องใช้ค่านี้ตัดสินว่าจะพาไปหน้าไหนต่อ และต้องอ่านจากค่าที่คืนมาตรง ๆ
+   * ไม่ใช่จาก state `user` เพราะ state เพิ่งถูก set ในจังหวะเดียวกัน
+   * ตัวแปร user ที่ handler มองเห็นยังเป็นค่าเก่าของ render รอบนั้นอยู่
+   */
+  login: (usernameOrEmail: string, password: string) => Promise<User | null>;
   register: (input: RegisterBuyerInput) => Promise<void>;
   logout: () => void;
   refresh: () => Promise<void>;
@@ -52,21 +59,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  async function login(usernameOrEmail: string, password: string) {
+  async function login(usernameOrEmail: string, password: string): Promise<User | null> {
     const result = await loginUser(usernameOrEmail, password);
     if (result.kind === "user") {
       setUserState(result.user);
       setAdmin(null);
       writeStorage(SESSION_KEY, { kind: "user", id: result.user.id });
-    } else {
-      setAdmin(result.admin);
-      setUserState(null);
-      writeStorage(SESSION_KEY, {
-        kind: "admin",
-        id: result.admin.id,
-        username: result.admin.username,
-      });
+      return result.user;
     }
+    setAdmin(result.admin);
+    setUserState(null);
+    writeStorage(SESSION_KEY, {
+      kind: "admin",
+      id: result.admin.id,
+      username: result.admin.username,
+    });
+    return null;
   }
 
   async function register(input: RegisterBuyerInput) {
