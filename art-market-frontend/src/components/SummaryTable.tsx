@@ -103,7 +103,7 @@ export function SummaryTable({
                   <td className="px-4 py-2 text-right font-medium text-stone-900">{r.count}</td>
                   {hasAmount && (
                     <td className="px-4 py-2 text-right text-stone-700">
-                      {r.amount === undefined ? "—" : `฿${r.amount.toLocaleString()}`}
+                      {r.amount === undefined ? "—" : `${r.amount.toLocaleString()} บาท`}
                     </td>
                   )}
                 </tr>
@@ -118,7 +118,7 @@ export function SummaryTable({
               <td className="px-4 py-2">{totalLabel}</td>
               <td className="px-4 py-2 text-right">{totalCount}</td>
               {hasAmount && (
-                <td className="px-4 py-2 text-right">฿{totalAmount.toLocaleString()}</td>
+                <td className="px-4 py-2 text-right">{totalAmount.toLocaleString()} บาท</td>
               )}
             </tr>
           </tbody>

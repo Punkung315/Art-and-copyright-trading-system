@@ -141,7 +141,7 @@ function AddArtContent() {
         <form onSubmit={handleSubmit} className="mt-6 grid gap-4 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <ImageUploadField
-              label="รูปผลงาน (artworkImage)"
+              label="รูปผลงาน"
               value={artworkImage}
               onChange={(dataUrl) => {
                 setArtworkImage(dataUrl);
@@ -154,10 +154,10 @@ function AddArtContent() {
             )}
           </div>
 
-          <Field label="ชื่อผลงาน (artworkName)" error={errors.artworkName}>
+          <Field label="ชื่อผลงาน" error={errors.artworkName}>
             <Input value={artworkName} onChange={(e) => setArtworkName(e.target.value)} />
           </Field>
-          <Field label="ประเภทงานศิลปะ (artworkType)" error={errors.artworkType}>
+          <Field label="ประเภทงานศิลปะ" error={errors.artworkType}>
             <Select value={artworkType} onChange={(e) => setArtworkType(e.target.value)}>
               {ARTWORK_TYPES.map((t) => (
                 <option key={t} value={t}>
@@ -166,7 +166,7 @@ function AddArtContent() {
               ))}
             </Select>
           </Field>
-          <Field label="สไตล์งานศิลปะ (artworkStyle)" error={errors.artworkStyle}>
+          <Field label="สไตล์งานศิลปะ" error={errors.artworkStyle}>
             <Combobox
               value={artworkStyle}
               onChange={setArtworkStyle}
@@ -175,7 +175,7 @@ function AddArtContent() {
               placeholder="เลือกหรือพิมพ์เอง เช่น ล้านนาร่วมสมัย"
             />
           </Field>
-          <Field label="เทคนิคงานศิลปะ (artworkMediums)" error={errors.artworkMediums}>
+          <Field label="เทคนิคงานศิลปะ" error={errors.artworkMediums}>
             <Combobox
               value={artworkMediums}
               onChange={setArtworkMediums}
@@ -184,7 +184,7 @@ function AddArtContent() {
               placeholder="เลือกหรือพิมพ์เอง เช่น สีอะคริลิกผสมใบไม้แห้ง"
             />
           </Field>
-          <Field label="วัสดุงานศิลปะ (artworkMaterial)">
+          <Field label="วัสดุงานศิลปะ">
             <Combobox
               value={artworkMaterial}
               onChange={setArtworkMaterial}
@@ -234,7 +234,7 @@ function AddArtContent() {
               placeholder="เช่น 2.5"
             />
           </Field>
-          <Field label="ราคา (price)" error={errors.price}>
+          <Field label="ราคา (บาท)" error={errors.price}>
             <Input type="number" min={0} value={price} onChange={(e) => setPrice(e.target.value)} />
           </Field>
 
@@ -260,7 +260,7 @@ function AddArtContent() {
           />
 
           <div className="sm:col-span-2">
-            <Field label="คำอธิบายงานศิลปะ (description)" error={errors.description}>
+            <Field label="คำอธิบายงานศิลปะ" error={errors.description}>
               <Textarea rows={4} value={description} onChange={(e) => setDescription(e.target.value)} />
             </Field>
           </div>

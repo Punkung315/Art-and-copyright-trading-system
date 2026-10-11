@@ -160,12 +160,12 @@ function AdminDashboardContent() {
 
       <p className="text-sm text-stone-500">
         ยอดเงินที่ยืนยันแล้วทั้งหมด{" "}
-        <span className="font-semibold text-stone-900">฿{confirmedAmount.toLocaleString()}</span>
+        <span className="font-semibold text-stone-900">{confirmedAmount.toLocaleString()} บาท</span>
         {pendingPayments.length > 0 && (
           <>
             {" · "}รอตรวจสอบอีก{" "}
             <span className="font-semibold text-amber-700">
-              ฿{pendingPayments.reduce((s, p) => s + p.grandTotal, 0).toLocaleString()}
+              {pendingPayments.reduce((s, p) => s + p.grandTotal, 0).toLocaleString()} บาท
             </span>
           </>
         )}

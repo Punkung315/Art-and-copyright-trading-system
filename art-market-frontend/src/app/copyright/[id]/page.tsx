@@ -169,7 +169,7 @@ function CopyrightDetailContent({ id }: { id: string }) {
         <div className="grid grid-cols-2 gap-4 rounded-lg bg-stone-50 p-4 text-sm">
           <div>
             <p className="text-stone-500">ราคาลิขสิทธิ์</p>
-            <p className="font-medium text-stone-800">฿{transfer.price.toLocaleString()}</p>
+            <p className="font-medium text-stone-800">{transfer.price.toLocaleString()} บาท</p>
           </div>
           <div>
             <p className="text-stone-500">วันที่ยื่นคำขอ</p>
@@ -316,7 +316,7 @@ function CopyrightDetailContent({ id }: { id: string }) {
             <span className="font-medium">
               {transfer.paymentStatus === "confirmed" && (
                 <span className="text-emerald-700">
-                  ชำระแล้ว ฿{(transfer.paidAmount ?? transfer.price).toLocaleString()}
+                  ชำระแล้ว {(transfer.paidAmount ?? transfer.price).toLocaleString()} บาท
                 </span>
               )}
               {transfer.paymentStatus === "submitted" && (
@@ -348,7 +348,7 @@ function CopyrightDetailContent({ id }: { id: string }) {
                 <Button>
                   {transfer.paymentStatus === "rejected"
                     ? "อัปโหลดสลิปใหม่อีกครั้ง"
-                    : `ชำระค่าลิขสิทธิ์ ฿${transfer.price.toLocaleString()}`}
+                    : `ชำระค่าลิขสิทธิ์ ${transfer.price.toLocaleString()} บาท`}
                 </Button>
               </Link>
             )}
@@ -436,7 +436,7 @@ function CopyrightDetailContent({ id }: { id: string }) {
                   title: "ยืนยันการตอบรับคำขอโอนลิขสิทธิ์?",
                   description:
                     `คุณกำลังลงนามโอนลิขสิทธิ์ของ "${transfer.artworkName}" ให้ ${transfer.buyerName} ` +
-                    `ในราคา ฿${transfer.price.toLocaleString()} — เป็นการโอนแต่เพียงผู้เดียวตลอดอายุการคุ้มครอง ` +
+                    `ในราคา ${transfer.price.toLocaleString()} บาท — เป็นการโอนแต่เพียงผู้เดียวตลอดอายุการคุ้มครอง ` +
                     "งานชิ้นนี้จะขายลิขสิทธิ์ให้ผู้อื่นอีกไม่ได้ และยกเลิกการตอบรับภายหลังไม่ได้",
                   confirmLabel: "ยืนยันการตอบรับ",
                 },

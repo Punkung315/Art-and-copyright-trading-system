@@ -69,10 +69,10 @@ export function CopyrightPriceField({
               {computed > 0 ? (
                 <>
                   <p className="mt-1 text-xl font-bold text-stone-900">
-                    ฿{computed.toLocaleString()}
+                    {computed.toLocaleString()} บาท
                   </p>
                   <p className="mt-1 text-xs text-stone-500">
-                    คำนวณจากราคาขาย ฿{(price ?? 0).toLocaleString()} x{" "}
+                    คำนวณจากราคาขาย {(price ?? 0).toLocaleString()} บาท x{" "}
                     {COPYRIGHT_PRICE_MULTIPLIER} — แก้ราคาขายแล้วราคานี้จะขยับตามให้เอง
                   </p>
                 </>

@@ -82,7 +82,7 @@ function CopyrightPaymentContent({ id }: { id: string }) {
           </div>
           <div className="flex justify-between border-t border-stone-200 pt-2 text-base font-semibold">
             <span>ยอดที่ต้องชำระ</span>
-            <span>฿{preview.amount.toLocaleString()}</span>
+            <span>{preview.amount.toLocaleString()} บาท</span>
           </div>
         </div>
 
@@ -106,7 +106,7 @@ function CopyrightPaymentContent({ id }: { id: string }) {
         ) : (
           <>
             <div className="mt-6">
-              <p className="mb-2 text-sm font-medium text-stone-700">แนบหลักฐานการโอนเงิน (slip)</p>
+              <p className="mb-2 text-sm font-medium text-stone-700">แนบหลักฐานการโอนเงิน</p>
               <input
                 type="file"
                 accept="image/png,image/jpeg"

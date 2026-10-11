@@ -70,20 +70,20 @@ function PaymentContent({ id }: { id: string }) {
         <div className="mt-6 flex flex-col gap-2 rounded-lg bg-stone-50 p-4 text-sm">
           <div className="flex justify-between">
             <span className="text-stone-500">ราคารวมชิ้นงาน</span>
-            <span>฿{order.payableTotalAmount.toLocaleString()}</span>
+            <span>{order.payableTotalAmount.toLocaleString()} บาท</span>
           </div>
           <div className="flex justify-between">
             <span className="text-stone-500">ค่าจัดส่ง</span>
-            <span>฿{order.payableShippingCost.toLocaleString()}</span>
+            <span>{order.payableShippingCost.toLocaleString()} บาท</span>
           </div>
           <div className="flex justify-between border-t border-stone-200 pt-2 text-base font-semibold">
             <span>ยอดที่ต้องชำระ</span>
-            <span>฿{order.payableGrandTotal.toLocaleString()}</span>
+            <span>{order.payableGrandTotal.toLocaleString()} บาท</span>
           </div>
           {order.payableGrandTotal !== order.grandTotal && (
             <p className="text-xs text-stone-500">
-              ไม่รวมผลงานที่ผู้ขายแจ้งว่าไม่พร้อมจำหน่าย (ยอดเต็มของคำสั่งซื้อคือ ฿
-              {order.grandTotal.toLocaleString()})
+              ไม่รวมผลงานที่ผู้ขายแจ้งว่าไม่พร้อมจำหน่าย (ยอดเต็มของคำสั่งซื้อคือ
+              {order.grandTotal.toLocaleString()} บาท)
             </p>
           )}
         </div>
@@ -97,7 +97,7 @@ function PaymentContent({ id }: { id: string }) {
         )}
 
         <div className="mt-6">
-          <p className="mb-2 text-sm font-medium text-stone-700">แนบหลักฐานการโอนเงิน (slip)</p>
+          <p className="mb-2 text-sm font-medium text-stone-700">แนบหลักฐานการโอนเงิน</p>
           <input
             type="file"
             accept="image/png,image/jpeg"

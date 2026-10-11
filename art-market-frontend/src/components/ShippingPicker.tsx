@@ -109,7 +109,7 @@ export function ShippingPicker({
                     จึงโชว์ขีดแทน
                   */}
                   <span className="shrink-0 font-semibold text-stone-900">
-                    {o.available ? `฿${o.cost.toLocaleString()}` : "—"}
+                    {o.available ? `${o.cost.toLocaleString()} บาท` : "—"}
                   </span>
                 </label>
               );

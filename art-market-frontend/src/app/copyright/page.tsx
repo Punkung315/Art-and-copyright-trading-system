@@ -41,7 +41,7 @@ function CopyrightListContent() {
                   <p className="text-xs text-stone-500">ผู้ขาย: {t.sellerName}</p>
                 </div>
                 <div className="text-right">
-                  <p className="mb-1 text-sm font-semibold text-stone-900">฿{t.price.toLocaleString()}</p>
+                  <p className="mb-1 text-sm font-semibold text-stone-900">{t.price.toLocaleString()} บาท</p>
                   <StatusBadge status={t.transferStatus} domain="transfer" />
                 </div>
               </Card>

@@ -98,7 +98,7 @@ export default function ArtDetailPage({ params }: { params: Promise<{ id: string
           </div>
         </div>
 
-        <p className="text-3xl font-bold text-stone-900">฿{artwork.price.toLocaleString()}</p>
+        <p className="text-3xl font-bold text-stone-900">{artwork.price.toLocaleString()} บาท</p>
 
         {/*
           แถบสถานะ — ขึ้นเฉพาะตอนที่ซื้อไม่ได้ ไม่มีแถบ "พร้อมจำหน่าย"
@@ -161,7 +161,7 @@ export default function ArtDetailPage({ params }: { params: Promise<{ id: string
               <>
                 {" "}· ค่าจัดส่งประมาณ{" "}
                 <span className="font-medium text-stone-800">
-                  ฿{artwork.shippingCostEstimate.toLocaleString()}
+                  {artwork.shippingCostEstimate.toLocaleString()} บาท
                 </span>
               </>
             )}
@@ -205,7 +205,7 @@ export default function ArtDetailPage({ params }: { params: Promise<{ id: string
                 ) : (
                   <Link href={user ? `/copyright/new/${artwork.id}` : "/login"}>
                     <Button variant="secondary">
-                      ขอซื้อลิขสิทธิ์ (฿{(artwork.copyrightPrice ?? 0).toLocaleString()})
+                      ขอซื้อลิขสิทธิ์ ({(artwork.copyrightPrice ?? 0).toLocaleString()} บาท)
                     </Button>
                   </Link>
                 ))

@@ -176,9 +176,9 @@ function AdminPaymentDetailContent({ paymentId }: { paymentId: string }) {
                   : undefined
               }
             />
-            <Row label="ค่าชิ้นงานรวม" value={`฿${payment.totalPrice.toLocaleString()}`} />
-            <Row label="ค่าจัดส่ง" value={`฿${payment.shippingCost.toLocaleString()}`} />
-            <Row label="ยอดสุทธิที่ต้องโอน" value={`฿${payment.grandTotal.toLocaleString()}`} />
+            <Row label="ค่าชิ้นงานรวม" value={`${payment.totalPrice.toLocaleString()} บาท`} />
+            <Row label="ค่าจัดส่ง" value={`${payment.shippingCost.toLocaleString()} บาท`} />
+            <Row label="ยอดสุทธิที่ต้องโอน" value={`${payment.grandTotal.toLocaleString()} บาท`} />
             {excluded.length > 0 && (
               <p className="mt-3 rounded-lg bg-stone-100 px-3 py-2 text-xs leading-relaxed text-stone-600">
                 ยอดข้างต้นไม่รวมผลงาน {excluded.length} ชิ้นที่ผู้ขายแจ้งว่าไม่พร้อมจำหน่าย
@@ -239,17 +239,17 @@ function AdminPaymentDetailContent({ paymentId }: { paymentId: string }) {
                             )}
                           </td>
                           <td className={`py-2 text-right ${strike}`}>
-                            ฿{i.price.toLocaleString()}
+                            {i.price.toLocaleString()} บาท
                           </td>
                           <td className={`py-2 text-right ${strike}`}>
-                            ฿{(i.shippingCost ?? 0).toLocaleString()}
+                            {(i.shippingCost ?? 0).toLocaleString()} บาท
                           </td>
                           <td
                             className={`py-2 text-right font-semibold ${
                               notCharged ? "text-stone-400" : "text-stone-900"
                             }`}
                           >
-                            ฿{(i.chargedPrice + i.chargedShipping).toLocaleString()}
+                            {(i.chargedPrice + i.chargedShipping).toLocaleString()} บาท
                           </td>
                         </tr>
                       );
@@ -258,10 +258,10 @@ function AdminPaymentDetailContent({ paymentId }: { paymentId: string }) {
                       <td className="py-2" colSpan={3}>
                         รวมที่เรียกเก็บ
                       </td>
-                      <td className="py-2 text-right">฿{itemSum.toLocaleString()}</td>
-                      <td className="py-2 text-right">฿{shippingSum.toLocaleString()}</td>
+                      <td className="py-2 text-right">{itemSum.toLocaleString()} บาท</td>
+                      <td className="py-2 text-right">{shippingSum.toLocaleString()} บาท</td>
                       <td className="py-2 text-right">
-                        ฿{(itemSum + shippingSum).toLocaleString()}
+                        {(itemSum + shippingSum).toLocaleString()} บาท
                       </td>
                     </tr>
                     {/* บรรทัดนี้คือตัวเลขที่ต้องตรงกับสลิป — เน้นให้เห็นชัดกว่าบรรทัดอื่น */}
@@ -270,7 +270,7 @@ function AdminPaymentDetailContent({ paymentId }: { paymentId: string }) {
                         ยอดสุทธิที่ผู้ซื้อต้องโอน
                       </td>
                       <td className="py-2 text-right text-base font-bold text-stone-900">
-                        ฿{payment.grandTotal.toLocaleString()}
+                        {payment.grandTotal.toLocaleString()} บาท
                       </td>
                     </tr>
                   </tbody>
@@ -281,7 +281,7 @@ function AdminPaymentDetailContent({ paymentId }: { paymentId: string }) {
             {excluded.length > 0 && (
               <p className="mt-3 rounded-lg bg-stone-100 p-3 text-xs leading-relaxed text-stone-600">
                 ผลงานที่ขีดฆ่าไว้คือชิ้นที่ผู้ขายแจ้งว่าไม่พร้อมจำหน่าย
-                ระบบตัดออกจากยอดที่เรียกเก็บแล้วตั้งแต่ตอนที่ผู้ซื้อชำระเงิน จึงคิดเป็น ฿0
+                ระบบตัดออกจากยอดที่เรียกเก็บแล้วตั้งแต่ตอนที่ผู้ซื้อชำระเงิน จึงคิดเป็น 0 บาท
               </p>
             )}
 
@@ -292,8 +292,8 @@ function AdminPaymentDetailContent({ paymentId }: { paymentId: string }) {
             */}
             {mismatch && (
               <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
-                ยอดรวมที่เรียกเก็บ + ค่าจัดส่ง = ฿{expected.toLocaleString()} ซึ่งไม่ตรงกับยอดสุทธิ ฿
-                {payment.grandTotal.toLocaleString()} — ตรวจสอบก่อนยืนยัน
+                ยอดรวมที่เรียกเก็บ + ค่าจัดส่ง = {expected.toLocaleString()} บาท
+                ซึ่งไม่ตรงกับยอดสุทธิ {payment.grandTotal.toLocaleString()} บาท — ตรวจสอบก่อนยืนยัน
               </p>
             )}
           </Card>
@@ -381,7 +381,7 @@ function AdminPaymentDetailContent({ paymentId }: { paymentId: string }) {
                       <div className="text-right">
                         <p className="text-xs text-stone-500">ยอดที่ต้องโอน</p>
                         <p className="text-lg font-semibold text-stone-900">
-                          ฿{p.amount.toLocaleString()}
+                          {p.amount.toLocaleString()} บาท
                         </p>
                       </div>
                     </div>
@@ -481,7 +481,7 @@ function AdminPaymentDetailContent({ paymentId }: { paymentId: string }) {
                 ตรวจสอบการโอนเงิน
               </h2>
               <p className="mb-4 text-sm text-stone-500">
-                เทียบสลิปกับยอดสุทธิ ฿{payment.grandTotal.toLocaleString()} ก่อนตัดสินใจ
+                เทียบสลิปกับยอดสุทธิ {payment.grandTotal.toLocaleString()} บาท ก่อนตัดสินใจ
               </p>
               <div className="flex gap-2">
                 <Button disabled={busy} onClick={() => setPendingAction(true)} className="flex-1">
@@ -521,14 +521,14 @@ function AdminPaymentDetailContent({ paymentId }: { paymentId: string }) {
                 {
                   title: "ยืนยันการโอนเงินนี้?",
                   description:
-                    `ตรวจสลิปตรงกับยอดสุทธิ ฿${payment.grandTotal.toLocaleString()} แล้วใช่ไหม ` +
+                    `ตรวจสลิปตรงกับยอดสุทธิ ${payment.grandTotal.toLocaleString()} บาท แล้วใช่ไหม ` +
                     "เมื่อยืนยันแล้วจะแก้ไขไม่ได้อีก",
                   confirmLabel: "ตรวจแล้ว ไปขั้นถัดไป",
                 },
                 {
                   title: "ยืนยันครั้งสุดท้าย",
                   description:
-                    `ระบบจะบันทึกว่าได้รับเงิน ฿${payment.grandTotal.toLocaleString()} ` +
+                    `ระบบจะบันทึกว่าได้รับเงิน ${payment.grandTotal.toLocaleString()} บาท ` +
                     `จาก ${payment.buyerName || "ผู้ซื้อ"} ` +
                     `และปล่อยให้ ${payment.sellerName || "ผู้ขาย"} จัดส่งสินค้าได้ทันที`,
                   confirmLabel: "ยืนยันการโอนเงิน",
@@ -563,7 +563,7 @@ function AdminPaymentDetailContent({ paymentId }: { paymentId: string }) {
           {
             title: "ยืนยันการโอนเงินให้ผู้ขาย?",
             description:
-              `ตรวจสลิปว่าโอนยอด ฿${payingSeller?.amount.toLocaleString() ?? ""} ` +
+              `ตรวจสลิปว่าโอนยอด ${payingSeller?.amount.toLocaleString() ?? ""} บาท ` +
               `เข้าบัญชี ${payingSeller?.bankName ?? ""} ${formatBankAccountNumber(payingSeller?.bankAccountNumber)} ` +
               `(${payingSeller?.bankAccountName ?? ""}) ถูกต้องแล้วใช่ไหม`,
             confirmLabel: "ตรวจแล้ว ไปขั้นถัดไป",
@@ -571,7 +571,7 @@ function AdminPaymentDetailContent({ paymentId }: { paymentId: string }) {
           {
             title: "ยืนยันครั้งสุดท้าย",
             description:
-              `ระบบจะบันทึกว่าโอนเงิน ฿${payingSeller?.amount.toLocaleString() ?? ""} ` +
+              `ระบบจะบันทึกว่าโอนเงิน ${payingSeller?.amount.toLocaleString() ?? ""} บาท ` +
               `ให้ ${payingSeller?.sellerName || "ผู้ขาย"} แล้ว และส่งสลิปให้ผู้ขายดู — แก้ไขไม่ได้อีก`,
             confirmLabel: "บันทึกการโอนเงิน",
           },

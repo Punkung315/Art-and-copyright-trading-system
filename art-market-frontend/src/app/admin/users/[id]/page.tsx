@@ -108,14 +108,14 @@ function AdminUserDetailContent({ userId }: { userId: string }) {
             backend ไม่ส่ง password มาให้ตั้งแต่ต้นทาง (UserDetailResponse) —
             ต่อให้เผลอเรนเดอร์ที่นี่ก็ไม่มีค่าให้แสดง เป็นการกันสองชั้น
           */}
-          <Row label="ชื่อผู้ใช้ (username)" value={user.username} />
+          <Row label="ชื่อผู้ใช้" value={user.username} />
           <Row label="ชื่อ-นามสกุล" value={user.fullName} />
           <Row label="อีเมล" value={user.email} />
           <Row label="เบอร์โทรศัพท์" value={user.phoneNumber} />
           <Row label="เลขบัตรประชาชน" value={user.nationalNo} />
           <Row label="บทบาท" value={user.roles.join(", ")} />
-          <Row label="รหัสผู้ขาย (seller_id)" value={user.sellerId} />
-          <Row label="รหัสผู้ซื้อ (buyer_id)" value={user.buyerId} />
+          <Row label="รหัสผู้ขาย" value={user.sellerId} />
+          <Row label="รหัสผู้ซื้อ" value={user.buyerId} />
           <Row label="วันที่สมัครสมาชิก" value={formatDate(user.createdAt)} />
 
           {isSeller && (

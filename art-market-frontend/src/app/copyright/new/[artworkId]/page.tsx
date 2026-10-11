@@ -125,7 +125,7 @@ function SendCopyrightContent({ artworkId }: { artworkId: string }) {
           <div>
             <h1 className="font-serif text-xl font-bold text-stone-900">ส่งคำขอโอนลิขสิทธิ์</h1>
             <p className="text-sm text-stone-500">
-              {artwork.artworkName} · ราคาลิขสิทธิ์ ฿{(artwork.copyrightPrice ?? 0).toLocaleString()}
+              {artwork.artworkName} · ราคาลิขสิทธิ์ {(artwork.copyrightPrice ?? 0).toLocaleString()} บาท
             </p>
           </div>
         </div>

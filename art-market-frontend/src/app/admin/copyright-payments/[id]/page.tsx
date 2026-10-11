@@ -103,7 +103,7 @@ function AdminCopyrightPaymentContent({ paymentId }: { paymentId: string }) {
             <Row label="รหัสสัญญาโอนลิขสิทธิ์" value={payment.copyrightId} />
             <Row label="ผลงาน" value={payment.artworkName} />
             <Row label="วันที่แจ้งโอน" value={formatDate(payment.paymentDate)} />
-            <Row label="ยอดที่ต้องโอน" value={`฿${payment.amount.toLocaleString()}`} />
+            <Row label="ยอดที่ต้องโอน" value={`${payment.amount.toLocaleString()} บาท`} />
           </Card>
 
           <Card className="p-5">
@@ -154,7 +154,7 @@ function AdminCopyrightPaymentContent({ paymentId }: { paymentId: string }) {
                 ตรวจสอบการโอนเงิน
               </h2>
               <p className="mb-4 text-sm text-stone-500">
-                เทียบสลิปกับยอด ฿{payment.amount.toLocaleString()} ก่อนตัดสินใจ
+                เทียบสลิปกับยอด {payment.amount.toLocaleString()} บาท ก่อนตัดสินใจ
               </p>
               <div className="flex gap-2">
                 <Button disabled={busy} onClick={() => setPendingAction(true)} className="flex-1">
@@ -190,14 +190,14 @@ function AdminCopyrightPaymentContent({ paymentId }: { paymentId: string }) {
                 {
                   title: "ยืนยันการชำระค่าลิขสิทธิ์นี้?",
                   description:
-                    `ตรวจสลิปตรงกับยอด ฿${payment.amount.toLocaleString()} แล้วใช่ไหม ` +
+                    `ตรวจสลิปตรงกับยอด ${payment.amount.toLocaleString()} บาท แล้วใช่ไหม ` +
                     "เมื่อยืนยันแล้วจะแก้ไขไม่ได้อีก",
                   confirmLabel: "ตรวจแล้ว ไปขั้นถัดไป",
                 },
                 {
                   title: "ยืนยันครั้งสุดท้าย",
                   description:
-                    `ระบบจะบันทึกว่าได้รับเงิน ฿${payment.amount.toLocaleString()} ` +
+                    `ระบบจะบันทึกว่าได้รับเงิน ${payment.amount.toLocaleString()} บาท ` +
                     `จาก ${payment.buyerName || "ผู้ซื้อ"} ` +
                     `และเปิดให้ลงนามรับโอนลิขสิทธิ์ผลงาน "${payment.artworkName}" ได้ทันที`,
                   confirmLabel: "ยืนยันการโอนเงิน",

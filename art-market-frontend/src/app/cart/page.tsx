@@ -45,7 +45,7 @@ function CartContent() {
                     เพิ่มเมื่อ {new Date(item.addDate).toLocaleDateString("th-TH")}
                   </p>
                 </div>
-                <p className="font-semibold text-stone-900">฿{item.priceAtAdd.toLocaleString()}</p>
+                <p className="font-semibold text-stone-900">{item.priceAtAdd.toLocaleString()} บาท</p>
                 <Button variant="ghost" onClick={() => handleRemove(item.id)}>
                   ลบ
                 </Button>
@@ -57,7 +57,7 @@ function CartContent() {
             <h2 className="font-serif text-lg font-bold text-stone-900">สรุปยอดสั่งซื้อ</h2>
             <div className="mt-4 flex items-center justify-between text-sm text-stone-600">
               <span>ราคารวม ({items.length} ชิ้น)</span>
-              <span>฿{total.toLocaleString()}</span>
+              <span>{total.toLocaleString()} บาท</span>
             </div>
             <p className="mt-1 text-xs text-stone-400">
               * ค่าจัดส่งจะคำนวณในขั้นตอนยืนยันคำสั่งซื้อ

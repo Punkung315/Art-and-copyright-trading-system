@@ -163,7 +163,7 @@ function CheckoutContent() {
                     <span className="text-stone-400">({item.artwork?.sellerName})</span>
                   </span>
                   <span className="font-medium text-stone-900">
-                    ฿{item.priceAtAdd.toLocaleString()}
+                    {item.priceAtAdd.toLocaleString()} บาท
                   </span>
                 </label>
               );
@@ -173,12 +173,12 @@ function CheckoutContent() {
 
         <div className="mt-6 flex items-center justify-between border-t border-stone-200 pt-4 text-base font-semibold text-stone-900">
           <span>ยอดรวมที่เลือก</span>
-          <span>฿{chosenTotal.toLocaleString()}</span>
+          <span>{chosenTotal.toLocaleString()} บาท</span>
         </div>
         {chosenItems.length < items.length && (
           <p className="mt-1 text-xs text-stone-500">
             อีก {items.length - chosenItems.length} ชิ้นที่ไม่ได้เลือกจะยังอยู่ในตะกร้า
-            (ยอดรวมทั้งตะกร้า ฿{total.toLocaleString()})
+            (ยอดรวมทั้งตะกร้า {total.toLocaleString()} บาท)
           </p>
         )}
 

@@ -58,7 +58,7 @@ function SellerArtListContent() {
                   <p className="font-medium text-stone-900">{a.artworkName}</p>
                   <StatusBadge status={a.artworkStatus} domain="artwork" />
                 </div>
-                <p className="text-sm text-stone-500">{a.artworkType} · ฿{a.price.toLocaleString()}</p>
+                <p className="text-sm text-stone-500">{a.artworkType} · {a.price.toLocaleString()} บาท</p>
                 <div className="mt-2 flex gap-2">
                   <Link href={`/seller/art/${a.id}/edit`} className="flex-1">
                     <Button variant="secondary" className="w-full">

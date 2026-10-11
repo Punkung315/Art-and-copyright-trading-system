@@ -146,14 +146,14 @@ function EditProfileContent() {
               <Field label="อีเมล" error={errors.email}>
                 <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
               </Field>
-              <Field label="เบอร์โทรศัพท์" error={errors.phoneNumber}>
+              <Field label="เบอร์โทรศัพท์ (ไม่บังคับ)" error={errors.phoneNumber}>
                 <Input
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
                   placeholder="ตัวเลข 10 หลัก"
                 />
               </Field>
-              <Field label="เลขบัตรประชาชน" error={errors.nationalNo}>
+              <Field label="เลขบัตรประชาชน (ไม่บังคับ)" error={errors.nationalNo}>
                 <Input
                   value={nationalNo}
                   onChange={(e) => setNationalNo(e.target.value)}

@@ -179,13 +179,13 @@ function OrderDetailContent({ id }: { id: string }) {
                       <p className="mt-0.5 text-xs text-stone-500">
                         จัดส่งโดย {item.shippingCompanyName}
                         {item.shippingCost != null &&
-                          ` · ค่าส่ง ฿${item.shippingCost.toLocaleString()}`}
+                          ` · ค่าส่ง ${item.shippingCost.toLocaleString()} บาท`}
                       </p>
                     )}
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <p className="text-sm font-medium text-stone-900">
-                      ฿{item.price.toLocaleString()}
+                      {item.price.toLocaleString()} บาท
                     </p>
                     {shipsItem(item) && (
                       <StatusBadge status={item.shippingStatus ?? "not_shipped"} domain="shipping" />
@@ -426,7 +426,7 @@ function OrderDetailContent({ id }: { id: string }) {
                     <div className="flex justify-between">
                       <span className="text-stone-500">ยอดที่จะได้รับ (ราคาผลงาน + ค่าจัดส่ง)</span>
                       <span className="font-semibold text-stone-900">
-                        ฿{order.sellerPayout.amount.toLocaleString()}
+                        {order.sellerPayout.amount.toLocaleString()} บาท
                       </span>
                     </div>
                     {order.sellerPayout.hasBankAccount ? (
@@ -483,37 +483,37 @@ function OrderDetailContent({ id }: { id: string }) {
             {isSeller ? (
               <div className="flex justify-between">
                 <span>ยอดเฉพาะผลงานของร้านคุณ</span>
-                <span>฿{visibleTotal.toLocaleString()}</span>
+                <span>{visibleTotal.toLocaleString()} บาท</span>
               </div>
             ) : (
               <>
                 <div className="flex justify-between">
                   <span>ราคารวมชิ้นงาน{partialOrder && " (เฉพาะที่พร้อมขาย)"}</span>
                   <span>
-                    ฿{(partialOrder ? order.payableTotalAmount : order.totalAmount).toLocaleString()}
+                    {(partialOrder ? order.payableTotalAmount : order.totalAmount).toLocaleString()} บาท
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span>ค่าจัดส่ง</span>
                   <span>
-                    ฿
                     {(partialOrder
                       ? order.payableShippingCost
                       : order.shippingCost
-                    ).toLocaleString()}
+                    ).toLocaleString()}{" "}
+                    บาท
                   </span>
                 </div>
                 {/* บอกให้ชัดว่าตัดชิ้นที่ไม่พร้อมขายออกจากยอดแล้ว ไม่ใช่คิดเงินขาด */}
                 {partialOrder && (
                   <p className="rounded-lg bg-stone-100 px-3 py-2 text-xs text-stone-600">
                     ไม่รวมผลงาน {progress.rejected} ชิ้นที่ผู้ขายแจ้งว่าไม่พร้อมจำหน่าย
-                    (ยอดเต็มของคำสั่งซื้อคือ ฿{order.grandTotal.toLocaleString()})
+                    (ยอดเต็มของคำสั่งซื้อคือ {order.grandTotal.toLocaleString()} บาท)
                   </p>
                 )}
                 <div className="flex justify-between border-t border-stone-200 pt-2 text-base font-semibold text-stone-900">
                   <span>ยอดสุทธิ</span>
                   <span>
-                    ฿{(partialOrder ? order.payableGrandTotal : order.grandTotal).toLocaleString()}
+                    {(partialOrder ? order.payableGrandTotal : order.grandTotal).toLocaleString()} บาท
                   </span>
                 </div>
               </>

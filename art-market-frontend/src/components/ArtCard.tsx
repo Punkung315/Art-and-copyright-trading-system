@@ -82,15 +82,15 @@ export function ArtCard({
               <>
                 <span className="block text-[10px] leading-tight text-stone-400">ลิขสิทธิ์</span>
                 <span className="text-sm font-semibold text-stone-900">
-                  ฿{artwork.copyrightPrice!.toLocaleString()}
+                  {artwork.copyrightPrice!.toLocaleString()} บาท
                 </span>
                 <span className="block text-[10px] leading-tight text-stone-400">
-                  ชิ้นงาน ฿{artwork.price.toLocaleString()}
+                  ชิ้นงาน {artwork.price.toLocaleString()} บาท
                 </span>
               </>
             ) : (
               <span className="text-sm font-semibold text-stone-900">
-                ฿{artwork.price.toLocaleString()}
+                {artwork.price.toLocaleString()} บาท
               </span>
             )}
           </span>

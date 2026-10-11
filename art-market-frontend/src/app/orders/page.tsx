@@ -42,7 +42,7 @@ function OrdersContent() {
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusBadge status={order.orderStatus} domain="order" />
                   <span className="font-semibold text-stone-900">
-                    ฿{order.grandTotal.toLocaleString()}
+                    {order.grandTotal.toLocaleString()} บาท
                   </span>
                 </div>
               </Card>

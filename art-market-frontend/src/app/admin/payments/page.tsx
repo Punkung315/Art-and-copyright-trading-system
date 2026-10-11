@@ -310,7 +310,7 @@ function AdminPaymentsContent() {
                       <td className="px-4 py-3 font-medium text-stone-900">{r.buyerName || "—"}</td>
                       <td className="px-4 py-3 text-stone-600">{r.sellerName || "—"}</td>
                       <td className="px-4 py-3 text-right font-medium text-stone-900">
-                        ฿{r.amount.toLocaleString()}
+                        {r.amount.toLocaleString()} บาท
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-col items-start gap-1">

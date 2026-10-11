@@ -109,7 +109,7 @@ export function SellerShippingControl({
         <div className="flex flex-col gap-2">
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-medium text-stone-700">
-              รหัสพัสดุ (Tracking number){item.shippingCompanyName ? ` · ${item.shippingCompanyName}` : ""} *
+              รหัสพัสดุ{item.shippingCompanyName ? ` · ${item.shippingCompanyName}` : ""} *
             </span>
             <Input
               value={tracking}

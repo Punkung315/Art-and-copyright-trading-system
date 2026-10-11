@@ -38,7 +38,7 @@ function SellerCopyrightContent() {
                   <p className="text-xs text-stone-500">ผู้ซื้อ: {t.buyerName}</p>
                 </div>
                 <div className="text-right">
-                  <p className="mb-1 text-sm font-semibold text-stone-900">฿{t.price.toLocaleString()}</p>
+                  <p className="mb-1 text-sm font-semibold text-stone-900">{t.price.toLocaleString()} บาท</p>
                   <StatusBadge status={t.transferStatus} domain="transfer" />
                 </div>
               </Card>

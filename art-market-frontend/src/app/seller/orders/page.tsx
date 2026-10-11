@@ -157,7 +157,7 @@ function SellerOrdersContent() {
                         <p className="text-xs text-stone-500">
                           ผู้ซื้อ {order.buyerName} ·{" "}
                           {new Date(order.orderDate).toLocaleDateString("th-TH")} ·{" "}
-                          {order.items.length} รายการ · ฿{order.grandTotal.toLocaleString()}
+                          {order.items.length} รายการ · {order.grandTotal.toLocaleString()} บาท
                         </p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
