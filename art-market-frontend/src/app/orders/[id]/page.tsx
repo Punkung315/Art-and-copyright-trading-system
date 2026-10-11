@@ -391,7 +391,7 @@ function OrderDetailContent({ id }: { id: string }) {
                   myShippableItems.length > 0 ? (
                     <>
                       <p className="mb-3 text-xs text-stone-500">
-                        อัปเดตทีละชิ้น: แนบรูปเมื่อแพ็คสินค้า และกรอกรหัสพัสดุเมื่อส่งของ
+                        อัปเดตทีละชิ้น: แนบรูปตอนแพ็คสินค้าและกรอกรหัสพัสดุให้ครบ แล้วกดบันทึกครั้งเดียว
                         — ผู้ซื้อและผู้ดูแลระบบจะเห็นหลักฐานนี้
                       </p>
                       <div className="flex flex-col gap-3">

@@ -10,8 +10,11 @@ import lombok.Data;
  *
  * หลักฐานที่ต้องแนบตามสถานะ (ตรวจใน SellerOrderService เพราะขึ้นกับสถานะปลายทาง):
  *   PREPARING (แพ็คสินค้าแล้ว) → packingImage   รูปสินค้าที่แพ็คแล้ว
- *   SHIPPED   (จัดส่งแล้ว)     → trackingNumber รหัสพัสดุของขนส่ง
+ *   SHIPPED   (จัดส่งแล้ว)     → packingImage + trackingNumber
  *   DELIVERED                  → ผู้ขายตั้งเองไม่ได้ ผู้ซื้อเป็นคนยืนยัน (หรือระบบยืนยันเมื่อครบกำหนด)
+ *
+ * ส่ง SHIPPED พร้อม packingImage มาในคำขอเดียวได้ ผู้ขายจึงกรอกรูปกับเลขพัสดุทีเดียว
+ * แล้วบันทึกรอบเดียวจบ ไม่ต้องยิงสองรอบเหมือนเดิม (ถ้าเคยแนบรูปไว้แล้วจะไม่ส่งมาก็ได้)
  */
 @Data
 public class UpdateShippingStatusRequest {

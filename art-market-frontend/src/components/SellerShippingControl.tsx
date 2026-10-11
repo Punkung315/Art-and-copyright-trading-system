@@ -13,11 +13,18 @@ import { ShippingEvidence } from "./ShippingEvidence";
 /**
  * แผงจัดการการจัดส่งของผู้ขาย "ทีละชิ้น"
  *
- * ลำดับเดินหน้าอย่างเดียว และแต่ละขั้นต้องมีหลักฐาน:
- *   ยังไม่จัดส่ง → แพ็คสินค้าแล้ว (แนบรูป) → จัดส่งแล้ว (กรอกรหัสพัสดุ) → จัดส่งสำเร็จ (ผู้ซื้อยืนยัน)
+ * กรอกทีเดียวจบ: ช่องรูปแพ็คสินค้ากับช่องรหัสพัสดุอยู่ในฟอร์มเดียวกัน กดบันทึกครั้งเดียว
+ * แล้วข้ามไปเป็น "จัดส่งแล้ว" ได้เลย
  *
- * เดิมเป็น dropdown เดียวทั้งคำสั่งซื้อ ข้ามขั้นได้ และผู้ขายเลือก "จัดส่งสำเร็จ" เองได้
- * ผู้ซื้อกับผู้ดูแลระบบจึงไม่มีอะไรให้ตรวจสอบเลยว่าของออกจากร้านจริงหรือไม่
+ * เดิมบังคับเป็นสองรอบ (บันทึกรูป → แล้วค่อยกลับมากรอกเลขพัสดุ) ซึ่งไม่ตรงกับงานจริง
+ * ผู้ขายแพ็คของแล้วหิ้วไปส่งขนส่งรอบเดียว ได้ใบเสร็จมาพร้อมเลขพัสดุ แล้วจึงมานั่งบันทึก
+ * การบังคับแยกสองครั้งจึงเป็นข้อจำกัดของหน้าจอ ไม่ใช่ของกระบวนการ
+ *
+ * สิ่งที่ยังเหมือนเดิมโดยตั้งใจ:
+ *   - หลักฐานต้องครบ ไม่มีรูปแพ็ค = บันทึกจัดส่งไม่ได้ (ตรวจซ้ำที่ backend ด้วย)
+ *   - บันทึกเฉพาะรูปก่อนได้ สำหรับคนที่แพ็ควันนี้ส่งพรุ่งนี้
+ *   - ประวัติยังเก็บเป็นสองขั้น (เวลาแพ็ค / เวลาส่ง) ให้ผู้ซื้อกับผู้ดูแลระบบตรวจสอบ
+ *   - "จัดส่งสำเร็จ" ยังเป็นของผู้ซื้อเท่านั้น ผู้ขายกดเองไม่ได้
  */
 export function SellerShippingControl({
   item,
@@ -31,15 +38,22 @@ export function SellerShippingControl({
   const { notify } = useToast();
   const status = item.shippingStatus ?? "not_shipped";
   const [image, setImage] = useState("");
-  const [changingImage, setChangingImage] = useState(false);
   const [tracking, setTracking] = useState(item.trackingNumber ?? "");
-  const [editingTracking, setEditingTracking] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  /** จัดส่งไปแล้ว ฟอร์มจึงพับเก็บไว้จนกว่าจะกดแก้ไข */
+  const formOpen = status === "not_shipped" || status === "packed" || editing;
+
+  /** มีรูปแพ็คอยู่แล้วหรือกำลังแนบใหม่ — ใช้ตัดสินว่ากดบันทึกจัดส่งได้หรือยัง */
+  const hasPackingImage = !!image || !!item.packingImage;
 
   const trackingError =
     tracking.trim() && !isValidTrackingNumber(tracking)
       ? "รหัสพัสดุต้องเป็นตัวอักษรภาษาอังกฤษหรือตัวเลข 8–30 ตัว"
       : null;
+
+  const canSaveShipped = hasPackingImage && !!tracking.trim() && !trackingError;
 
   async function save(next: "packed" | "shipped") {
     setBusy(true);
@@ -48,10 +62,12 @@ export function SellerShippingControl({
         packingImage: image || undefined,
         trackingNumber: next === "shipped" ? normalizeTrackingNumber(tracking) : undefined,
       });
-      notify(next === "packed" ? "บันทึกว่าแพ็คสินค้าแล้ว" : "บันทึกว่าจัดส่งแล้ว", "success");
+      notify(
+        next === "packed" ? "บันทึกว่าแพ็คสินค้าแล้ว" : "บันทึกข้อมูลการจัดส่งแล้ว",
+        "success"
+      );
       setImage("");
-      setChangingImage(false);
-      setEditingTracking(false);
+      setEditing(false);
       await onChanged();
     } catch (err) {
       notify(
@@ -76,37 +92,18 @@ export function SellerShippingControl({
         </div>
       )}
 
-      {/* ขั้นที่ 1 — แพ็คสินค้า: ต้องแนบรูป */}
-      {(status === "not_shipped" || (status === "packed" && changingImage)) && (
-        <div className="flex flex-col gap-3">
+      {formOpen && (
+        <div className="flex flex-col gap-3" data-testid={`ship-form-${item.id}`}>
           <ImageUploadField
-            label={status === "not_shipped" ? "รูปสินค้าที่แพ็คแล้ว *" : "รูปแพ็คสินค้าใหม่"}
+            label={
+              item.packingImage ? "เปลี่ยนรูปสินค้าที่แพ็คแล้ว (ไม่บังคับ)" : "รูปสินค้าที่แพ็คแล้ว *"
+            }
             value={image}
             onChange={setImage}
             onError={(m) => notify(m, "error")}
             hint="ถ่ายให้เห็นสินค้าและกล่อง/หีบห่อชัดเจน · png หรือ jpg"
           />
-          <div className="flex flex-wrap gap-2">
-            <Button disabled={busy || !image} onClick={() => save("packed")}>
-              {busy ? "กำลังบันทึก..." : status === "not_shipped" ? "บันทึก: แพ็คสินค้าแล้ว" : "บันทึกรูปใหม่"}
-            </Button>
-            {changingImage && (
-              <Button variant="ghost" disabled={busy} onClick={() => setChangingImage(false)}>
-                ยกเลิก
-              </Button>
-            )}
-          </div>
-          {status === "not_shipped" && !image && (
-            <p className="text-xs text-stone-500">
-              แนบรูปก่อนจึงจะบันทึกได้ — ผู้ซื้อและผู้ดูแลระบบจะเห็นรูปนี้เพื่อตรวจสอบ
-            </p>
-          )}
-        </div>
-      )}
 
-      {/* ขั้นที่ 2 — จัดส่ง: ต้องกรอกรหัสพัสดุ */}
-      {((status === "packed" && !changingImage) || (status === "shipped" && editingTracking)) && (
-        <div className="flex flex-col gap-2">
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-medium text-stone-700">
               รหัสพัสดุ{item.shippingCompanyName ? ` · ${item.shippingCompanyName}` : ""} *
@@ -120,24 +117,33 @@ export function SellerShippingControl({
             />
           </label>
           {trackingError && <p className="text-xs text-rose-600">{trackingError}</p>}
+
           <div className="flex flex-wrap gap-2">
-            <Button
-              disabled={busy || !tracking.trim() || !!trackingError}
-              onClick={() => save("shipped")}
-            >
-              {busy ? "กำลังบันทึก..." : status === "shipped" ? "บันทึกรหัสพัสดุ" : "บันทึก: จัดส่งแล้ว"}
+            <Button disabled={busy || !canSaveShipped} onClick={() => save("shipped")}>
+              {busy
+                ? "กำลังบันทึก..."
+                : status === "shipped"
+                  ? "บันทึกการแก้ไข"
+                  : "บันทึก: จัดส่งแล้ว"}
             </Button>
-            {status === "packed" && (
-              <Button variant="ghost" disabled={busy} onClick={() => setChangingImage(true)}>
-                เปลี่ยนรูปแพ็คสินค้า
+
+            {/*
+              ทางออกสำหรับคนที่แพ็ควันนี้แต่ยังไม่ได้เอาไปส่ง จึงยังไม่มีเลขพัสดุ
+              ขึ้นเฉพาะตอนที่ยังไม่เคยบันทึกว่าแพ็ค ไม่งั้นปุ่มนี้ไม่มีความหมาย
+            */}
+            {status === "not_shipped" && (
+              <Button variant="secondary" disabled={busy || !image} onClick={() => save("packed")}>
+                บันทึกเฉพาะรูปไว้ก่อน
               </Button>
             )}
-            {editingTracking && (
+
+            {editing && (
               <Button
                 variant="ghost"
                 disabled={busy}
                 onClick={() => {
-                  setEditingTracking(false);
+                  setEditing(false);
+                  setImage("");
                   setTracking(item.trackingNumber ?? "");
                 }}
               >
@@ -145,11 +151,22 @@ export function SellerShippingControl({
               </Button>
             )}
           </div>
+
+          {!hasPackingImage && (
+            <p className="text-xs text-stone-500">
+              แนบรูปก่อนจึงจะบันทึกได้ — ผู้ซื้อและผู้ดูแลระบบจะเห็นรูปนี้เพื่อตรวจสอบ
+            </p>
+          )}
+          {hasPackingImage && !tracking.trim() && status === "not_shipped" && (
+            <p className="text-xs text-stone-500">
+              ยังไม่มีรหัสพัสดุตอนนี้? กด &quot;บันทึกเฉพาะรูปไว้ก่อน&quot; แล้วกลับมากรอกทีหลังได้
+            </p>
+          )}
         </div>
       )}
 
-      {/* ขั้นที่ 3 — รอผู้ซื้อยืนยัน ผู้ขายกดจัดส่งสำเร็จเองไม่ได้ */}
-      {status === "shipped" && !editingTracking && (
+      {/* จัดส่งแล้ว — รอผู้ซื้อยืนยัน ผู้ขายกดจัดส่งสำเร็จเองไม่ได้ */}
+      {status === "shipped" && !editing && (
         <div className="flex flex-col gap-2">
           <p className="rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-800">
             รอผู้ซื้อยืนยันการได้รับสินค้า
@@ -157,8 +174,8 @@ export function SellerShippingControl({
               ` · หากผู้ซื้อไม่ยืนยัน ระบบจะเปลี่ยนเป็นจัดส่งสำเร็จให้อัตโนมัติวันที่ ${formatThaiDate(autoDeliveryConfirmAt)}`}
           </p>
           <div>
-            <Button variant="ghost" onClick={() => setEditingTracking(true)}>
-              แก้ไขรหัสพัสดุ
+            <Button variant="ghost" onClick={() => setEditing(true)}>
+              แก้ไขข้อมูลการจัดส่ง
             </Button>
           </div>
         </div>

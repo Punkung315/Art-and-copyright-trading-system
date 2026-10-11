@@ -131,6 +131,13 @@ public class SellerOrderService {
      *
      * ส่งสถานะเดิมซ้ำได้ เพื่อแก้หลักฐานที่แนบผิด (เปลี่ยนรูป / แก้เลขพัสดุที่พิมพ์ผิด)
      * แต่ย้อนสถานะไม่ได้ และแก้อะไรไม่ได้อีกเมื่อจัดส่งสำเร็จแล้ว
+     *
+     * ข้ามขั้นแบบ "กรอกทีเดียวจบ" ได้:
+     *   ผู้ขายส่ง SHIPPED พร้อมแนบ packingImage มาในคำขอเดียวได้เลย ไม่ต้องยิงสองรอบ
+     *   ของจริงผู้ขายแพ็คแล้วหิ้วไปส่งขนส่งรอบเดียว การบังคับบันทึกสองครั้งเป็นเรื่องของ
+     *   หน้าจอ ไม่ใช่เรื่องของกระบวนการ — แต่ "หลักฐานต้องครบ" ยังเหมือนเดิมทุกข้อ
+     *   (ไม่มีรูปแพ็ค = จัดส่งไม่ได้) และยังบันทึกเวลาแพ็ค/เวลาส่งแยกกันไว้ให้ผู้ซื้อ
+     *   กับผู้ดูแลระบบเห็นเป็นสองขั้นเหมือนเดิม
      */
     @Transactional
     public ApiResponse<SellerOrderResponse.SellerOrderItemDetail> updateShippingStatus(
@@ -192,18 +199,37 @@ public class SellerOrderService {
         }
 
         if (target == ShippingStatus.SHIPPED) {
-            // ข้ามขั้นแพ็คไม่ได้ — ผู้ซื้อ/แอดมินต้องมีรูปแพ็คไว้ตรวจสอบทุกชิ้น
-            if (current == null || item.getPackingImage() == null) {
-                return ApiResponse.error("กรุณาอัปเดตเป็นแพ็คสินค้าแล้วพร้อมแนบรูปก่อนจัดส่ง");
+            /*
+              ตรวจให้ครบก่อนค่อยเขียนลง entity
+
+              @Transactional ของ Spring จะ rollback ก็ต่อเมื่อโยน RuntimeException
+              การ return ApiResponse.error เฉย ๆ ไม่ rollback ถ้าเผลอ setPackingImage
+              ไว้ก่อนแล้วมาพบว่าเลขพัสดุผิดรูปแบบ รูปกับ packedAt จะถูกบันทึกค้างไว้
+              ทั้งที่สถานะยังเป็น "ยังไม่จัดส่ง" — ผู้ซื้อจะเห็นรูปแพ็คในรายการที่ยังไม่ส่ง
+            */
+            boolean hasNewImage = req.getPackingImage() != null && !req.getPackingImage().isBlank();
+
+            // หลักฐานยังต้องครบเหมือนเดิม — ไม่มีรูปแพ็คก็จัดส่งไม่ได้ ไม่ว่าจะแนบรอบนี้หรือรอบก่อน
+            if (!hasNewImage && item.getPackingImage() == null) {
+                return ApiResponse.error("กรุณาแนบรูปภาพสินค้าที่แพ็คแล้ว");
             }
+            if (hasNewImage) {
+                String err = ImageDataUrls.validate(req.getPackingImage(), "รูปภาพสินค้าที่แพ็คแล้ว");
+                if (err != null) return ApiResponse.error(err);
+            }
+
             String tracking = req.getTrackingNumber() == null ? ""
                     : req.getTrackingNumber().replaceAll("\\s+", "").toUpperCase();
             if (tracking.isEmpty()) {
-                return ApiResponse.error("กรุณากรอกรหัสพัสดุ (Tracking number) ของขนส่ง");
+                return ApiResponse.error("กรุณากรอกรหัสพัสดุของขนส่ง");
             }
             if (!TRACKING_PATTERN.matcher(tracking).matches()) {
                 return ApiResponse.error("รหัสพัสดุต้องเป็นตัวอักษรภาษาอังกฤษหรือตัวเลข 8–30 ตัว");
             }
+
+            if (hasNewImage) item.setPackingImage(req.getPackingImage());
+            // ยังบันทึกเวลาแพ็คไว้ด้วย ประวัติการจัดส่งจึงมีครบสองขั้นแม้บันทึกครั้งเดียว
+            if (item.getPackedAt() == null) item.setPackedAt(now);
             item.setTrackingNumber(tracking);
             if (item.getShippedAt() == null) item.setShippedAt(now);
         }
