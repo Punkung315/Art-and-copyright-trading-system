@@ -49,7 +49,27 @@ public interface ArtworkRepository extends JpaRepository<Artwork, Integer> {
            // เดิมอ่านคอลัมน์ artworkSize ที่หน้าเว็บคอยเซ็ตให้เท่ากับ width อยู่ตลอด
            // ซึ่งแปลว่าเก็บค่าเดียวกันไว้สองที่ พอตัดคอลัมน์นั้นทิ้งจึงย้ายมาอ่าน width
            "AND (:minSize IS NULL OR a.width >= :minSize) " +
-           "AND (:maxSize IS NULL OR a.width <= :maxSize)")
+           "AND (:maxSize IS NULL OR a.width <= :maxSize) " +
+           /*
+            * ตัวกรอง "สิ่งที่ขาย"
+            *   WITH_COPYRIGHT = ซื้อลิขสิทธิ์ของงานชิ้นนี้ได้ด้วย
+            *   ORIGINAL_ONLY  = ขายเฉพาะตัวชิ้นงาน (ไม่เปิดขายลิขสิทธิ์ หรือลิขสิทธิ์ถูกขายไปแล้ว)
+            *
+            * ต้องเช็ค "ลิขสิทธิ์ขายไปแล้วหรือยัง" จากตารางสัญญาด้วย ไม่ใช่ดูแค่ copyrightPrice
+            * เพราะราคายังค้างอยู่ที่ชิ้นงานแม้สัญญาจะปิดจบไปแล้ว (ดู ArtworkService.copyrightSold)
+            * ถ้าดูแค่ราคา ตัวกรองจะพางานที่ซื้อลิขสิทธิ์ไม่ได้แล้วขึ้นมาให้ผู้ซื้อเสียเวลากดเข้าไป
+            */
+           "AND (:offer IS NULL " +
+           "     OR (:offer = 'WITH_COPYRIGHT' AND a.copyrightPrice IS NOT NULL " +
+           "         AND NOT EXISTS (SELECT 1 FROM CopyrightTransfer t " +
+           "                         WHERE t.artwork = a AND t.transferStatus = 'COMPLETED')) " +
+           "     OR (:offer = 'ORIGINAL_ONLY' AND (a.copyrightPrice IS NULL " +
+           "         OR EXISTS (SELECT 1 FROM CopyrightTransfer t " +
+           "                    WHERE t.artwork = a AND t.transferStatus = 'COMPLETED')))) " +
+           // ช่วงราคาลิขสิทธิ์ — งานที่ไม่ได้เปิดขายลิขสิทธิ์ (copyrightPrice IS NULL)
+           // จะหลุดออกจากผลลัพธ์เองตามกฎ NULL ของ SQL ซึ่งเป็นสิ่งที่ต้องการ
+           "AND (:minCopyrightPrice IS NULL OR a.copyrightPrice >= :minCopyrightPrice) " +
+           "AND (:maxCopyrightPrice IS NULL OR a.copyrightPrice <= :maxCopyrightPrice)")
     List<Artwork> searchArtworks(
             @Param("keyword")        String keyword,
             @Param("artworkType")    String artworkType,
@@ -59,6 +79,9 @@ public interface ArtworkRepository extends JpaRepository<Artwork, Integer> {
             @Param("maxPrice")       Double maxPrice,
             @Param("minSize")        Double minSize,
             @Param("maxSize")        Double maxSize,
+            @Param("offer")             String offer,
+            @Param("minCopyrightPrice") Double minCopyrightPrice,
+            @Param("maxCopyrightPrice") Double maxCopyrightPrice,
             // ORDER BY ถูกถอดออกจาก query string แล้วส่งเป็น Sort แทน
             // ถ้าปล่อย ORDER BY ไว้ใน query ด้วย Spring Data จะต่อ ORDER BY ซ้อนกันสองอัน → SQL พัง
             Sort sort
@@ -93,6 +116,34 @@ public interface ArtworkRepository extends JpaRepository<Artwork, Integer> {
     @Query("SELECT MIN(a.price), MAX(a.price) FROM Artwork a " +
            "WHERE a.publishStatus = 'PUBLISHED' AND a.artworkStatus <> 'SOLD'")
     List<Object[]> priceRange();
+
+    /**
+     * ขอบของสไลเดอร์เมื่อผู้ใช้สลับไปกรองด้วย "ราคาลิขสิทธิ์"
+     * นับเฉพาะงานที่ยังซื้อลิขสิทธิ์ได้จริง เพราะถ้ารวมงานที่ลิขสิทธิ์ขายไปแล้วด้วย
+     * เพดานสไลเดอร์จะกว้างเกินช่วงที่กดแล้วมีผลลัพธ์ขึ้นมาจริง
+     */
+    @Query("SELECT MIN(a.copyrightPrice), MAX(a.copyrightPrice) FROM Artwork a " +
+           "WHERE a.publishStatus = 'PUBLISHED' AND a.artworkStatus <> 'SOLD' " +
+           "AND a.copyrightPrice IS NOT NULL " +
+           "AND NOT EXISTS (SELECT 1 FROM CopyrightTransfer t " +
+           "                WHERE t.artwork = a AND t.transferStatus = 'COMPLETED')")
+    List<Object[]> copyrightPriceRange();
+
+    /** จำนวนงานที่ซื้อลิขสิทธิ์ได้ — ตัวเลขข้างตัวกรอง "สิ่งที่ขาย" */
+    @Query("SELECT COUNT(a) FROM Artwork a " +
+           "WHERE a.publishStatus = 'PUBLISHED' AND a.artworkStatus <> 'SOLD' " +
+           "AND a.copyrightPrice IS NOT NULL " +
+           "AND NOT EXISTS (SELECT 1 FROM CopyrightTransfer t " +
+           "                WHERE t.artwork = a AND t.transferStatus = 'COMPLETED')")
+    long countWithCopyright();
+
+    /** จำนวนงานที่ขายเฉพาะตัวชิ้นงาน (ไม่เปิดขายลิขสิทธิ์ หรือลิขสิทธิ์ถูกขายไปแล้ว) */
+    @Query("SELECT COUNT(a) FROM Artwork a " +
+           "WHERE a.publishStatus = 'PUBLISHED' AND a.artworkStatus <> 'SOLD' " +
+           "AND (a.copyrightPrice IS NULL " +
+           "     OR EXISTS (SELECT 1 FROM CopyrightTransfer t " +
+           "                WHERE t.artwork = a AND t.transferStatus = 'COMPLETED'))")
+    long countOriginalOnly();
 
     // =========================================================================
     // แนะนำสำหรับคุณ (หน้าแรก)

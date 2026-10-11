@@ -4,19 +4,27 @@ import { FormEvent, Suspense, useCallback, useEffect, useMemo, useState } from "
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArtworkFacets,
+  ArtworkOffer,
   ArtworkSort,
   getArtworkFacets,
   searchArtworks,
 } from "@/lib/api";
 import { Artwork } from "@/types";
 import { ArtCard } from "@/components/ArtCard";
-import { FilterSidebar, FilterState, SIZE_RANGES } from "@/components/FilterSidebar";
+import {
+  FilterSidebar,
+  FilterState,
+  PriceBasis,
+  SIZE_RANGES,
+} from "@/components/FilterSidebar";
 import { Button, Container, EmptyState, Input, Select, Spinner } from "@/components/ui";
 
 const SORT_OPTIONS: { value: ArtworkSort; label: string }[] = [
   { value: "newest", label: "ใหม่ล่าสุด" },
-  { value: "price_asc", label: "ราคา: ต่ำ → สูง" },
-  { value: "price_desc", label: "ราคา: สูง → ต่ำ" },
+  { value: "price_asc", label: "ราคาชิ้นงาน: ต่ำ → สูง" },
+  { value: "price_desc", label: "ราคาชิ้นงาน: สูง → ต่ำ" },
+  { value: "copyright_asc", label: "ราคาลิขสิทธิ์: ต่ำ → สูง" },
+  { value: "copyright_desc", label: "ราคาลิขสิทธิ์: สูง → ต่ำ" },
   { value: "name", label: "ชื่อผลงาน ก - ฮ" },
 ];
 
@@ -26,8 +34,31 @@ const EMPTY_FILTERS: FilterState = {
   artworkMediums: "",
   minPrice: null,
   maxPrice: null,
+  priceBasis: "artwork",
   sizeIndex: -1,
+  offer: "all",
 };
+
+const EMPTY_FACETS: ArtworkFacets = {
+  types: [],
+  styles: [],
+  mediums: [],
+  minPrice: null,
+  maxPrice: null,
+  minCopyrightPrice: null,
+  maxCopyrightPrice: null,
+  withCopyrightCount: 0,
+  originalOnlyCount: 0,
+};
+
+/** ค่าที่ระบบรู้จักเท่านั้น — URL แก้ด้วยมือได้ จึงต้องกันค่าแปลกปลอม */
+function parseOffer(raw: string | null): ArtworkOffer {
+  return raw === "with_copyright" || raw === "original_only" ? raw : "all";
+}
+
+function parseBasis(raw: string | null): PriceBasis {
+  return raw === "copyright" ? "copyright" : "artwork";
+}
 
 /** อ่านตัวเลขจาก URL — คืน null ถ้าไม่มีหรือไม่ใช่ตัวเลข */
 function numParam(raw: string | null): number | null {
@@ -52,7 +83,9 @@ function SearchContent() {
     artworkMediums: params.get("mediums") ?? "",
     minPrice: numParam(params.get("minPrice")),
     maxPrice: numParam(params.get("maxPrice")),
+    priceBasis: parseBasis(params.get("priceBasis")),
     sizeIndex: Number(params.get("size") ?? -1),
+    offer: parseOffer(params.get("offer")),
   });
 
   const [facets, setFacets] = useState<ArtworkFacets | null>(null);
@@ -69,12 +102,16 @@ function SearchContent() {
     if (filters.artworkMediums) n++;
     if (filters.minPrice !== null || filters.maxPrice !== null) n++;
     if (filters.sizeIndex >= 0) n++;
+    if (filters.offer !== "all") n++;
     return n;
   }, [filters]);
 
   // ยิงค้นหาใหม่ทุกครั้งที่ตัวกรอง/คำค้น/การเรียงเปลี่ยน แล้วอัปเดต URL ให้ตรงกัน
   useEffect(() => {
     const size = filters.sizeIndex >= 0 ? SIZE_RANGES[filters.sizeIndex] : undefined;
+
+    // ช่วงราคาที่ลากไว้ไปลงช่องไหน ขึ้นกับฐานราคาที่เลือกอยู่ — ส่งทีละฐานเท่านั้น
+    const byCopyright = filters.priceBasis === "copyright";
 
     let active = true;
     setResults(null);
@@ -83,10 +120,13 @@ function SearchContent() {
       artworkType: filters.artworkType || undefined,
       artworkStyle: filters.artworkStyle || undefined,
       artworkMediums: filters.artworkMediums || undefined,
-      minPrice: filters.minPrice ?? undefined,
-      maxPrice: filters.maxPrice ?? undefined,
+      minPrice: byCopyright ? undefined : filters.minPrice ?? undefined,
+      maxPrice: byCopyright ? undefined : filters.maxPrice ?? undefined,
+      minCopyrightPrice: byCopyright ? filters.minPrice ?? undefined : undefined,
+      maxCopyrightPrice: byCopyright ? filters.maxPrice ?? undefined : undefined,
       minSize: size?.min,
       maxSize: size?.max,
+      offer: filters.offer,
       sort,
     }).then((r) => {
       if (active) setResults(r);
@@ -99,7 +139,9 @@ function SearchContent() {
     if (filters.artworkMediums) sp.set("mediums", filters.artworkMediums);
     if (filters.minPrice !== null) sp.set("minPrice", String(filters.minPrice));
     if (filters.maxPrice !== null) sp.set("maxPrice", String(filters.maxPrice));
+    if (filters.priceBasis !== "artwork") sp.set("priceBasis", filters.priceBasis);
     if (filters.sizeIndex >= 0) sp.set("size", String(filters.sizeIndex));
+    if (filters.offer !== "all") sp.set("offer", filters.offer);
     if (sort !== "newest") sp.set("sort", sort);
     // scroll: false กันหน้าเด้งกลับไปบนสุดทุกครั้งที่ติ๊กตัวกรอง
     router.replace(sp.toString() ? `/search?${sp}` : "/search", { scroll: false });
@@ -124,7 +166,8 @@ function SearchContent() {
       <div className="mb-6">
         <h1 className="font-serif text-2xl font-bold text-stone-900">ค้นหางานศิลปะ</h1>
         <p className="mt-1 text-sm text-stone-500">
-          กรองตามประเภท สไตล์ เทคนิค ขนาด และช่วงราคา เพื่อหาผลงานที่ใช่
+          เลือกได้ว่าจะดูงานที่ซื้อลิขสิทธิ์ได้หรือขายเฉพาะตัวชิ้นงาน
+          แล้วกรองต่อตามประเภท สไตล์ เทคนิค ขนาด และช่วงราคา
         </p>
       </div>
 
@@ -152,7 +195,7 @@ function SearchContent() {
 
       <div className="flex flex-col gap-8 lg:flex-row">
         <FilterSidebar
-          facets={facets ?? { types: [], styles: [], mediums: [], minPrice: null, maxPrice: null }}
+          facets={facets ?? EMPTY_FACETS}
           value={filters}
           onChange={patchFilters}
           onReset={() => setFilters(EMPTY_FILTERS)}
@@ -181,7 +224,7 @@ function SearchContent() {
           ) : (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
               {results.map((a) => (
-                <ArtCard key={a.id} artwork={a} />
+                <ArtCard key={a.id} artwork={a} priceBasis={filters.priceBasis} />
               ))}
             </div>
           )}

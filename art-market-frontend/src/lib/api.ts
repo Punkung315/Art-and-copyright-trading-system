@@ -230,16 +230,21 @@ interface BeArtworkSummary {
   sellerName: string | null;
   /** users.user_id ของผู้ขาย — ต่างจาก sellerId ซึ่งเป็น PK ของตาราง seller */
   sellerUserId: number | null;
+  /**
+   * ข้อมูลลิขสิทธิ์และขนาด — backend ส่งมากับผลการค้นหาแล้ว
+   * (ของเดิมมีเฉพาะใน detail การ์ดจึงขึ้นป้าย "ซื้อลิขสิทธิ์ได้" ไม่ได้เลย)
+   */
+  copyrightPrice?: number | null;
+  copyrightSold?: boolean | null;
+  width?: number | null;
+  height?: number | null;
 }
 
 interface BeArtworkDetail extends BeArtworkSummary {
   artworkMediums: string | null;
   artworkMaterial: string | null;
   description: string | null;
-  copyrightPrice: number | null;
   copyrightAutoPrice?: boolean;
-  /** true = ลิขสิทธิ์ถูกโอนให้ผู้อื่นไปแล้ว ขอซื้อไม่ได้อีก */
-  copyrightSold?: boolean | null;
   /** ค่าส่ง "ประเมิน" ของชิ้นงาน — ห้ามใช้คิดเงิน ค่าจริงอยู่ที่ BeOrderItem.shippingCost */
   shippingCostEstimate: number | null;
   shippingCompany: ShippingCompanyCode | null;
@@ -693,7 +698,13 @@ function mapArtworkSummary(a: BeArtworkSummary): Artwork {
         : a.artworkStatus === "RESERVED"
           ? "reserved"
           : "available",
-    copyrightAvailable: false,
+    width: a.width ?? undefined,
+    height: a.height ?? undefined,
+    // ขายไปแล้ว = ซื้อลิขสิทธิ์ไม่ได้อีก (สัญญาเป็นการโอนแต่เพียงผู้เดียว ขายได้ครั้งเดียว)
+    // ตรรกะเดียวกับ mapArtworkDetail เป๊ะ ๆ ไม่งั้นการ์ดกับหน้ารายละเอียดจะบอกคนละอย่าง
+    copyrightAvailable: (a.copyrightPrice ?? 0) > 0 && !a.copyrightSold,
+    copyrightSold: !!a.copyrightSold,
+    copyrightPrice: a.copyrightPrice ?? undefined,
   };
 }
 
@@ -1144,15 +1155,43 @@ export async function loginAdmin(
   return { id: String(auth.userId), username: auth.username, password: "" };
 }
 
-export async function registerBuyer(input: {
+export interface RegisterBuyerInput {
   username: string;
   password: string;
   email: string;
-}): Promise<User> {
+  fullName: string;
+  phoneNumber: string;
+  nationalNo: string;
+  houseNo?: string;
+  villageNo?: string;
+  thoroughfare?: string;
+  subDistrict: string;
+  district: string;
+  province: string;
+  postalCode: string;
+}
+
+export async function registerBuyer(input: RegisterBuyerInput): Promise<User> {
   const auth = await request<BeAuth>("/auth/register", {
     method: "POST",
     auth: false,
-    body: JSON.stringify(input),
+    body: JSON.stringify({
+      username: input.username,
+      password: input.password,
+      email: input.email,
+      fullName: input.fullName,
+      phoneNumber: input.phoneNumber,
+      nationalNo: input.nationalNo,
+      address: {
+        houseNo: input.houseNo,
+        villageNo: input.villageNo,
+        thoroughfare: input.thoroughfare,
+        subdistrict: input.subDistrict, // backend สะกด subdistrict ตัวเล็กทั้งคำ
+        district: input.district,
+        province: input.province,
+        postalCode: input.postalCode,
+      },
+    }),
   });
   setToken(auth.token);
   return mapAuthToUser(auth);
@@ -1435,7 +1474,21 @@ export async function verifySeller(
 
 /* ------------------------------ Artworks ------------------------------ */
 
-export type ArtworkSort = "newest" | "price_asc" | "price_desc" | "name";
+export type ArtworkSort =
+  | "newest"
+  | "price_asc"
+  | "price_desc"
+  | "name"
+  | "copyright_asc"
+  | "copyright_desc";
+
+/**
+ * สิ่งที่ผู้ขายเปิดขายของงานชิ้นนั้น
+ *   all            = ไม่กรอง
+ *   with_copyright = ซื้อลิขสิทธิ์ได้ด้วย
+ *   original_only  = ขายแต่ตัวชิ้นงาน
+ */
+export type ArtworkOffer = "all" | "with_copyright" | "original_only";
 
 export interface ArtworkSearchParams {
   q?: string;
@@ -1446,6 +1499,10 @@ export interface ArtworkSearchParams {
   maxPrice?: number;
   minSize?: number;
   maxSize?: number;
+  offer?: ArtworkOffer;
+  /** ช่วงราคาลิขสิทธิ์ — ใช้แทน minPrice/maxPrice เมื่อผู้ใช้สลับฐานราคา */
+  minCopyrightPrice?: number;
+  maxCopyrightPrice?: number;
   sort?: ArtworkSort;
   limit?: number;
 }
@@ -1463,6 +1520,10 @@ export async function searchArtworks(
       maxPrice: params.maxPrice,
       minSize: params.minSize,
       maxSize: params.maxSize,
+      // backend ใช้ UPPER_SNAKE กับค่านี้ ส่วน URL ของหน้าเว็บใช้ตัวพิมพ์เล็กให้อ่านง่าย
+      offer: params.offer && params.offer !== "all" ? params.offer.toUpperCase() : undefined,
+      minCopyrightPrice: params.minCopyrightPrice,
+      maxCopyrightPrice: params.maxCopyrightPrice,
       sort: params.sort,
       limit: params.limit,
     })}`,
@@ -1507,6 +1568,12 @@ export interface ArtworkFacets {
   mediums: FacetValue[];
   minPrice: number | null;
   maxPrice: number | null;
+  /** ขอบสไลเดอร์เมื่อสลับไปกรองด้วยราคาลิขสิทธิ์ — null = ยังไม่มีงานที่ขายลิขสิทธิ์ */
+  minCopyrightPrice: number | null;
+  maxCopyrightPrice: number | null;
+  /** จำนวนงานของตัวกรอง "สิ่งที่ขาย" */
+  withCopyrightCount: number;
+  originalOnlyCount: number;
 }
 
 /**
@@ -1522,6 +1589,10 @@ export async function getArtworkFacets(): Promise<ArtworkFacets> {
     mediums: [],
     minPrice: null,
     maxPrice: null,
+    minCopyrightPrice: null,
+    maxCopyrightPrice: null,
+    withCopyrightCount: 0,
+    originalOnlyCount: 0,
   };
   return requestOr<ArtworkFacets>("/artworks/facets", empty, { auth: false });
 }

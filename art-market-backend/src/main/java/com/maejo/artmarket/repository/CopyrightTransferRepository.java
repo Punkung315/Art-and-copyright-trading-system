@@ -3,6 +3,8 @@ package com.maejo.artmarket.repository;
 import com.maejo.artmarket.entity.CopyrightTransfer;
 import com.maejo.artmarket.enums.CopyrightTransferStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
@@ -48,4 +50,15 @@ public interface CopyrightTransferRepository extends JpaRepository<CopyrightTran
     /** สัญญาที่ปิดจบแล้วของงานชิ้นนี้ — ใช้บอกผู้ใช้ว่าลิขสิทธิ์ถูกขายไปแล้ว */
     Optional<CopyrightTransfer> findFirstByArtwork_ArtworkIdAndTransferStatus(
             Integer artworkId, CopyrightTransferStatus status);
+
+    /**
+     * งานชิ้นไหนในชุดนี้ที่ลิขสิทธิ์ถูกขายไปแล้วบ้าง — ถามครั้งเดียวต่อหนึ่งรายการผลลัพธ์
+     *
+     * หน้าค้นหาต้องรู้สถานะนี้ของทุกใบเพื่อขึ้นป้าย "ซื้อลิขสิทธิ์ได้" ให้ถูก
+     * ถ้าเรียก findFirstByArtwork_... ทีละชิ้นจะกลายเป็น N+1 query ทันที
+     * (ผลการค้นหา 60 ชิ้น = ยิง query เพิ่มอีก 60 ครั้ง)
+     */
+    @Query("SELECT t.artwork.artworkId FROM CopyrightTransfer t " +
+           "WHERE t.transferStatus = 'COMPLETED' AND t.artwork.artworkId IN :artworkIds")
+    List<Integer> findSoldArtworkIds(@Param("artworkIds") List<Integer> artworkIds);
 }

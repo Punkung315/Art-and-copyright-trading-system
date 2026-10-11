@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { Artwork } from "@/types";
+import { formatArtworkSize } from "@/lib/format";
 
 /**
  * ป้ายบอกสถานะบนการ์ด — ขึ้นเฉพาะตอนที่ "ซื้อไม่ได้"
@@ -14,8 +15,22 @@ const SALES_BADGE: Record<string, { label: string; className: string }> = {
   reserved: { label: "อยู่ในคำสั่งซื้อแล้ว", className: "bg-amber-500 text-white" },
 };
 
-export function ArtCard({ artwork }: { artwork: Artwork }) {
+export function ArtCard({
+  artwork,
+  priceBasis = "artwork",
+}: {
+  artwork: Artwork;
+  /**
+   * ราคาที่ให้เด่นบนการ์ด — ตามฐานราคาที่ผู้ใช้กำลังกรองอยู่ในหน้าค้นหา
+   * ถ้าผู้ใช้กรองด้วยราคาลิขสิทธิ์แล้วการ์ดยังโชว์ราคาขายชิ้นงาน
+   * ตัวเลขที่เห็นจะไม่ใช่ตัวเลขที่เพิ่งกรองไป ซึ่งอ่านแล้วสับสนทันที
+   */
+  priceBasis?: "artwork" | "copyright";
+}) {
   const badge = SALES_BADGE[artwork.salesStatus ?? "available"];
+  const size = formatArtworkSize(artwork);
+  // โชว์ราคาลิขสิทธิ์เป็นตัวหลักได้เฉพาะตอนที่งานชิ้นนั้นมีราคาลิขสิทธิ์จริง
+  const showCopyrightPrice = priceBasis === "copyright" && !!artwork.copyrightPrice;
 
   return (
     <Link
@@ -56,12 +71,28 @@ export function ArtCard({ artwork }: { artwork: Artwork }) {
       <div className="flex flex-1 flex-col gap-1 p-3">
         <p className="line-clamp-1 text-sm font-semibold text-stone-900">{artwork.artworkName}</p>
         <p className="text-xs text-stone-500">{artwork.sellerName}</p>
-        <div className="mt-auto flex items-center justify-between pt-2">
+        {/* ขนาดจริงของชิ้นงาน — เดิมต้องกดเข้าไปในแต่ละชิ้นถึงจะเห็น */}
+        {size !== "—" && <p className="text-xs text-stone-500">{size}</p>}
+        <div className="mt-auto flex items-end justify-between gap-2 pt-2">
           <span className="text-xs rounded-full bg-stone-100 px-2 py-0.5 text-stone-600">
             {artwork.artworkType}
           </span>
-          <span className="text-sm font-semibold text-stone-900">
-            ฿{artwork.price.toLocaleString()}
+          <span className="text-right">
+            {showCopyrightPrice ? (
+              <>
+                <span className="block text-[10px] leading-tight text-stone-400">ลิขสิทธิ์</span>
+                <span className="text-sm font-semibold text-stone-900">
+                  ฿{artwork.copyrightPrice!.toLocaleString()}
+                </span>
+                <span className="block text-[10px] leading-tight text-stone-400">
+                  ชิ้นงาน ฿{artwork.price.toLocaleString()}
+                </span>
+              </>
+            ) : (
+              <span className="text-sm font-semibold text-stone-900">
+                ฿{artwork.price.toLocaleString()}
+              </span>
+            )}
           </span>
         </div>
       </div>

@@ -7,19 +7,9 @@ import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { useToast } from "@/context/ToastContext";
 import { Button, Card, Container, EmptyState, Spinner } from "@/components/ui";
-import { AddressForm, AddressDraft, formatAddress } from "@/components/AddressBook";
+import { AddressPicker, AddressDraft } from "@/components/AddressBook";
 import { addAddress, confirmOrder, getMe, ApiError } from "@/lib/api";
 import { Address } from "@/types";
-
-const EMPTY_ADDRESS: AddressDraft = {
-  houseNo: "",
-  villageNo: "",
-  thoroughfare: "",
-  subDistrict: "",
-  district: "",
-  province: "",
-  postalCode: "",
-};
 
 function CheckoutContent() {
   const { user, setUser } = useAuth();
@@ -34,8 +24,6 @@ function CheckoutContent() {
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string> | null>(null);
   const [addresses, setAddresses] = useState<Address[] | undefined>(undefined);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [addingAddress, setAddingAddress] = useState(false);
-  const [savingAddress, setSavingAddress] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -47,21 +35,18 @@ function CheckoutContent() {
     });
   }, []);
 
-  async function handleAddAddress(draft: AddressDraft) {
-    setSavingAddress(true);
+  /** บันทึกที่อยู่ใหม่เข้าสมุดที่อยู่ แล้วคืนรายการล่าสุดให้ตัวเลือกไปเลือกอันที่เพิ่งเพิ่ม */
+  async function handleAddAddress(draft: AddressDraft): Promise<Address[]> {
     try {
       const updated = await addAddress(draft);
       setUser(updated);
       const list = updated.addresses ?? [];
       setAddresses(list);
-      // เลือกที่อยู่ที่เพิ่งเพิ่มให้เลย เพราะผู้ซื้อกรอกมันเพื่อจะใช้ส่งของรอบนี้
-      setSelectedId(list.length ? list[list.length - 1].id : null);
-      setAddingAddress(false);
       notify("บันทึกที่อยู่เรียบร้อยแล้ว", "success");
+      return list;
     } catch (err) {
       notify(err instanceof ApiError ? err.message : "ไม่สามารถบันทึกที่อยู่ได้", "error");
-    } finally {
-      setSavingAddress(false);
+      return addresses ?? [];
     }
   }
 
@@ -127,7 +112,6 @@ function CheckoutContent() {
   const chosenItems = items.filter((i) => selectedItemIds === null || selectedItemIds.has(i.id));
   const chosenTotal = chosenItems.reduce((sum, i) => sum + i.priceAtAdd, 0);
   const sellers = Array.from(new Set(chosenItems.map((i) => i.artwork?.sellerName)));
-  const hasAddress = addresses.length > 0;
 
   return (
     <Container className="flex justify-center py-10">
@@ -207,63 +191,15 @@ function CheckoutContent() {
         <div className="mt-8 border-t border-stone-200 pt-6">
           <h2 className="font-serif text-lg font-bold text-stone-900">ที่อยู่สำหรับจัดส่ง</h2>
 
-          {!hasAddress && !addingAddress && (
-            <div className="mt-3 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              <p className="font-medium">คุณยังไม่มีที่อยู่ในระบบ</p>
-              <p className="mt-1 text-xs text-amber-800">
-                ต้องเพิ่มที่อยู่ก่อน ระบบจึงจะคำนวณค่าจัดส่งจากจังหวัดปลายทางได้
-              </p>
-              <Button type="button" className="mt-3" onClick={() => setAddingAddress(true)}>
-                เพิ่มที่อยู่จัดส่ง
-              </Button>
-            </div>
-          )}
-
-          {hasAddress && (
-            <div className="mt-3 flex flex-col gap-2">
-              {addresses.map((a) => (
-                <label
-                  key={a.id}
-                  className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm ${
-                    selectedId === a.id
-                      ? "border-amber-500 bg-amber-50"
-                      : "border-stone-200 hover:bg-stone-50"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="shippingAddress"
-                    className="mt-1"
-                    checked={selectedId === a.id}
-                    onChange={() => setSelectedId(a.id)}
-                  />
-                  <span className="text-stone-700">{formatAddress(a)}</span>
-                </label>
-              ))}
-
-              {!addingAddress && (
-                <button
-                  type="button"
-                  className="self-start text-sm text-amber-700 underline"
-                  onClick={() => setAddingAddress(true)}
-                >
-                  + เพิ่มที่อยู่ใหม่
-                </button>
-              )}
-            </div>
-          )}
-
-          {addingAddress && (
-            <div className="mt-4 rounded-lg border border-stone-200 p-4">
-              <AddressForm
-                initial={EMPTY_ADDRESS}
-                submitLabel="บันทึกที่อยู่"
-                busy={savingAddress}
-                onSubmit={handleAddAddress}
-                onCancel={hasAddress ? () => setAddingAddress(false) : undefined}
-              />
-            </div>
-          )}
+          <div className="mt-3">
+            <AddressPicker
+              addresses={addresses ?? []}
+              selectedId={selectedId}
+              onSelect={(a) => setSelectedId(a.id)}
+              onAdd={handleAddAddress}
+              emptyHint="คุณยังไม่มีที่อยู่ในระบบ — ต้องเพิ่มที่อยู่ก่อน ระบบจึงจะคำนวณค่าจัดส่งจากจังหวัดปลายทางได้"
+            />
+          </div>
         </div>
 
         <p className="mt-6 text-xs text-stone-400">

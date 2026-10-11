@@ -1,19 +1,15 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RequireUser } from "@/components/RoleGuard";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { Button, Card, Container, Field, Input } from "@/components/ui";
-import {
-  validateFullName,
-  validateNationalNo,
-  validateNotEmpty,
-  validatePhone,
-  validatePostalCode,
-} from "@/lib/validation";
-import { registerSeller, ApiError } from "@/lib/api";
+import { validateFullName, validateNationalNo, validatePhone } from "@/lib/validation";
+import { addAddress, getMe, registerSeller, ApiError } from "@/lib/api";
+import { Address } from "@/types";
+import { AddressDraft, AddressPicker } from "@/components/AddressBook";
 import {
   BankAccountFields,
   BankAccountDraft,
@@ -26,20 +22,49 @@ function RegisterSellerContent() {
   const { notify } = useToast();
   const router = useRouter();
 
-  const [fullName, setFullName] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
-  const [nationalNo, setNationalNo] = useState("");
-  const [houseNo, setHouseNo] = useState("");
-  const [villageNo, setVillageNo] = useState("");
-  const [thoroughfare, setThoroughfare] = useState("");
-  const [subDistrict, setSubDistrict] = useState("");
-  const [district, setDistrict] = useState("");
-  const [province, setProvince] = useState("");
-  const [postalCode, setPostalCode] = useState("");
+  /*
+   * เติมข้อมูลที่ผู้ใช้กรอกไว้ตั้งแต่สมัครเป็นผู้ซื้อให้เลย — ชื่อจริง เบอร์โทร เลขบัตร
+   * ทุกคนที่มาถึงหน้านี้เป็นผู้ซื้ออยู่แล้ว จึงมีข้อมูลชุดนี้ครบ
+   * ยังแก้ได้ เผื่อชื่อที่จะใช้ในฐานะศิลปินต่างจากที่เคยกรอกไว้
+   */
+  const [fullName, setFullName] = useState(user?.fullName ?? "");
+  const [phoneNumber, setPhoneNumber] = useState(user?.phoneNumber ?? "");
+  const [nationalNo, setNationalNo] = useState(user?.nationalNo ?? "");
+
+  /** ที่อยู่ — เลือกจากสมุดที่อยู่ที่มีอยู่แล้ว หรือเพิ่มใหม่ตรงนี้ */
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [bank, setBank] = useState<BankAccountDraft>(EMPTY_BANK_DRAFT);
   const [bankErrors, setBankErrors] = useState<Record<string, string | null>>({});
   const [errors, setErrors] = useState<Record<string, string | null>>({});
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    getMe().then((me) => {
+      if (!me) return;
+      const list = me.addresses ?? [];
+      setAddresses(list);
+      if (list.length > 0) setSelectedAddressId(list[0].id);
+      // เผื่อ user ใน context ยังไม่มีข้อมูลเหล่านี้ (บัญชีเก่าที่สมัครก่อนบังคับกรอก)
+      setFullName((v) => v || me.fullName || "");
+      setPhoneNumber((v) => v || me.phoneNumber || "");
+      setNationalNo((v) => v || me.nationalNo || "");
+    });
+  }, []);
+
+  /** บันทึกที่อยู่ใหม่เข้าสมุดที่อยู่ แล้วคืนรายการล่าสุดให้ตัวเลือก */
+  async function handleAddAddress(draft: AddressDraft): Promise<Address[]> {
+    try {
+      const updated = await addAddress(draft);
+      const list = updated.addresses ?? [];
+      setAddresses(list);
+      notify("บันทึกที่อยู่เรียบร้อยแล้ว", "success");
+      return list;
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : "ไม่สามารถบันทึกที่อยู่ได้", "error");
+      return addresses;
+    }
+  }
 
   if (user?.roles.includes("seller")) {
     return (
@@ -62,20 +87,22 @@ function RegisterSellerContent() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!user) return;
+    const selected = addresses.find((a) => a.id === selectedAddressId) ?? null;
     const nextErrors = {
       fullName: validateFullName(fullName),
       phoneNumber: validatePhone(phoneNumber),
       nationalNo: validateNationalNo(nationalNo),
-      houseNo: validateNotEmpty(houseNo, "บ้านเลขที่"),
-      subDistrict: validateNotEmpty(subDistrict, "ตำบล"),
-      district: validateNotEmpty(district, "อำเภอ"),
-      province: validateNotEmpty(province, "จังหวัด"),
-      postalCode: validatePostalCode(postalCode),
+      // ที่อยู่ผ่านการตรวจตั้งแต่ตอนบันทึกเข้าสมุดแล้ว เหลือแค่ "เลือกมาหรือยัง"
+      address: selected ? null : "กรุณาเลือกที่อยู่ของผู้ขาย",
     };
     const nextBankErrors = validateBankDraft(bank, false);
     setErrors(nextErrors);
     setBankErrors(nextBankErrors);
-    if (Object.values(nextErrors).some(Boolean) || Object.values(nextBankErrors).some(Boolean)) {
+    if (
+      Object.values(nextErrors).some(Boolean) ||
+      Object.values(nextBankErrors).some(Boolean) ||
+      !selected
+    ) {
       notify("กรุณากรอกข้อมูลให้ถูกต้อง", "error");
       return;
     }
@@ -86,13 +113,13 @@ function RegisterSellerContent() {
         fullName,
         phoneNumber,
         nationalNo,
-        houseNo,
-        villageNo,
-        thoroughfare,
-        subDistrict,
-        district,
-        province,
-        postalCode,
+        houseNo: selected.houseNo,
+        villageNo: selected.villageNo,
+        thoroughfare: selected.thoroughfare,
+        subDistrict: selected.subDistrict,
+        district: selected.district,
+        province: selected.province,
+        postalCode: selected.postalCode,
         bankAccount: bank,
       });
       await refresh();
@@ -123,27 +150,21 @@ function RegisterSellerContent() {
           <Field label="เลขบัตรประชาชน" error={errors.nationalNo}>
             <Input value={nationalNo} onChange={(e) => setNationalNo(e.target.value)} placeholder="13 หลัก" />
           </Field>
-          <Field label="บ้านเลขที่" error={errors.houseNo}>
-            <Input value={houseNo} onChange={(e) => setHouseNo(e.target.value)} />
-          </Field>
-          <Field label="หมู่ที่">
-            <Input value={villageNo} onChange={(e) => setVillageNo(e.target.value)} />
-          </Field>
-          <Field label="ถนน">
-            <Input value={thoroughfare} onChange={(e) => setThoroughfare(e.target.value)} />
-          </Field>
-          <Field label="ตำบล" error={errors.subDistrict}>
-            <Input value={subDistrict} onChange={(e) => setSubDistrict(e.target.value)} />
-          </Field>
-          <Field label="อำเภอ" error={errors.district}>
-            <Input value={district} onChange={(e) => setDistrict(e.target.value)} />
-          </Field>
-          <Field label="จังหวัด" error={errors.province}>
-            <Input value={province} onChange={(e) => setProvince(e.target.value)} />
-          </Field>
-          <Field label="รหัสไปรษณีย์" error={errors.postalCode}>
-            <Input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} placeholder="5 หลัก" />
-          </Field>
+          <div className="sm:col-span-2">
+            <Field label="ที่อยู่ผู้ขาย" error={errors.address}>
+              {/*
+                เลือกจากสมุดที่อยู่ที่กรอกไว้ตั้งแต่สมัครเป็นผู้ซื้อ ไม่ต้องพิมพ์ซ้ำ
+                ตั้ง "ที่อยู่ต้นทางส่งของ" (ตัวคิดค่าจัดส่ง) ได้ทีหลังในหน้าโปรไฟล์
+              */}
+              <AddressPicker
+                addresses={addresses}
+                selectedId={selectedAddressId}
+                onSelect={(a) => setSelectedAddressId(a.id)}
+                onAdd={handleAddAddress}
+                emptyHint="ยังไม่มีที่อยู่ในระบบ กรุณาเพิ่มที่อยู่ของผู้ขาย"
+              />
+            </Field>
+          </div>
 
           {/*
             บัญชีรับเงิน — ผู้ดูแลระบบโอนค่าผลงานให้ผ่านบัญชีนี้หลังผู้ซื้อได้รับสินค้า

@@ -5,16 +5,11 @@ import { useRouter } from "next/navigation";
 import { RequireUser } from "@/components/RoleGuard";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
-import { getArtwork, getMe, sendCopyrightTransfer, ApiError } from "@/lib/api";
+import { addAddress, getArtwork, getMe, sendCopyrightTransfer, ApiError } from "@/lib/api";
 import { Address, Artwork } from "@/types";
-import { formatAddress } from "@/components/AddressBook";
+import { AddressDraft, AddressPicker } from "@/components/AddressBook";
 import { Button, Card, Container, Field, Input, Spinner, Textarea } from "@/components/ui";
-import {
-  validateFullName,
-  validateNationalNo,
-  validateNotEmpty,
-  validatePostalCode,
-} from "@/lib/validation";
+import { validateFullName, validateNationalNo, validateNotEmpty } from "@/lib/validation";
 
 function SendCopyrightContent({ artworkId }: { artworkId: string }) {
   const { user } = useAuth();
@@ -24,21 +19,18 @@ function SendCopyrightContent({ artworkId }: { artworkId: string }) {
 
   const [fullName, setFullName] = useState("");
   const [nationalNo, setNationalNo] = useState("");
-  const [houseNo, setHouseNo] = useState("");
-  const [villageNo, setVillageNo] = useState("");
-  const [thoroughfare, setThoroughfare] = useState("");
-  const [subDistrict, setSubDistrict] = useState("");
-  const [district, setDistrict] = useState("");
-  const [province, setProvince] = useState("");
-  const [postalCode, setPostalCode] = useState("");
   const [agreement, setAgreement] = useState(
     "ข้าพเจ้าตกลงซื้อสิทธิ์ในลิขสิทธิ์ของผลงานชิ้นนี้ตามราคาที่กำหนด และยินยอมปฏิบัติตามข้อตกลงการโอนลิขสิทธิ์ทุกประการ"
   );
   const [errors, setErrors] = useState<Record<string, string | null>>({});
   const [submitting, setSubmitting] = useState(false);
 
-  /** ที่อยู่ในสมุดของผู้ซื้อ ไว้ให้เลือกเติมฟอร์มแทนการพิมพ์เองทุกช่อง */
+  /**
+   * ที่อยู่ในสมุดของผู้ซื้อ — เลือกเอา ไม่ต้องพิมพ์ใหม่ทั้ง 7 ช่องทุกครั้งที่ขอลิขสิทธิ์
+   * เพิ่มรายการใหม่ตรงนี้ได้ และที่เพิ่มจะเข้าสมุดที่อยู่ด้วย
+   */
   const [savedAddresses, setSavedAddresses] = useState<Address[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [prefilled, setPrefilled] = useState(false);
 
   useEffect(() => {
@@ -64,18 +56,23 @@ function SendCopyrightContent({ artworkId }: { artworkId: string }) {
 
       const list = me.addresses ?? [];
       setSavedAddresses(list);
-      if (list.length > 0) applyAddress(list[0]);
+      // เลือกรายการแรกให้ก่อน ผู้ซื้อส่วนใหญ่มีที่อยู่เดียว จะได้ไม่ต้องกดเลือกเอง
+      if (list.length > 0) setSelectedAddressId(list[0].id);
     });
   }, [prefilled]);
 
-  function applyAddress(a: Address) {
-    setHouseNo(a.houseNo ?? "");
-    setVillageNo(a.villageNo ?? "");
-    setThoroughfare(a.thoroughfare ?? "");
-    setSubDistrict(a.subDistrict ?? "");
-    setDistrict(a.district ?? "");
-    setProvince(a.province ?? "");
-    setPostalCode(a.postalCode ?? "");
+  /** บันทึกที่อยู่ใหม่เข้าสมุดที่อยู่ แล้วคืนรายการล่าสุดให้ตัวเลือก */
+  async function handleAddAddress(draft: AddressDraft): Promise<Address[]> {
+    try {
+      const updated = await addAddress(draft);
+      const list = updated.addresses ?? [];
+      setSavedAddresses(list);
+      notify("บันทึกที่อยู่เรียบร้อยแล้ว", "success");
+      return list;
+    } catch (err) {
+      notify(err instanceof ApiError ? err.message : "ไม่สามารถบันทึกที่อยู่ได้", "error");
+      return savedAddresses;
+    }
   }
 
   if (artwork === undefined) return <Spinner />;
@@ -86,18 +83,16 @@ function SendCopyrightContent({ artworkId }: { artworkId: string }) {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!user || !artwork) return;
+    const selected = savedAddresses.find((a) => a.id === selectedAddressId) ?? null;
     const nextErrors = {
       fullName: validateFullName(fullName),
       nationalNo: validateNationalNo(nationalNo),
-      houseNo: validateNotEmpty(houseNo, "บ้านเลขที่"),
-      subDistrict: validateNotEmpty(subDistrict, "ตำบล"),
-      district: validateNotEmpty(district, "อำเภอ"),
-      province: validateNotEmpty(province, "จังหวัด"),
-      postalCode: validatePostalCode(postalCode),
+      // ที่อยู่ถูกตรวจตั้งแต่ตอนบันทึกเข้าสมุดแล้ว ตรงนี้เหลือแค่ "เลือกมาหรือยัง"
+      address: selected ? null : "กรุณาเลือกที่อยู่สำหรับสัญญา",
       agreement: validateNotEmpty(agreement, "รายละเอียดข้อตกลง"),
     };
     setErrors(nextErrors);
-    if (Object.values(nextErrors).some(Boolean)) {
+    if (Object.values(nextErrors).some(Boolean) || !selected) {
       notify("กรุณากรอกข้อมูลให้ถูกต้อง", "error");
       return;
     }
@@ -109,16 +104,7 @@ function SendCopyrightContent({ artworkId }: { artworkId: string }) {
         buyer: user,
         fullName,
         nationalNo,
-        address: {
-          id: "addr_tmp",
-          houseNo,
-          villageNo,
-          thoroughfare,
-          subDistrict,
-          district,
-          province,
-          postalCode,
-        },
+        address: selected,
         agreement,
       });
       notify("ส่งคำขอโอนลิขสิทธิ์สำเร็จ รอผู้ขายตรวจสอบ", "success");
@@ -145,57 +131,29 @@ function SendCopyrightContent({ artworkId }: { artworkId: string }) {
         </div>
 
         <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2">
-          <Field label="ชื่อ-นามสกุล (fullName)" error={errors.fullName}>
+          <Field label="ชื่อ-นามสกุล" error={errors.fullName}>
             <Input value={fullName} onChange={(e) => setFullName(e.target.value)} />
           </Field>
-          <Field label="เลขบัตรประชาชน (nationalNo)" error={errors.nationalNo}>
+          <Field label="เลขบัตรประชาชน" error={errors.nationalNo}>
             <Input value={nationalNo} onChange={(e) => setNationalNo(e.target.value)} />
           </Field>
-          {/*
-            มีที่อยู่ในสมุดมากกว่าหนึ่งรายการ ให้เลือกเติมได้ ไม่ต้องพิมพ์ใหม่ทั้งชุด
-            ระบบเติมรายการแรกให้ตั้งแต่โหลดหน้าแล้ว ปุ่มนี้ไว้สลับไปใช้ที่อยู่อื่น
-          */}
-          {savedAddresses.length > 1 && (
-            <div className="sm:col-span-2">
-              <p className="mb-2 text-sm font-medium text-stone-700">เติมจากที่อยู่ที่บันทึกไว้</p>
-              <div className="flex flex-wrap gap-2">
-                {savedAddresses.map((a) => (
-                  <Button
-                    key={a.id}
-                    type="button"
-                    variant="secondary"
-                    onClick={() => applyAddress(a)}
-                  >
-                    {formatAddress(a).slice(0, 40)}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <Field label="บ้านเลขที่ (houseNo)" error={errors.houseNo}>
-            <Input value={houseNo} onChange={(e) => setHouseNo(e.target.value)} />
-          </Field>
-          <Field label="หมู่ที่ (villageNo)">
-            <Input value={villageNo} onChange={(e) => setVillageNo(e.target.value)} />
-          </Field>
-          <Field label="ถนน (thoroughfare)">
-            <Input value={thoroughfare} onChange={(e) => setThoroughfare(e.target.value)} />
-          </Field>
-          <Field label="ตำบล (sub-district)" error={errors.subDistrict}>
-            <Input value={subDistrict} onChange={(e) => setSubDistrict(e.target.value)} />
-          </Field>
-          <Field label="อำเภอ (district)" error={errors.district}>
-            <Input value={district} onChange={(e) => setDistrict(e.target.value)} />
-          </Field>
-          <Field label="จังหวัด (province)" error={errors.province}>
-            <Input value={province} onChange={(e) => setProvince(e.target.value)} />
-          </Field>
-          <Field label="รหัสไปรษณีย์ (postalCode)" error={errors.postalCode}>
-            <Input value={postalCode} onChange={(e) => setPostalCode(e.target.value)} />
-          </Field>
           <div className="sm:col-span-2">
-            <Field label="รายละเอียดข้อตกลง (agreement)" error={errors.agreement}>
+            <Field label="ที่อยู่ในสัญญา" error={errors.address}>
+              {/*
+                เลือกจากสมุดที่อยู่แทนการพิมพ์ใหม่ทั้งชุด — ข้อมูลชุดนี้ผู้ซื้อกรอกไว้แล้ว
+                ตั้งแต่สมัคร การพิมพ์ใหม่ทุกครั้งเสี่ยงให้ที่อยู่ในสัญญาไม่ตรงกับที่เคยให้ไว้
+              */}
+              <AddressPicker
+                addresses={savedAddresses}
+                selectedId={selectedAddressId}
+                onSelect={(a) => setSelectedAddressId(a.id)}
+                onAdd={handleAddAddress}
+                emptyHint="ยังไม่มีที่อยู่ในระบบ กรุณาเพิ่มที่อยู่เพื่อใช้ในสัญญา"
+              />
+            </Field>
+          </div>
+          <div className="sm:col-span-2">
+            <Field label="รายละเอียดข้อตกลง" error={errors.agreement}>
               <Textarea rows={4} value={agreement} onChange={(e) => setAgreement(e.target.value)} />
             </Field>
           </div>

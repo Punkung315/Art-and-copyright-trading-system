@@ -27,6 +27,17 @@ public class ArtworkFacetsResponse {
     private Double minPrice;
     private Double maxPrice;
 
+    /**
+     * ขอบของ slider เมื่อผู้ใช้สลับไปกรองด้วย "ราคาลิขสิทธิ์"
+     * null ทั้งคู่ = ตอนนี้ยังไม่มีงานที่เปิดขายลิขสิทธิ์อยู่เลย
+     */
+    private Double minCopyrightPrice;
+    private Double maxCopyrightPrice;
+
+    /** จำนวนงานในตัวกรอง "สิ่งที่ขาย" — ให้ผู้ใช้เห็นก่อนกดว่าแต่ละแบบมีกี่ชิ้น */
+    private long withCopyrightCount;
+    private long originalOnlyCount;
+
     @Data
     @Builder
     @AllArgsConstructor

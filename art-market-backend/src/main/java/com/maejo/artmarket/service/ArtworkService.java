@@ -21,9 +21,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * ArtworkService — Business Logic ของยูสเคส:
@@ -128,6 +131,14 @@ public class ArtworkService {
         if ("price_desc".equals(key)) return Sort.by(Sort.Direction.DESC, "price");
         if ("name".equals(key))       return Sort.by(Sort.Direction.ASC,  "artworkName");
 
+        /*
+         * การเรียงตามราคาลิขสิทธิ์ไม่ได้ทำที่ชั้นฐานข้อมูล แต่ไปเรียงต่อใน Java (ดู sortByCopyrightPrice)
+         * เพราะงานที่ไม่ได้เปิดขายลิขสิทธิ์มี copyrightPrice เป็น NULL และแต่ละฐานข้อมูล
+         * จัดลำดับ NULL ไม่เหมือนกัน (MySQL เอา NULL ขึ้นก่อนตอน ASC) ผลคือผู้ใช้กด
+         * "ราคาลิขสิทธิ์ ต่ำ → สูง" แล้วเจอแต่งานที่ไม่มีราคาลิขสิทธิ์เต็มหน้าแรก
+         * ตรงนี้จึงคืนลำดับตั้งต้นที่แน่นอนไว้ก่อน แล้วค่อยเรียงใหม่ให้ NULL ไปท้ายสุดเสมอ
+         */
+
         // ค่าเริ่มต้น = newest (และเป็นค่าที่ใช้เมื่อส่งค่าที่ไม่รู้จักมาด้วย)
         return Sort.by(Sort.Direction.DESC, "artworkId");
     }
@@ -143,18 +154,64 @@ public class ArtworkService {
                 keyword, artworkType, artworkStyle, artworkMediums,
                 req.getMinPrice(), req.getMaxPrice(),
                 req.getMinSize(), req.getMaxSize(),
+                resolveOffer(req.getOffer()),
+                req.getMinCopyrightPrice(), req.getMaxCopyrightPrice(),
                 resolveSort(req.getSort()));
+
+        artworks = sortByCopyrightPrice(artworks, req.getSort());
 
         if (req.getLimit() != null && req.getLimit() > 0) {
             artworks = artworks.stream().limit(req.getLimit()).toList();
         }
+
+        // ถามครั้งเดียวว่าในชุดผลลัพธ์นี้ ลิขสิทธิ์ของชิ้นไหนถูกขายไปแล้วบ้าง
+        Set<Integer> soldCopyright = soldCopyrightIds(artworks);
 
         // "ค้นหาแล้วไม่เจอ" ไม่ใช่ error ของระบบ — เป็นผลลัพธ์ที่ถูกต้องคือ list ว่าง
         // เดิมคืน success=false ทำให้ frontend เด้ง toast error ทุกครั้งที่ผลการค้นหาว่าง
         // และแยกไม่ออกจากกรณี backend พังจริง (SRS Alternate Flow ให้ "แสดงข้อความ" ไม่ใช่ error)
         return ApiResponse.ok(
                 artworks.isEmpty() ? "ไม่พบงานศิลปะที่ค้นหา" : "พบผลงาน " + artworks.size() + " รายการ",
-                artworks.stream().map(ArtworkSummaryResponse::from).toList());
+                artworks.stream()
+                        .map(a -> ArtworkSummaryResponse.from(a, soldCopyright.contains(a.getArtworkId())))
+                        .toList());
+    }
+
+    /**
+     * ค่าตัวกรอง "สิ่งที่ขาย" ที่ระบบรู้จัก — ค่าที่ไม่รู้จัก (รวมถึง ALL) แปลว่าไม่กรอง
+     * ใช้ whitelist ด้วยเหตุผลเดียวกับ resolveSort คือค่านี้มาจาก query string ของผู้ใช้
+     */
+    private String resolveOffer(String offer) {
+        if (offer == null) return null;
+        String key = offer.trim().toUpperCase();
+        return ("WITH_COPYRIGHT".equals(key) || "ORIGINAL_ONLY".equals(key)) ? key : null;
+    }
+
+    /**
+     * เรียงตามราคาลิขสิทธิ์ โดยให้งานที่ไม่ได้เปิดขายลิขสิทธิ์ไปอยู่ท้ายสุดเสมอ
+     * ไม่ว่าจะเรียงจากน้อยไปมากหรือมากไปน้อย (ดูเหตุผลใน resolveSort)
+     */
+    private List<Artwork> sortByCopyrightPrice(List<Artwork> artworks, String sort) {
+        boolean asc  = "copyright_asc".equals(sort);
+        boolean desc = "copyright_desc".equals(sort);
+        if (!asc && !desc) return artworks;
+
+        Comparator<Artwork> byPrice = Comparator.comparingDouble(a -> a.getCopyrightPrice() == null ? 0 : a.getCopyrightPrice());
+        if (desc) byPrice = byPrice.reversed();
+
+        return artworks.stream()
+                .sorted(Comparator
+                        .comparing((Artwork a) -> a.getCopyrightPrice() == null)  // false (มีราคา) มาก่อน
+                        .thenComparing(byPrice))
+                .toList();
+    }
+
+    /** id ของงานที่ลิขสิทธิ์ถูกขายจบไปแล้ว ในชุดที่ส่งเข้ามา (query เดียว ไม่ใช่รายชิ้น) */
+    private Set<Integer> soldCopyrightIds(List<Artwork> artworks) {
+        List<Integer> ids = artworks.stream().map(Artwork::getArtworkId).toList();
+        // IN () ที่ไม่มีค่าเลยเป็น SQL ที่ไม่ถูกต้อง ต้องกันไว้ก่อนเสมอ
+        if (ids.isEmpty()) return Set.of();
+        return new HashSet<>(copyrightTransferRepository.findSoldArtworkIds(ids));
     }
 
     // =========================================================================
@@ -255,12 +312,24 @@ public class ArtworkService {
             maxPrice = (Double) priceRow.get(0)[1];
         }
 
+        List<Object[]> copyrightRow = artworkRepository.copyrightPriceRange();
+        Double minCopyrightPrice = null;
+        Double maxCopyrightPrice = null;
+        if (!copyrightRow.isEmpty() && copyrightRow.get(0)[0] != null) {
+            minCopyrightPrice = (Double) copyrightRow.get(0)[0];
+            maxCopyrightPrice = (Double) copyrightRow.get(0)[1];
+        }
+
         ArtworkFacetsResponse facets = ArtworkFacetsResponse.builder()
                 .types(toFacetValues(artworkRepository.countByType()))
                 .styles(toFacetValues(artworkRepository.countByStyle()))
                 .mediums(toFacetValues(artworkRepository.countByMediums()))
                 .minPrice(minPrice)
                 .maxPrice(maxPrice)
+                .minCopyrightPrice(minCopyrightPrice)
+                .maxCopyrightPrice(maxCopyrightPrice)
+                .withCopyrightCount(artworkRepository.countWithCopyright())
+                .originalOnlyCount(artworkRepository.countOriginalOnly())
                 .build();
 
         return ApiResponse.ok("ดึงตัวเลือกตัวกรองสำเร็จ", facets);
@@ -372,12 +441,17 @@ public class ArtworkService {
 
         List<Artwork> artworks = artworkRepository.findBySeller_SellerId(seller.getSellerId());
 
+        // ผู้ขายต้องเห็นด้วยว่างานชิ้นไหนของตัวเองขายลิขสิทธิ์ไปแล้ว (แก้ราคาลิขสิทธิ์ไม่ได้อีก)
+        Set<Integer> soldCopyright = soldCopyrightIds(artworks);
+
         // Alternate Flow 3.1 — "ยังไม่มีรายการงานศิลปะ"
         // คืน success=true พร้อม list ว่าง เพื่อให้ frontend แสดง empty state ได้
         // แทนที่จะเด้ง error ทุกครั้งที่ผู้ขายยังไม่มีผลงาน
         return ApiResponse.ok(
                 artworks.isEmpty() ? "ยังไม่มีรายการงานศิลปะ" : "พบ " + artworks.size() + " รายการ",
-                artworks.stream().map(ArtworkSummaryResponse::from).toList());
+                artworks.stream()
+                        .map(a -> ArtworkSummaryResponse.from(a, soldCopyright.contains(a.getArtworkId())))
+                        .toList());
     }
 
     // =========================================================================

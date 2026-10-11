@@ -40,9 +40,39 @@ public class ArtworkSummaryResponse {
      */
     private Integer sellerUserId;
 
+    /**
+     * ราคาลิขสิทธิ์ และสถานะว่าขายไปแล้วหรือยัง
+     *
+     * ต้องมีในระดับ summary ไม่ใช่เฉพาะหน้า detail เพราะหน้าค้นหาต้องกรองและ
+     * แสดง "ซื้อลิขสิทธิ์ได้" บนการ์ดได้โดยไม่ต้องยิง API รายชิ้น
+     * (ของเดิมการ์ดมีป้ายนี้อยู่แล้วแต่ไม่เคยขึ้นเลย เพราะข้อมูลไม่เคยถูกส่งมา)
+     */
+    private Double  copyrightPrice;
+    private boolean copyrightSold;
+
+    /**
+     * ขนาดชิ้นงาน — ไว้แสดงบนการ์ดผลการค้นหา
+     * ผู้ซื้อเลือกงานจากขนาดจริงพอ ๆ กับจากราคา แต่เดิมต้องกดเข้าไปในแต่ละชิ้นถึงจะเห็น
+     */
+    private Double width;
+    private Double height;
+
     /** แปลง Entity → DTO ในที่เดียว ไม่ต้องกระจาย logic ไปหลายที่ */
     public static ArtworkSummaryResponse from(Artwork artwork) {
+        return from(artwork, false);
+    }
+
+    /**
+     * @param copyrightSold ลิขสิทธิ์ของชิ้นนี้ถูกโอนจบไปแล้วหรือยัง
+     *                      ผู้เรียกต้องหามาให้ (ดู CopyrightTransferRepository.findSoldArtworkIds)
+     *                      DTO ไม่ควรไปเรียก repository เองเพราะจะกลายเป็น N+1 ทันที
+     */
+    public static ArtworkSummaryResponse from(Artwork artwork, boolean copyrightSold) {
         return ArtworkSummaryResponse.builder()
+                .copyrightPrice(artwork.getCopyrightPrice())
+                .copyrightSold(copyrightSold)
+                .width(artwork.getWidth())
+                .height(artwork.getHeight())
                 .artworkId(artwork.getArtworkId())
                 .artworkName(artwork.getArtworkName())
                 .artworkImage(artwork.getArtworkImage())

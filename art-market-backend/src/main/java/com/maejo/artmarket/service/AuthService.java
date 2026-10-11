@@ -50,17 +50,25 @@ public class AuthService {
         }
 
         // Basic Flow ข้อ 5.1 — บันทึก User + Buyer ลง DB
+        //
+        // fullName / phoneNumber / nationalNo รับมาตั้งแต่สมัครแล้ว (ดูหมายเหตุใน DTO)
+        // ของเดิมตั้ง fullName เป็นสตริงว่าง แล้วไปขอทีหลังตอนผู้ซื้อจะทำสัญญาลิขสิทธิ์
         User user = User.builder()
                 .username(req.getUsername())
                 .password(passwordEncoder.encode(req.getPassword()))  // hash ก่อนเก็บ
                 .email(req.getEmail())
-                .fullName("")   // Buyer ยังไม่จำเป็นต้องกรอก fullName ตาม SRS
+                .fullName(req.getFullName())
+                .phoneNumber(req.getPhoneNumber())
+                .nationalNo(req.getNationalNo())
                 .role(Role.BUYER)
                 .build();
         userRepository.save(user);
 
         Buyer buyer = Buyer.builder().user(user).build();
         buyerRepository.save(buyer);
+
+        // ที่อยู่รายการแรกของผู้ซื้อ — เป็นที่อยู่จัดส่งตั้งต้น เพิ่ม/เลือกอันอื่นทีหลังได้
+        addressRepository.save(toAddress(req.getAddress(), user));
 
         // คืน token ทันที (login อัตโนมัติหลัง register สำเร็จ)
         return ApiResponse.ok("สมัครสมาชิกสำเร็จ", buildAuthResponse(user));
@@ -139,21 +147,32 @@ public class AuthService {
         // บันทึก Seller (verified=false รอ Admin ตรวจสอบ) พร้อมบัญชีรับเงินที่ตรวจแล้วด้านบน
         sellerRepository.save(seller);
 
-        // บันทึกที่อยู่
-        RegisterSellerRequest.AddressRequest addrReq = req.getAddress();
-        Address address = Address.builder()
-                .houseNo(addrReq.getHouseNo())
-                .villageNo(addrReq.getVillageNo())
-                .thoroughfare(addrReq.getThoroughfare())
-                .subdistrict(addrReq.getSubdistrict())
-                .district(addrReq.getDistrict())
-                .province(addrReq.getProvince())
-                .postalCode(addrReq.getPostalCode())
-                .user(user)
-                .build();
-        addressRepository.save(address);
+        /*
+         * บันทึกที่อยู่ — แต่เฉพาะเมื่อผู้ใช้ยังไม่มีที่อยู่ในสมุดเท่านั้น
+         *
+         * ตั้งแต่ผู้ซื้อกรอกที่อยู่ตั้งแต่สมัคร คนที่มาสมัครเป็นผู้ขายต่อจะมีที่อยู่อยู่แล้ว
+         * ถ้าบันทึกเพิ่มทุกครั้งจะได้ที่อยู่ซ้ำสองรายการในสมุดตั้งแต่วันแรก
+         * และผู้ใช้จะงงว่าทำไมตอนสั่งซื้อมีที่อยู่เดียวกันให้เลือกสองอัน
+         */
+        if (addressRepository.findByUser_UserId(user.getUserId()).isEmpty()) {
+            addressRepository.save(toAddress(req.getAddress(), user));
+        }
 
         return ApiResponse.ok("สมัครเป็นผู้ขายสำเร็จ รอการตรวจสอบจากผู้ดูแลระบบ", buildAuthResponse(user));
+    }
+
+    /** แปลง AddressRequest เป็น Address ของผู้ใช้คนหนึ่ง — ใช้ร่วมกันทั้งสมัครผู้ซื้อและผู้ขาย */
+    private Address toAddress(RegisterSellerRequest.AddressRequest req, User user) {
+        return Address.builder()
+                .houseNo(req.getHouseNo())
+                .villageNo(req.getVillageNo())
+                .thoroughfare(req.getThoroughfare())
+                .subdistrict(req.getSubdistrict())
+                .district(req.getDistrict())
+                .province(req.getProvince())
+                .postalCode(req.getPostalCode())
+                .user(user)
+                .build();
     }
 
     // =========================================================================

@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { Admin, User } from "@/types";
-import { getMe, loginUser, registerBuyer, setToken } from "@/lib/api";
+import { getMe, loginUser, registerBuyer, RegisterBuyerInput, setToken } from "@/lib/api";
 import { readStorage, writeStorage } from "@/lib/storage";
 
 interface Session {
@@ -17,7 +17,7 @@ interface AuthContextValue {
   admin: Admin | null;
   loading: boolean;
   login: (usernameOrEmail: string, password: string) => Promise<void>;
-  register: (input: { username: string; password: string; email: string }) => Promise<void>;
+  register: (input: RegisterBuyerInput) => Promise<void>;
   logout: () => void;
   refresh: () => Promise<void>;
   setUser: (u: User) => void;
@@ -69,7 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  async function register(input: { username: string; password: string; email: string }) {
+  async function register(input: RegisterBuyerInput) {
     const u = await registerBuyer(input);
     setUserState(u);
     setAdmin(null);

@@ -114,6 +114,110 @@ export function AddressForm({
 }
 
 /**
+ * ตัวเลือกที่อยู่ — เลือกจากสมุดที่อยู่ หรือเพิ่มรายการใหม่ตรงนั้นเลย
+ *
+ * ใช้ร่วมกันทุกหน้าที่ต้องการ "ที่อยู่หนึ่งรายการ" จากผู้ใช้
+ * (ยืนยันคำสั่งซื้อ / ส่งคำขอโอนลิขสิทธิ์ / สมัครเป็นผู้ขาย)
+ *
+ * ทำไมต้องรวมเป็นคอมโพเนนต์เดียว: ของเดิมแต่ละหน้าทำกันเอง หน้าชำระเงินให้เลือกจากสมุด
+ * แต่หน้าขอลิขสิทธิ์ให้พิมพ์ที่อยู่ใหม่ทั้ง 7 ช่องทุกครั้ง ทั้งที่เป็นข้อมูลชุดเดียวกัน
+ * ของผู้ใช้คนเดียวกัน — นอกจากเสียเวลาแล้วยังพิมพ์ไม่ตรงกับที่เคยกรอกไว้ได้ง่าย
+ *
+ * ที่อยู่ที่เพิ่มใหม่จะถูกบันทึกเข้าสมุดที่อยู่ด้วยเสมอ ไม่ใช่ใช้ครั้งเดียวทิ้ง
+ * เพราะคนที่กรอกที่อยู่ใหม่ตอนนี้ มีแนวโน้มจะใช้ที่อยู่เดิมนั้นอีกในครั้งถัดไป
+ */
+export function AddressPicker({
+  addresses,
+  selectedId,
+  onSelect,
+  onAdded,
+  busy = false,
+  onAdd,
+  addLabel = "+ เพิ่มที่อยู่ใหม่",
+  emptyHint = "ยังไม่มีที่อยู่ในระบบ กรุณาเพิ่มที่อยู่",
+}: {
+  addresses: Address[];
+  selectedId: string | null;
+  onSelect: (address: Address) => void;
+  /** เรียกหลังเพิ่มที่อยู่สำเร็จ ให้หน้าแม่อัปเดตรายการของตัวเอง */
+  onAdded?: (addresses: Address[]) => void;
+  busy?: boolean;
+  /** บันทึกที่อยู่ใหม่ คืนรายการที่อยู่ทั้งหมดหลังบันทึก */
+  onAdd: (draft: AddressDraft) => Promise<Address[]>;
+  addLabel?: string;
+  emptyHint?: string;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // ยังไม่มีที่อยู่เลย = ต้องกรอกอยู่ดี เปิดฟอร์มค้างไว้ ไม่ต้องให้กดปุ่มเพิ่มก่อน
+  const empty = addresses.length === 0;
+  const showForm = adding || empty;
+
+  async function handleAdd(draft: AddressDraft) {
+    setSaving(true);
+    try {
+      const list = await onAdd(draft);
+      onAdded?.(list);
+      // เลือกรายการที่เพิ่งเพิ่มให้เลย เพราะผู้ใช้กรอกมันเพื่อจะใช้รอบนี้
+      if (list.length > 0) onSelect(list[list.length - 1]);
+      setAdding(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      {empty && <p className="text-sm text-stone-500">{emptyHint}</p>}
+
+      {addresses.map((a) => (
+        <label
+          key={a.id}
+          className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm transition ${
+            selectedId === a.id
+              ? "border-stone-900 bg-stone-50"
+              : "border-stone-200 hover:bg-stone-50"
+          }`}
+        >
+          <input
+            type="radio"
+            name="addressPicker"
+            className="mt-1 accent-stone-900"
+            checked={selectedId === a.id}
+            onChange={() => onSelect(a)}
+          />
+          <span className="text-stone-700">{formatAddress(a)}</span>
+        </label>
+      ))}
+
+      {!showForm && (
+        <button
+          type="button"
+          className="self-start text-sm text-amber-700 underline"
+          onClick={() => setAdding(true)}
+        >
+          {addLabel}
+        </button>
+      )}
+
+      {showForm && (
+        <div className="mt-1 rounded-lg border border-stone-200 p-4">
+          <AddressForm
+            initial={EMPTY}
+            submitLabel="บันทึกที่อยู่"
+            busy={busy || saving}
+            onSubmit={handleAdd}
+            // ไม่มีที่อยู่เลยก็ยกเลิกไม่ได้ เพราะยกเลิกแล้วจะไม่เหลืออะไรให้เลือก
+            onCancel={empty ? undefined : () => setAdding(false)}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * สมุดที่อยู่ — เพิ่ม / แก้ไข / ลบ ได้หลายรายการ
  *
  * บันทึกทันทีทีละรายการ ไม่รอปุ่ม "บันทึกการแก้ไข" ของฟอร์มโปรไฟล์
