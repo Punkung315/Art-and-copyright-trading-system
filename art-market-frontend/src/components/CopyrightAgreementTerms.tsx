@@ -1,3 +1,6 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CopyrightTransfer } from "@/types";
 
 /**
@@ -130,5 +133,127 @@ export function CopyrightAgreementTerms({ transfer }: { transfer: CopyrightTrans
         </section>
       ))}
     </>
+  );
+}
+
+/**
+ * กล่องอ่านสัญญาก่อนลงนาม — ปลดล็อกช่องติ๊กยอมรับเมื่อเลื่อนอ่านจนจบเท่านั้น
+ *
+ * ทำไมต้องบังคับอ่าน:
+ *   สัญญาฉบับนี้โอนลิขสิทธิ์ "แต่เพียงผู้เดียวตลอดอายุการคุ้มครอง" ซึ่งเลิกไม่ได้
+ *   และผู้โอนหมดสิทธิ์ใช้ประโยชน์เชิงพาณิชย์ในงานของตัวเองทันที
+ *   ของเดิมมีแค่ปุ่มลิงก์ "อ่านสัญญาฉบับเต็มก่อนลงนาม" ซึ่งกดหรือไม่กดก็เซ็นได้
+ *   = ลงนามโดยไม่เคยเห็นข้อสัญญาเลยสักครั้ง
+ *
+ * ทำไมวัดด้วย "เลื่อนจนสุด" ไม่ใช่แค่ติ๊กยอมรับ:
+ *   ช่องติ๊กอย่างเดียวพิสูจน์ไม่ได้ว่าข้อความเคยปรากฏบนจอ การเลื่อนจนสุดอย่างน้อย
+ *   ก็ยืนยันว่าเนื้อหาทั้งฉบับถูกแสดงให้เห็นแล้ว (ยังคงเป็นคนละเรื่องกับ "อ่านจริง"
+ *   แต่เป็นสิ่งที่ระบบตรวจได้จริง ไม่ใช่การอ้างลอย ๆ)
+ *
+ * กรณีจอสูงจนไม่มีอะไรให้เลื่อน ให้ถือว่าอ่านครบแล้ว ไม่งั้นจะติดค้างเซ็นไม่ได้เลย
+ */
+export function AgreementReadGate({
+  transfer,
+  accepted,
+  onAcceptedChange,
+  disabled = false,
+  acceptLabel = "ข้าพเจ้าได้อ่านสัญญาฉบับนี้โดยตลอดแล้ว และตกลงยอมรับเงื่อนไขทั้งหมด",
+}: {
+  transfer: CopyrightTransfer;
+  accepted: boolean;
+  onAcceptedChange: (next: boolean) => void;
+  disabled?: boolean;
+  acceptLabel?: string;
+}) {
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [reachedEnd, setReachedEnd] = useState(false);
+
+  const checkScrolledToEnd = useCallback(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    // เผื่อ 8px เพราะความสูงจริงเป็นทศนิยมได้ตามการย่อ/ขยายหน้าจอ
+    // ถ้าเทียบเป๊ะ ๆ ผู้ใช้บางเครื่องจะเลื่อนจนสุดแล้วแต่ยังไม่ผ่าน
+    const atEnd = el.scrollTop + el.clientHeight >= el.scrollHeight - 8;
+    if (atEnd) setReachedEnd(true);
+  }, []);
+
+  useEffect(() => {
+    checkScrolledToEnd();
+    // เนื้อหาสั้นกว่ากล่อง = ไม่มีอะไรให้เลื่อน ถือว่าเห็นครบแล้ว
+    const el = boxRef.current;
+    if (el && el.scrollHeight <= el.clientHeight + 8) setReachedEnd(true);
+
+    // ขนาดกล่องเปลี่ยนได้ตอนหมุนจอหรือย่อ/ขยายหน้าต่าง ต้องตรวจซ้ำ
+    const observer = new ResizeObserver(checkScrolledToEnd);
+    if (el) observer.observe(el);
+    return () => observer.disconnect();
+  }, [checkScrolledToEnd]);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-sm font-medium text-stone-700">สัญญาโอนลิขสิทธิ์ฉบับเต็ม</p>
+
+      <div
+        ref={boxRef}
+        onScroll={checkScrolledToEnd}
+        tabIndex={0}
+        role="region"
+        aria-label="เนื้อหาสัญญาโอนลิขสิทธิ์"
+        data-testid="agreement-scroll"
+        className="max-h-72 overflow-y-auto rounded-lg border border-stone-200 bg-stone-50 px-4 py-3"
+      >
+        {/*
+          ข้อ 1-2 เป็นข้อมูลรายสัญญา (คู่สัญญา/ผลงาน/ค่าตอบแทน) จึงไม่ได้อยู่ใน TERMS
+          แต่ต้องมีในกล่องนี้ด้วย ไม่งั้นสิ่งที่เรียกว่า "สัญญาฉบับเต็ม" จะเริ่มที่ข้อ 3
+          ซึ่งอ่านแล้วเหมือนเอกสารขาดหาย และคนจะไม่เห็นว่าตัวเองกำลังตกลงกับใครเรื่องงานชิ้นไหน
+        */}
+        <section>
+          <h2 className="text-sm font-bold text-stone-900">ข้อ 1. คู่สัญญา</h2>
+          <p className="mt-1.5 text-sm leading-relaxed text-stone-700">
+            ผู้โอน (เจ้าของลิขสิทธิ์เดิม): {transfer.sellerName}
+            <br />
+            ผู้รับโอน: {transfer.fullName}
+            {transfer.nationalNo ? ` · เลขบัตรประชาชน ${transfer.nationalNo}` : ""}
+          </p>
+        </section>
+
+        <section>
+          <h2 className="mt-5 text-sm font-bold text-stone-900">ข้อ 2. ผลงานที่โอนลิขสิทธิ์</h2>
+          <p className="mt-1.5 text-sm leading-relaxed text-stone-700">
+            ชื่อผลงาน: {transfer.artworkName}
+            <br />
+            ผู้สร้างสรรค์: {transfer.sellerName}
+            <br />
+            ค่าตอบแทนการโอน: {transfer.price.toLocaleString()} บาท
+          </p>
+        </section>
+
+        <CopyrightAgreementTerms transfer={transfer} />
+        <p className="mt-5 border-t border-stone-200 pt-3 text-xs text-stone-400">
+          — จบเนื้อหาสัญญา (เวอร์ชัน {transfer.termsVersion ?? CURRENT_TERMS_VERSION}) —
+        </p>
+      </div>
+
+      {!reachedEnd && (
+        <p className="text-xs text-amber-700">
+          เลื่อนอ่านสัญญาให้ครบทั้งฉบับก่อน จึงจะติ๊กยอมรับและลงนามได้
+        </p>
+      )}
+
+      <label
+        className={`flex items-start gap-2.5 text-sm ${
+          reachedEnd ? "cursor-pointer text-stone-700" : "cursor-not-allowed text-stone-400"
+        }`}
+      >
+        <input
+          type="checkbox"
+          className="mt-0.5 h-4 w-4 accent-stone-900"
+          checked={accepted}
+          disabled={disabled || !reachedEnd}
+          onChange={(e) => onAcceptedChange(e.target.checked)}
+        />
+        <span>{acceptLabel}</span>
+      </label>
+    </div>
   );
 }

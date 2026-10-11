@@ -17,6 +17,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { fileToDataUrl } from "@/lib/storage";
 import { SignaturePad } from "@/components/SignaturePad";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { AgreementReadGate } from "@/components/CopyrightAgreementTerms";
 
 function CopyrightDetailContent({ id }: { id: string }) {
   const { user } = useAuth();
@@ -35,6 +36,12 @@ function CopyrightDetailContent({ id }: { id: string }) {
    * ปฏิเสธ = ปิดคำขอฉบับนั้นถาวร จึงถามซ้ำอีกครั้งก่อนบันทึกทั้งคู่
    */
   const [pendingAction, setPendingAction] = useState<boolean | null>(null);
+  /**
+   * ติ๊กยอมรับสัญญาแล้วหรือยัง — ปลดล็อกได้ต่อเมื่อเลื่อนอ่านจนจบ (ดู AgreementReadGate)
+   * แยกตัวแปรของผู้ขาย (ตอนตอบรับ) กับของผู้ซื้อ (ตอนลงนาม) เพราะเป็นคนละคนคนละจังหวะ
+   */
+  const [sellerAgreed, setSellerAgreed] = useState(false);
+  const [buyerAgreed, setBuyerAgreed] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   /** ลายเซ็นของ "ผู้ที่กำลังดูหน้านี้" — ผู้ขายใช้ตอนตอบรับ ผู้ซื้อใช้ตอนลงนาม */
   const [signature, setSignature] = useState("");
@@ -69,6 +76,12 @@ function CopyrightDetailContent({ id }: { id: string }) {
   function askRespond(accept: boolean) {
     // ตอบรับ = ลงนามในฐานะผู้โอน จึงต้องมีลายมือชื่อ (พ.ร.บ. ลิขสิทธิ์ ม.17)
     // ปฏิเสธไม่ต้องเซ็น เพราะไม่มีการโอนเกิดขึ้น
+    // ตอบรับ = ลงนามจริง จึงต้องอ่านสัญญาครบและติ๊กยอมรับก่อน
+    // ปฏิเสธไม่ต้องอ่าน เพราะไม่ได้ตกลงอะไรเลย
+    if (accept && !sellerAgreed) {
+      notify("กรุณาอ่านสัญญาให้ครบและติ๊กยอมรับก่อนลงนาม", "error");
+      return;
+    }
     if (accept && !signature) {
       setSignatureError("กรุณาแนบลายมือชื่อเพื่อยืนยันการตอบรับ");
       return;
@@ -117,6 +130,10 @@ function CopyrightDetailContent({ id }: { id: string }) {
   }
 
   async function handleSign() {
+    if (!buyerAgreed) {
+      notify("กรุณาอ่านสัญญาให้ครบและติ๊กยอมรับก่อนลงนาม", "error");
+      return;
+    }
     if (!signature) {
       setSignatureError("กรุณาลงลายมือชื่อเพื่อยืนยันการรับโอนลิขสิทธิ์");
       return;
@@ -239,8 +256,21 @@ function CopyrightDetailContent({ id }: { id: string }) {
             ) : (
               <>
                 {/*
+                  บังคับอ่านสัญญาก่อน แล้วค่อยเปิดช่องเซ็น
+                  วางไว้เหนือช่องลายมือชื่อโดยตั้งใจ — ลำดับบนหน้าจอคือลำดับที่ควรทำ
+                */}
+                <AgreementReadGate
+                  transfer={transfer}
+                  accepted={sellerAgreed}
+                  onAcceptedChange={setSellerAgreed}
+                  disabled={submitting}
+                  acceptLabel="ข้าพเจ้าได้อ่านสัญญาฉบับนี้โดยตลอดแล้ว และตกลงโอนลิขสิทธิ์ตามเงื่อนไขทั้งหมด"
+                />
+
+                {/*
                   ลายมือชื่อผู้โอน — จำเป็นเฉพาะตอนตอบรับ
                   ตอนปฏิเสธไม่ต้องเซ็นเพราะไม่มีการโอนเกิดขึ้น
+                  ปิดไว้จนกว่าจะติ๊กยอมรับ จะได้ไม่เซ็นก่อนแล้วค่อยไปอ่านทีหลัง
                 */}
                 <SignaturePad
                   label="ลายมือชื่อผู้โอน"
@@ -250,12 +280,16 @@ function CopyrightDetailContent({ id }: { id: string }) {
                     setSignature(v);
                     if (v) setSignatureError(null);
                   }}
-                  disabled={submitting}
+                  disabled={submitting || !sellerAgreed}
                 />
                 {signatureError && <p className="text-xs text-rose-600">{signatureError}</p>}
 
                 <div className="flex gap-3">
-                  <Button onClick={() => askRespond(true)} disabled={submitting} className="flex-1">
+                  <Button
+                    onClick={() => askRespond(true)}
+                    disabled={submitting || !sellerAgreed}
+                    className="flex-1"
+                  >
                     ยอมรับและลงนาม
                   </Button>
                   <Button
@@ -324,13 +358,17 @@ function CopyrightDetailContent({ id }: { id: string }) {
         {isBuyer && transfer.transferStatus === "accepted" && transfer.paymentStatus === "confirmed" && (
           <div className="mt-6 flex flex-col gap-2 border-t border-stone-200 pt-5">
             <p className="text-sm text-stone-600">
-              ชำระค่าลิขสิทธิ์เรียบร้อยแล้ว กรุณาอ่านสัญญาแล้วลงลายมือชื่อเพื่อรับโอนลิขสิทธิ์
+              ชำระค่าลิขสิทธิ์เรียบร้อยแล้ว กรุณาอ่านสัญญาให้ครบแล้วลงลายมือชื่อเพื่อรับโอนลิขสิทธิ์
             </p>
-            <Link href={`/copyright/${transfer.id}/print`} className="w-fit">
-              <Button variant="secondary" type="button">
-                อ่านสัญญาฉบับเต็มก่อนลงนาม
-              </Button>
-            </Link>
+
+            {/* อ่านในหน้านี้ได้เลย ไม่ต้องเปิดหน้าใหม่แล้วกลับมา (ของเดิมเป็นแค่ปุ่มลิงก์ที่ข้ามได้) */}
+            <AgreementReadGate
+              transfer={transfer}
+              accepted={buyerAgreed}
+              onAcceptedChange={setBuyerAgreed}
+              disabled={submitting}
+              acceptLabel="ข้าพเจ้าได้อ่านสัญญาฉบับนี้โดยตลอดแล้ว และตกลงรับโอนลิขสิทธิ์ตามเงื่อนไขทั้งหมด"
+            />
 
             <SignaturePad
               label="ลายมือชื่อผู้รับโอน"
@@ -340,7 +378,7 @@ function CopyrightDetailContent({ id }: { id: string }) {
                 setSignature(v);
                 if (v) setSignatureError(null);
               }}
-              disabled={submitting}
+              disabled={submitting || !buyerAgreed}
             />
             {signatureError && <p className="text-xs text-rose-600">{signatureError}</p>}
 
@@ -362,7 +400,11 @@ function CopyrightDetailContent({ id }: { id: string }) {
               {signedDocument && <p className="mt-1 text-xs text-emerald-700">แนบไฟล์แล้ว</p>}
             </div>
 
-            <Button onClick={handleSign} disabled={submitting} className="w-fit">
+            <Button
+              onClick={handleSign}
+              disabled={submitting || !buyerAgreed}
+              className="w-fit"
+            >
               {submitting ? "กำลังลงนาม..." : "ลงนามสัญญา"}
             </Button>
           </div>

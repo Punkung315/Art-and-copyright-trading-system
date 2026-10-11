@@ -62,12 +62,9 @@ public class SellerPayoutInfo {
     /** รูปหน้าสมุดบัญชีปัจจุบัน — ให้แอดมินตรวจก่อนโอน (ไม่มีหลังโอนแล้ว) */
     private String  bankBookImage;
 
-    /** fallback ไป artwork เฉพาะออเดอร์เก่าที่ยังไม่มี order_item.shipping_cost (สูตรเดียวกับ PaymentService) */
+    /** ค่าจัดส่งที่ล็อกไว้ของชิ้นหนึ่ง — สูตรอยู่ที่ OrderCharge ที่เดียว */
     static double shippingOf(OrderItem item) {
-        if (item.getShippingCost() != null) return item.getShippingCost();
-        var artwork = item.getArtwork();
-        return artwork != null && artwork.getShippingCostEstimate() != null
-                ? artwork.getShippingCostEstimate() : 0.0;
+        return OrderCharge.lockedShippingOf(item);
     }
 
     /** รายการผู้ขายทุกคนในคำสั่งซื้อที่มีชิ้นพร้อมขาย เรียงตามลำดับชิ้นในคำสั่งซื้อ */

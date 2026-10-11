@@ -133,9 +133,18 @@ function AdminPaymentDetailContent({ paymentId }: { paymentId: string }) {
 
   // ยอดในตาราง order_item ต้องเท่ากับยอดที่เก็บใน payment
   // ถ้าไม่ตรงแปลว่าราคาถูกแก้หลังสั่งซื้อ หรือสูตรคิดเงินเพี้ยน — ต้องเตือน Admin ก่อนกดยืนยัน
-  const itemSum = payment.items.reduce((s, i) => s + i.price, 0);
+  /*
+   * ยอดที่ "เรียกเก็บจริง" เท่านั้น — ชิ้นที่ผู้ขายแจ้งไม่พร้อมจำหน่ายคิดเป็น 0 ทั้งค่างานและค่าส่ง
+   * (backend เป็นคนคิดให้ใน OrderCharge หน้านี้แค่บวกยอดที่ได้มา)
+   *
+   * ของเดิมบวกราคาทุกชิ้นรวมชิ้นที่ไม่พร้อมจำหน่าย ทำให้ "รวมรายการ + ค่าจัดส่ง"
+   * ไม่เท่ากับยอดสุทธิที่ผู้ซื้อโอนมา แล้วขึ้นคำเตือนยอดไม่ตรงกับคำสั่งซื้อที่ปกติดี
+   */
+  const itemSum = payment.items.reduce((s, i) => s + i.chargedPrice, 0);
+  const shippingSum = payment.items.reduce((s, i) => s + i.chargedShipping, 0);
   const expected = itemSum + payment.shippingCost;
   const mismatch = payment.items.length > 0 && Math.abs(expected - payment.grandTotal) > 0.5;
+  const excluded = payment.items.filter((i) => i.availabilityStatus === "rejected");
 
   return (
     <Container className="py-10">
@@ -170,6 +179,12 @@ function AdminPaymentDetailContent({ paymentId }: { paymentId: string }) {
             <Row label="ค่าชิ้นงานรวม" value={`฿${payment.totalPrice.toLocaleString()}`} />
             <Row label="ค่าจัดส่ง" value={`฿${payment.shippingCost.toLocaleString()}`} />
             <Row label="ยอดสุทธิที่ต้องโอน" value={`฿${payment.grandTotal.toLocaleString()}`} />
+            {excluded.length > 0 && (
+              <p className="mt-3 rounded-lg bg-stone-100 px-3 py-2 text-xs leading-relaxed text-stone-600">
+                ยอดข้างต้นไม่รวมผลงาน {excluded.length} ชิ้นที่ผู้ขายแจ้งว่าไม่พร้อมจำหน่าย
+                — ผู้ซื้อไม่ได้ถูกเรียกเก็บเงินส่วนนั้น
+              </p>
+            )}
           </Card>
 
           <Card className="p-5">
@@ -186,45 +201,98 @@ function AdminPaymentDetailContent({ paymentId }: { paymentId: string }) {
                       <th className="py-2">ผลงาน</th>
                       <th className="py-2">ความพร้อมขาย</th>
                       <th className="py-2">การจัดส่ง</th>
-                      <th className="py-2 text-right">ราคา ณ วันสั่งซื้อ</th>
+                      <th className="py-2 text-right">ราคาผลงาน</th>
+                      <th className="py-2 text-right">ค่าจัดส่ง</th>
+                      <th className="py-2 text-right">เรียกเก็บจริง</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {payment.items.map((i) => (
-                      <tr key={i.id} className="border-t border-stone-100">
-                        <td className="py-2">
-                          <Link
-                            href={`/art/${i.artworkId}`}
-                            className="font-medium text-stone-900 hover:underline"
+                    {payment.items.map((i) => {
+                      // ไม่พร้อมจำหน่าย = ไม่ได้เก็บเงิน ขีดฆ่าตัวเลขเดิมไว้ให้เห็นว่าเคยมีราคาเท่าไร
+                      const notCharged = i.availabilityStatus === "rejected";
+                      const strike = notCharged ? "line-through text-stone-400" : "text-stone-900";
+                      return (
+                        <tr key={i.id} className="border-t border-stone-100 align-top">
+                          <td className="py-2">
+                            <Link
+                              href={`/art/${i.artworkId}`}
+                              className={`font-medium hover:underline ${
+                                notCharged ? "text-stone-400" : "text-stone-900"
+                              }`}
+                            >
+                              {i.artworkName}
+                            </Link>
+                            {i.shippingCompanyName && !notCharged && (
+                              <span className="block text-xs text-stone-400">
+                                ขนส่ง {i.shippingCompanyName}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2">
+                            <StatusBadge status={i.availabilityStatus} domain="availability" />
+                          </td>
+                          <td className="py-2">
+                            {notCharged ? (
+                              <span className="text-xs text-stone-400">ไม่ได้จัดส่ง</span>
+                            ) : (
+                              <StatusBadge status={i.shippingStatus} domain="shipping" />
+                            )}
+                          </td>
+                          <td className={`py-2 text-right ${strike}`}>
+                            ฿{i.price.toLocaleString()}
+                          </td>
+                          <td className={`py-2 text-right ${strike}`}>
+                            ฿{(i.shippingCost ?? 0).toLocaleString()}
+                          </td>
+                          <td
+                            className={`py-2 text-right font-semibold ${
+                              notCharged ? "text-stone-400" : "text-stone-900"
+                            }`}
                           >
-                            {i.artworkName}
-                          </Link>
-                        </td>
-                        <td className="py-2">
-                          <StatusBadge status={i.availabilityStatus} domain="availability" />
-                        </td>
-                        <td className="py-2">
-                          <StatusBadge status={i.shippingStatus} domain="shipping" />
-                        </td>
-                        <td className="py-2 text-right font-medium text-stone-900">
-                          ฿{i.price.toLocaleString()}
-                        </td>
-                      </tr>
-                    ))}
+                            ฿{(i.chargedPrice + i.chargedShipping).toLocaleString()}
+                          </td>
+                        </tr>
+                      );
+                    })}
                     <tr className="border-t border-stone-200 font-semibold text-stone-900">
                       <td className="py-2" colSpan={3}>
-                        รวมค่าชิ้นงาน
+                        รวมที่เรียกเก็บ
                       </td>
                       <td className="py-2 text-right">฿{itemSum.toLocaleString()}</td>
+                      <td className="py-2 text-right">฿{shippingSum.toLocaleString()}</td>
+                      <td className="py-2 text-right">
+                        ฿{(itemSum + shippingSum).toLocaleString()}
+                      </td>
+                    </tr>
+                    {/* บรรทัดนี้คือตัวเลขที่ต้องตรงกับสลิป — เน้นให้เห็นชัดกว่าบรรทัดอื่น */}
+                    <tr className="border-t border-stone-200">
+                      <td className="py-2 font-semibold text-stone-900" colSpan={5}>
+                        ยอดสุทธิที่ผู้ซื้อต้องโอน
+                      </td>
+                      <td className="py-2 text-right text-base font-bold text-stone-900">
+                        ฿{payment.grandTotal.toLocaleString()}
+                      </td>
                     </tr>
                   </tbody>
                 </table>
               </div>
             )}
 
+            {excluded.length > 0 && (
+              <p className="mt-3 rounded-lg bg-stone-100 p-3 text-xs leading-relaxed text-stone-600">
+                ผลงานที่ขีดฆ่าไว้คือชิ้นที่ผู้ขายแจ้งว่าไม่พร้อมจำหน่าย
+                ระบบตัดออกจากยอดที่เรียกเก็บแล้วตั้งแต่ตอนที่ผู้ซื้อชำระเงิน จึงคิดเป็น ฿0
+              </p>
+            )}
+
+            {/*
+              คำเตือนนี้ควรขึ้นเฉพาะตอนที่ตัวเลขผิดจริง ๆ เท่านั้น
+              ก่อนหน้านี้มันขึ้นกับทุกคำสั่งซื้อที่มีของขาด (เพราะ totalPrice รวมชิ้นที่ไม่ได้เก็บเงิน)
+              คำเตือนที่ขึ้นบ่อยจนเป็นเรื่องปกติ = คำเตือนที่ไม่มีใครอ่าน
+            */}
             {mismatch && (
               <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
-                ยอดรวมรายการ + ค่าจัดส่ง = ฿{expected.toLocaleString()} ซึ่งไม่ตรงกับยอดสุทธิ ฿
+                ยอดรวมที่เรียกเก็บ + ค่าจัดส่ง = ฿{expected.toLocaleString()} ซึ่งไม่ตรงกับยอดสุทธิ ฿
                 {payment.grandTotal.toLocaleString()} — ตรวจสอบก่อนยืนยัน
               </p>
             )}

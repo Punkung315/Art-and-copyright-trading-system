@@ -460,6 +460,9 @@ interface BePaymentItemLine {
   sellerId?: number | null;
   sellerName?: string | null;
   shippingCost?: number | null;
+  /** ยอดที่เรียกเก็บจริงของชิ้นนี้ — 0 ถ้าผู้ขายแจ้งไม่พร้อมจำหน่าย (backend เป็นคนคิดให้) */
+  chargedPrice?: number | null;
+  chargedShipping?: number | null;
   shippingCompanyName?: string | null;
   packingImage?: string | null;
   packedAt?: string | null;
@@ -999,7 +1002,11 @@ export interface AdminPaymentDetail extends Payment {
     shippingStatus: ShippingStatus;
     sellerId?: string;
     sellerName?: string;
+    /** ค่าจัดส่งที่ล็อกไว้ของชิ้นนี้ */
     shippingCost?: number;
+    /** ยอดที่เรียกเก็บจริง — 0 เมื่อผู้ขายแจ้งไม่พร้อมจำหน่าย */
+    chargedPrice: number;
+    chargedShipping: number;
   })[];
   /** การโอนเงินต่อให้ผู้ขาย แยกรายผู้ขาย */
   payouts: SellerPayout[];
@@ -1023,6 +1030,9 @@ function mapPaymentDetail(p: BePayment): AdminPaymentDetail {
       sellerId: i.sellerId != null ? String(i.sellerId) : undefined,
       sellerName: i.sellerName ?? undefined,
       shippingCost: i.shippingCost ?? undefined,
+      // ไม่คำนวณเองจาก availabilityStatus — ให้ backend เป็นเจ้าของสูตรคิดเงินที่เดียว
+      chargedPrice: i.chargedPrice ?? 0,
+      chargedShipping: i.chargedShipping ?? 0,
       shippingCompanyName: i.shippingCompanyName ?? undefined,
       ...mapShippingEvidence(i),
     })),

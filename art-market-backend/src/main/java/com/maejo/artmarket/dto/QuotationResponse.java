@@ -121,10 +121,7 @@ public class QuotationResponse {
      * เพราะผู้ขายแก้ราคาประเมินได้ตลอด ยอดในใบเสนอราคาที่ออกไปแล้วจะเปลี่ยนตาม
      */
     public static double shippingOf(OrderItem item) {
-        if (item.getShippingCost() != null) return item.getShippingCost();
-        var artwork = item.getArtwork();
-        return artwork != null && artwork.getShippingCostEstimate() != null
-                ? artwork.getShippingCostEstimate() : 0.0;
+        return OrderCharge.lockedShippingOf(item);
     }
 
     /** formatAddress ใช้ซ้ำได้ทั้ง buyer/seller — รวม field ที่อยู่เป็นบรรทัดเดียว */

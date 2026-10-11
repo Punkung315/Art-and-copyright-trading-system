@@ -75,7 +75,8 @@ public class PaymentSummaryResponse {
                 .buyerUserId(p.getOrder().getBuyer().getUser().getUserId())
                 .grandTotal(p.getGrandTotal())
                 .shippingCost(p.getShippingCost())
-                .totalPrice(items.stream().mapToDouble(i -> i.getPrice() != null ? i.getPrice() : 0).sum())
+                // เฉพาะชิ้นที่เรียกเก็บเงินจริง จะได้บวกกับค่าจัดส่งแล้วเท่ากับ grandTotal เสมอ
+                .totalPrice(OrderCharge.chargedItemTotal(items))
                 .paymentStatus(p.getPaymentStatus())
                 .orderDate(p.getOrder().getOrderDate())
                 .orderStatus(p.getOrder().getOrderStatus())

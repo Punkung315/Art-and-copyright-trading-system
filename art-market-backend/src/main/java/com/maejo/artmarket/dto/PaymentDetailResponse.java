@@ -83,7 +83,18 @@ public class PaymentDetailResponse {
         /** ผู้ขายของชิ้นนี้ — ใช้จับคู่กับรายการโอนเงินให้ผู้ขาย (payouts) */
         private Integer            sellerId;
         private String             sellerName;
+
+        /** ค่าจัดส่งที่ล็อกไว้ของชิ้นนี้ — ค่าที่คิดไว้ตอนยืนยันคำสั่งซื้อ */
         private Double             shippingCost;
+
+        /**
+         * ยอดที่ "เรียกเก็บจริง" ของชิ้นนี้ — เป็น 0 ทั้งคู่ถ้าผู้ขายแจ้งไม่พร้อมจำหน่าย
+         *
+         * ส่งมาจาก backend แทนที่จะให้หน้าเว็บคำนวณเอง เพราะสูตรคิดเงินเป็นของ backend
+         * ถ้าหน้าเว็บตีความเองแล้ววันหนึ่งกฎเปลี่ยน ตัวเลขสองฝั่งจะหลุดจากกันเงียบ ๆ
+         */
+        private Double             chargedPrice;
+        private Double             chargedShipping;
 
         /** หลักฐานการจัดส่ง — ผู้ดูแลระบบตรวจก่อนโอนเงินให้ผู้ขาย */
         private String        packingImage;
@@ -107,7 +118,9 @@ public class PaymentDetailResponse {
                     .shippingStatus(i.getShippingStatus())
                     .sellerId(seller != null ? seller.getSellerId() : null)
                     .sellerName(seller != null ? seller.getUser().getFullName() : null)
-                    .shippingCost(SellerPayoutInfo.shippingOf(i))
+                    .shippingCost(OrderCharge.lockedShippingOf(i))
+                    .chargedPrice(OrderCharge.chargedPriceOf(i))
+                    .chargedShipping(OrderCharge.chargedShippingOf(i))
                     .packingImage(i.getPackingImage())
                     .packedAt(i.getPackedAt())
                     .trackingNumber(i.getTrackingNumber())
@@ -137,8 +150,13 @@ public class PaymentDetailResponse {
                 .sellerName(seller != null ? seller.getUser().getFullName() : null)
                 .sellerId(seller != null ? seller.getSellerId() : null)
                 .sellerUserId(seller != null ? seller.getUser().getUserId() : null)
-                .totalPrice(orderItems.stream()
-                        .mapToDouble(i -> i.getPrice() != null ? i.getPrice() : 0).sum())
+                /*
+                 * ค่าชิ้นงานรวม = เฉพาะชิ้นที่เรียกเก็บเงินจริง
+                 * ของเดิมบวกทุกชิ้นรวมชิ้นที่ผู้ขายแจ้งไม่พร้อมจำหน่าย ทำให้
+                 * totalPrice + shippingCost ไม่เท่ากับ grandTotal แล้วหน้าแอดมิน
+                 * ขึ้นคำเตือน "ยอดไม่ตรง" กับคำสั่งซื้อที่ปกติดี (ดู OrderCharge)
+                 */
+                .totalPrice(OrderCharge.chargedItemTotal(orderItems))
                 .grandTotal(p.getGrandTotal())
                 .shippingCost(p.getShippingCost())
                 .slipTransfer(p.getSlipTransfer())

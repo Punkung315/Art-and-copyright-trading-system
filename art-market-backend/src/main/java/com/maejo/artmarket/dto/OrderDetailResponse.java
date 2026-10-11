@@ -155,10 +155,7 @@ public class OrderDetailResponse {
      * fallback ไปที่ artwork ให้เฉพาะออเดอร์เก่าที่สร้างก่อนมีคอลัมน์นี้เท่านั้น
      */
     private static double shippingOf(OrderItem item) {
-        if (item.getShippingCost() != null) return item.getShippingCost();
-        var artwork = item.getArtwork();
-        return artwork != null && artwork.getShippingCostEstimate() != null
-                ? artwork.getShippingCostEstimate() : 0.0;
+        return OrderCharge.lockedShippingOf(item);
     }
 
     public static OrderDetailResponse from(Orders order) {
