@@ -12,6 +12,11 @@ import java.util.Optional;
 
 public interface ArtworkRepository extends JpaRepository<Artwork, Integer> {
 
+    /** รหัสผลงานที่ยังไม่มีภาพตัวอย่างมีลายน้ำ — ใช้เติมให้งานเก่าตอนเปิดระบบ */
+    @Query("SELECT a.artworkId FROM Artwork a " +
+           "WHERE a.watermarkedImage IS NULL AND a.artworkImage IS NOT NULL")
+    List<Integer> findIdsMissingWatermark();
+
     /** List Art ฝั่งผู้ขาย — ดูงานของตัวเองทั้งหมด (DRAFT + PUBLISHED) */
     List<Artwork> findBySeller_SellerId(Integer sellerId);
 
@@ -38,8 +43,12 @@ public interface ArtworkRepository extends JpaRepository<Artwork, Integer> {
            "JOIN FETCH s.user u " +
            "WHERE a.publishStatus = 'PUBLISHED' " +
            "AND a.artworkStatus <> 'SOLD' " +
-           "AND (:keyword IS NULL OR LOWER(a.artworkName) LIKE LOWER(CONCAT('%', :keyword, '%')) " +
-           "                      OR LOWER(u.fullName)    LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
+           // คำค้นเทียบกับ ชื่อผลงาน / ชื่อศิลปิน / คำอธิบายผลงาน (LIKE '%คำค้น%')
+           // คำอธิบายช่วยให้ค้นด้วยเรื่องราวหรือแรงบันดาลใจได้ เช่น "ดอกไม้", "แม่น้ำ", "ล้านนา"
+           // ซึ่งมักไม่อยู่ในชื่องาน — description เป็น varchar(1000) จึงใช้ LIKE ได้ไม่หนัก
+           "AND (:keyword IS NULL OR LOWER(a.artworkName)  LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+           "                      OR LOWER(u.fullName)     LIKE LOWER(CONCAT('%', :keyword, '%')) " +
+           "                      OR LOWER(a.description)  LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
            "AND (:artworkType IS NULL OR a.artworkType = :artworkType) " +
            "AND (:artworkStyle IS NULL OR a.artworkStyle = :artworkStyle) " +
            "AND (:artworkMediums IS NULL OR a.artworkMediums = :artworkMediums) " +

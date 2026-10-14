@@ -14,6 +14,7 @@ import { EvidenceThumb, ShippingEvidence } from "@/components/ShippingEvidence";
 import { SellerShippingControl } from "@/components/SellerShippingControl";
 import { formatThaiDate, formatThaiDateTime } from "@/lib/format";
 import { formatBankAccountNumber } from "@/lib/banks";
+import { PROTECTED_IMAGE_CLASS, protectedImageProps } from "@/lib/protectImage";
 
 /** นับความคืบหน้าการยืนยันของผู้ขายทุกคนในคำสั่งซื้อ */
 function availabilityProgress(items: OrderItem[]) {
@@ -156,7 +157,8 @@ function OrderDetailContent({ id }: { id: string }) {
                   <img
                     src={item.artworkImage}
                     alt={item.artworkName}
-                    className="h-14 w-14 rounded-lg object-cover"
+                    {...protectedImageProps}
+                    className={`h-14 w-14 rounded-lg object-cover ${PROTECTED_IMAGE_CLASS}`}
                   />
                   <div className="flex-1">
                     <Link

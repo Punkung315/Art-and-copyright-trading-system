@@ -275,6 +275,6 @@ public class SellerOrderService {
         }
 
         // Basic Flow ข้อ 5 — คืนรายละเอียดงานศิลปะให้ frontend เอาไปใส่ในฟอร์มใบรับรอง
-        return ApiResponse.ok("ดึงข้อมูลสำหรับใบรับรองสำเร็จ", ArtworkDetailResponse.from(artwork));
+        return ApiResponse.ok("ดึงข้อมูลสำหรับใบรับรองสำเร็จ", ArtworkDetailResponse.forOwner(artwork));
     }
 }

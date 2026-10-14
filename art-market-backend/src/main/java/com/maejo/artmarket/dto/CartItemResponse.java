@@ -1,5 +1,7 @@
 package com.maejo.artmarket.dto;
 
+import com.maejo.artmarket.image.ArtworkImages;
+
 import com.maejo.artmarket.entity.CartItem;
 import lombok.Builder;
 import lombok.Data;
@@ -32,7 +34,7 @@ public class CartItemResponse {
                 .cartItemId(c.getCartItemId())
                 .artworkId(c.getArtwork().getArtworkId())
                 .artworkName(c.getArtwork().getArtworkName())
-                .artworkImage(c.getArtwork().getArtworkImage())
+                .artworkImage(ArtworkImages.publicImageOf(c.getArtwork()))
                 .addDate(c.getAddDate())
                 .priceAtAdd(c.getPriceAtAdd())
                 .artwork(ArtworkSummaryResponse.from(c.getArtwork()))

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { PROTECTED_IMAGE_CLASS, protectedImageProps } from "@/lib/protectImage";
 import { Artwork } from "@/types";
 import { formatArtworkSize } from "@/lib/format";
 
@@ -43,7 +44,8 @@ export function ArtCard({
           alt={artwork.artworkName}
           fill
           unoptimized
-          className="object-cover transition duration-300 group-hover:scale-105"
+          {...protectedImageProps}
+          className={`object-cover transition duration-300 group-hover:scale-105 ${PROTECTED_IMAGE_CLASS}`}
         />
         {/*
           ผลงานที่ขายแล้วจะจางลง เพื่อให้แยกออกจากงานที่ยังซื้อได้ตั้งแต่ยังไม่ทันอ่านป้าย

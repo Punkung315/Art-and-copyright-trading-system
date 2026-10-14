@@ -1,5 +1,7 @@
 package com.maejo.artmarket.service;
 
+import com.maejo.artmarket.image.Watermark;
+
 import com.maejo.artmarket.dto.*;
 import com.maejo.artmarket.entity.Address;
 import com.maejo.artmarket.entity.Artwork;
@@ -360,8 +362,12 @@ public class ArtworkService {
 
         Optional<Artwork> published = artworkRepository.findPublishedById(artworkId);
         if (published.isPresent()) {
+            Artwork a = published.get();
+            // คนทั่วไปได้ภาพมีลายน้ำ เจ้าของงานได้รูปต้นฉบับ (ใช้ในหน้าแก้ไขงาน)
             return ApiResponse.ok("ดึงข้อมูลผลงานสำเร็จ",
-                    ArtworkDetailResponse.from(published.get(), copyrightSold(published.get())));
+                    isOwner(a, currentUsername)
+                            ? ArtworkDetailResponse.forOwner(a, copyrightSold(a))
+                            : ArtworkDetailResponse.from(a, copyrightSold(a)));
         }
 
         if (currentUsername != null) {
@@ -369,11 +375,29 @@ public class ArtworkService {
                     .filter(a -> a.getSeller().getUser().getUsername().equals(currentUsername));
             if (own.isPresent()) {
                 return ApiResponse.ok("ดึงข้อมูลผลงานสำเร็จ",
-                        ArtworkDetailResponse.from(own.get(), copyrightSold(own.get())));
+                        ArtworkDetailResponse.forOwner(own.get(), copyrightSold(own.get())));
             }
         }
 
         return ApiResponse.error("ไม่พบงานศิลปะที่ต้องการ");
+    }
+
+    private static boolean isOwner(Artwork artwork, String username) {
+        return username != null && artwork.getSeller() != null
+                && username.equals(artwork.getSeller().getUser().getUsername());
+    }
+
+    /**
+     * สร้างภาพตัวอย่างมีลายน้ำจากรูปต้นฉบับ
+     * @return null ถ้าสำเร็จ (ใส่ค่าลง artwork แล้ว) ไม่งั้นคืนข้อความ error ภาษาไทย
+     */
+    private static String applyWatermark(Artwork artwork) {
+        try {
+            artwork.setWatermarkedImage(Watermark.apply(artwork.getArtworkImage()));
+            return null;
+        } catch (Watermark.UnreadableImageException e) {
+            return "ไม่สามารถอ่านไฟล์รูปผลงานได้ กรุณาใช้ไฟล์ png หรือ jpg อื่น";
+        }
     }
 
     // =========================================================================
@@ -420,8 +444,13 @@ public class ArtworkService {
             applyCopyrightPrice(artwork, copyrightEnabled, req.getCopyrightPrice());
 
             refreshShippingEstimate(artwork);
+
+            // สร้างภาพตัวอย่างมีลายน้ำตอนบันทึกเลย คนทั่วไปจะไม่มีวันได้รูปต้นฉบับ
+            String imageError = applyWatermark(artwork);
+            if (imageError != null) return ApiResponse.error(imageError);
+
             artworkRepository.save(artwork);
-            return ApiResponse.ok("บันทึกงานศิลปะสำเร็จ", ArtworkDetailResponse.from(artwork));
+            return ApiResponse.ok("บันทึกงานศิลปะสำเร็จ", ArtworkDetailResponse.forOwner(artwork));
 
         } catch (Exception e) {
             // Alternate Flow 5.1.1
@@ -450,7 +479,8 @@ public class ArtworkService {
         return ApiResponse.ok(
                 artworks.isEmpty() ? "ยังไม่มีรายการงานศิลปะ" : "พบ " + artworks.size() + " รายการ",
                 artworks.stream()
-                        .map(a -> ArtworkSummaryResponse.from(a, soldCopyright.contains(a.getArtworkId())))
+                        // หน้า "ผลงานของฉัน" — เจ้าของงานเห็นรูปต้นฉบับของตัวเอง
+                        .map(a -> ArtworkSummaryResponse.forOwner(a, soldCopyright.contains(a.getArtworkId())))
                         .toList());
     }
 
@@ -478,7 +508,13 @@ public class ArtworkService {
 
         // Basic Flow ข้อ 9.1 — partial update
         if (StringUtils.hasText(req.getArtworkName()))      artwork.setArtworkName(req.getArtworkName());
-        if (StringUtils.hasText(req.getArtworkImage()))     artwork.setArtworkImage(req.getArtworkImage());
+        if (StringUtils.hasText(req.getArtworkImage())
+                && !req.getArtworkImage().equals(artwork.getArtworkImage())) {
+            artwork.setArtworkImage(req.getArtworkImage());
+            // เปลี่ยนรูปแล้วต้องสร้างภาพตัวอย่างใหม่ ไม่งั้นหน้าสาธารณะยังโชว์รูปเก่า
+            String imageError = applyWatermark(artwork);
+            if (imageError != null) return ApiResponse.error(imageError);
+        }
         if (StringUtils.hasText(req.getArtworkType()))      artwork.setArtworkType(req.getArtworkType());
         if (StringUtils.hasText(req.getArtworkStyle()))     artwork.setArtworkStyle(req.getArtworkStyle());
         if (StringUtils.hasText(req.getArtworkMediums()))   artwork.setArtworkMediums(req.getArtworkMediums());
@@ -523,7 +559,7 @@ public class ArtworkService {
 
         try {
             artworkRepository.save(artwork);
-            return ApiResponse.ok("แก้ไขข้อมูลงานศิลปะสำเร็จ", ArtworkDetailResponse.from(artwork));
+            return ApiResponse.ok("แก้ไขข้อมูลงานศิลปะสำเร็จ", ArtworkDetailResponse.forOwner(artwork));
         } catch (Exception e) {
             // Alternate Flow 9.1.1
             return ApiResponse.error("ไม่สามารถแก้ไขข้อมูลได้ กรุณาลองใหม่อีกครั้ง");
@@ -586,7 +622,7 @@ public class ArtworkService {
             // Basic Flow ข้อ 6.1 — DRAFT → PUBLISHED
             artwork.setPublishStatus(PublishStatus.PUBLISHED);
             artworkRepository.save(artwork);
-            return ApiResponse.ok("เผยแพร่งานศิลปะสำเร็จ", ArtworkDetailResponse.from(artwork));
+            return ApiResponse.ok("เผยแพร่งานศิลปะสำเร็จ", ArtworkDetailResponse.forOwner(artwork));
         } catch (Exception e) {
             // Alternate Flow 6.1.1
             return ApiResponse.error("ไม่สามารถแก้ไขสถานะได้ กรุณาลองใหม่อีกครั้ง");
@@ -631,7 +667,7 @@ public class ArtworkService {
             artwork.setPublishStatus(PublishStatus.DRAFT);
             artworkRepository.save(artwork);
             return ApiResponse.ok("ยกเลิกการเผยแพร่สำเร็จ งานกลับไปเป็นฉบับร่าง",
-                    ArtworkDetailResponse.from(artwork));
+                    ArtworkDetailResponse.forOwner(artwork));
         } catch (Exception e) {
             return ApiResponse.error("ไม่สามารถแก้ไขสถานะได้ กรุณาลองใหม่อีกครั้ง");
         }

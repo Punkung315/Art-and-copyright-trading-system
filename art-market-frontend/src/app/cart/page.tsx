@@ -6,6 +6,7 @@ import { RequireUser } from "@/components/RoleGuard";
 import { useCart } from "@/context/CartContext";
 import { useToast } from "@/context/ToastContext";
 import { Button, Card, Container, EmptyState } from "@/components/ui";
+import { PROTECTED_IMAGE_CLASS, protectedImageProps } from "@/lib/protectImage";
 
 function CartContent() {
   const { items, total, remove } = useCart();
@@ -36,7 +37,8 @@ function CartContent() {
                 <img
                   src={item.artwork?.artworkImage}
                   alt={item.artwork?.artworkName}
-                  className="h-20 w-20 rounded-lg object-cover"
+                  {...protectedImageProps}
+                  className={`h-20 w-20 rounded-lg object-cover ${PROTECTED_IMAGE_CLASS}`}
                 />
                 <div className="flex-1">
                   <p className="font-medium text-stone-900">{item.artwork?.artworkName}</p>

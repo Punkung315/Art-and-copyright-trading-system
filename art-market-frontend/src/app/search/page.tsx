@@ -173,7 +173,7 @@ function SearchContent() {
 
       <form onSubmit={handleSubmit} className="mb-6 flex flex-col gap-3 sm:flex-row">
         <Input
-          placeholder="ค้นหาชื่อผลงาน หรือชื่อศิลปิน"
+          placeholder="ค้นหาผลงานศิลปะ"
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
           className="sm:flex-1"

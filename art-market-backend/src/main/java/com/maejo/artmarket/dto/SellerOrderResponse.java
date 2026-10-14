@@ -1,5 +1,7 @@
 package com.maejo.artmarket.dto;
 
+import com.maejo.artmarket.image.ArtworkImages;
+
 import com.maejo.artmarket.entity.OrderItem;
 import com.maejo.artmarket.entity.Orders;
 import com.maejo.artmarket.enums.AvailabilityStatus;
@@ -63,7 +65,7 @@ public class SellerOrderResponse {
                     .orderItemId(item.getOrderItemId())
                     .artworkId(item.getArtwork().getArtworkId())
                     .artworkName(item.getArtwork().getArtworkName())
-                    .artworkImage(item.getArtwork().getArtworkImage())
+                    .artworkImage(ArtworkImages.publicImageOf(item.getArtwork()))
                     .price(item.getPrice())
                     .availabilityStatus(item.getAvailabilityStatus())
                     .shippingStatus(item.getShippingStatus())

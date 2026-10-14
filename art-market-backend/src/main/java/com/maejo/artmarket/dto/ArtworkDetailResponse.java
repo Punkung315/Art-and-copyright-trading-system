@@ -1,6 +1,7 @@
 package com.maejo.artmarket.dto;
 
 import com.maejo.artmarket.entity.Artwork;
+import com.maejo.artmarket.image.ArtworkImages;
 import com.maejo.artmarket.enums.ArtworkStatus;
 import com.maejo.artmarket.enums.PublishStatus;
 import com.fasterxml.jackson.annotation.JsonFormat;
@@ -73,6 +74,22 @@ public class ArtworkDetailResponse {
      */
     private Integer sellerUserId;
 
+    /**
+     * สำหรับเจ้าของงานเท่านั้น — ได้รูปต้นฉบับไม่มีลายน้ำ (หน้าแก้ไขงาน / ใบรับรอง)
+     * ผู้เรียกต้องตรวจแล้วว่าคนที่ขอเป็นเจ้าของงานจริง
+     */
+    public static ArtworkDetailResponse forOwner(Artwork artwork, boolean copyrightSold) {
+        ArtworkDetailResponse r = from(artwork, copyrightSold);
+        r.setArtworkImage(ArtworkImages.originalImageOf(artwork));
+        return r;
+    }
+
+    public static ArtworkDetailResponse forOwner(Artwork artwork) {
+        ArtworkDetailResponse r = from(artwork);
+        r.setArtworkImage(ArtworkImages.originalImageOf(artwork));
+        return r;
+    }
+
     /** ใช้ตอนที่ผู้เรียกรู้สถานะการขายลิขสิทธิ์แล้ว (หน้ารายละเอียดงาน) */
     public static ArtworkDetailResponse from(Artwork artwork, boolean copyrightSold) {
         ArtworkDetailResponse r = from(artwork);
@@ -84,7 +101,8 @@ public class ArtworkDetailResponse {
         return ArtworkDetailResponse.builder()
                 .artworkId(artwork.getArtworkId())
                 .artworkName(artwork.getArtworkName())
-                .artworkImage(artwork.getArtworkImage())
+                // ค่าเริ่มต้นคือภาพมีลายน้ำ — เจ้าของงานขอรูปต้นฉบับผ่าน forOwner() เท่านั้น
+                .artworkImage(ArtworkImages.publicImageOf(artwork))
                 .artworkType(artwork.getArtworkType())
                 .artworkStyle(artwork.getArtworkStyle())
                 .artworkMediums(artwork.getArtworkMediums())

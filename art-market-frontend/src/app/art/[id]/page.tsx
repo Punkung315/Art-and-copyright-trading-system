@@ -78,7 +78,16 @@ export default function ArtDetailPage({ params }: { params: Promise<{ id: string
   return (
     <Container className="grid gap-8 py-10 md:grid-cols-2">
       <div className="self-start">
-        <ZoomableImage src={artwork.artworkImage} alt={artwork.artworkName} />
+        {/*
+          รูปที่ backend ส่งมาให้คนที่ไม่ใช่เจ้าของงานเป็นภาพตัวอย่างฝังลายน้ำอยู่แล้ว
+          ที่นี่กันคลิกขวา/ลากรูปเพิ่มอีกชั้น — เจ้าของงานได้รูปต้นฉบับ จึงไม่ต้องกันและไม่ต้องอธิบาย
+        */}
+        <ZoomableImage src={artwork.artworkImage} alt={artwork.artworkName} protect={!isOwnArtwork} />
+        {!isOwnArtwork && (
+          <p className="mt-2 text-xs text-stone-500">
+            ภาพนี้มีลายน้ำเพื่อป้องกันการคัดลอกผลงาน — ผลงานจริงที่ได้รับไม่มีลายน้ำ
+          </p>
+        )}
       </div>
 
       <div className="flex flex-col gap-5">

@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { RequireAdmin } from "@/components/RoleGuard";
 import { listCopyrightPayments, listPayments } from "@/lib/api";
 import { PaymentStatus } from "@/types";
@@ -11,6 +10,9 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { SummaryTable } from "@/components/SummaryTable";
 import { FilterChips } from "@/components/FilterChips";
 import { PendingBadge } from "@/components/PendingBadge";
+import { MonthYearFilter } from "@/components/MonthYearFilter";
+import { useUrlQuery } from "@/hooks/useUrlQuery";
+import { Period, inPeriod, parsePeriod, periodLabel, periodQuery, yearsOf } from "@/lib/period";
 
 type PaymentFilter = "all" | PaymentStatus;
 type KindFilter = "all" | "artwork" | "copyright";
@@ -80,34 +82,32 @@ function AdminPaymentsContent() {
   const [keyword, setKeyword] = useState("");
 
   /*
-    สถานะและประเภทเก็บไว้ที่ URL (?status=submitted&kind=artwork)
+    สถานะ ประเภท และเดือน/ปี เก็บไว้ที่ URL (?status=submitted&kind=artwork&year=2569&month=9)
     ลิงก์จากแดชบอร์ดจึงพาเข้ามาที่กลุ่มที่กดได้ตรงๆ และปุ่มย้อนกลับของเบราว์เซอร์ทำงานถูก
+
+    ของเดิมสร้าง query ใหม่ทั้งก้อนทุกครั้ง — ถ้ายังทำแบบนั้น การกดชิปสถานะจะลบเดือน/ปี
+    ที่เลือกไว้ทิ้ง useUrlQuery แก้เฉพาะคีย์ที่เปลี่ยนแทน
   */
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const { searchParams, update } = useUrlQuery();
   const filter = parseStatus(searchParams.get("status"));
   const kind = parseKind(searchParams.get("kind"));
-
-  const pushQuery = useCallback(
-    (nextStatus: PaymentFilter, nextKind: KindFilter) => {
-      const params = new URLSearchParams();
-      if (nextStatus !== "all") params.set("status", nextStatus);
-      if (nextKind !== "all") params.set("kind", nextKind);
-      const qs = params.toString();
-      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-    },
-    [pathname, router]
-  );
+  const period = useMemo(() => parsePeriod(searchParams), [searchParams]);
 
   const setFilter = useCallback(
-    (next: string) => pushQuery(parseStatus(next), kind),
-    [pushQuery, kind]
+    (next: string) => {
+      const v = parseStatus(next);
+      update({ status: v === "all" ? null : v });
+    },
+    [update]
   );
   const setKind = useCallback(
-    (next: string) => pushQuery(filter, parseKind(next)),
-    [pushQuery, filter]
+    (next: string) => {
+      const v = parseKind(next);
+      update({ kind: v === "all" ? null : v });
+    },
+    [update]
   );
+  const setPeriod = useCallback((p: Period) => update(periodQuery(p)), [update]);
 
   useEffect(() => {
     Promise.all([listPayments(), listCopyrightPayments()]).then(([orders, copyrights]) => {
@@ -157,7 +157,25 @@ function AdminPaymentsContent() {
     });
   }, []);
 
-  const all = useMemo(() => rows ?? [], [rows]);
+  const everything = useMemo(() => rows ?? [], [rows]);
+
+  /*
+    ช่วงเวลากรองก่อนประเภทและสถานะ — ตารางสรุปและตัวเลขบนชิปทุกตัวจึงเป็นยอดของ
+    เดือนที่เลือก ใช้ปิดยอดรายเดือนได้ตรง ๆ
+
+    วันที่ที่ใช้เทียบคือคอลัมน์ "วันที่" ในตาราง: ค่าชิ้นงานอิงวันที่สั่งซื้อ
+    (ตาราง payment ไม่มีวันที่สร้างเป็นของตัวเอง) ค่าลิขสิทธิ์อิงวันที่แจ้งโอน
+    — กรองตามวันที่ที่ผู้ใช้เห็นบนหน้าจอเสมอ จะได้ไม่มีแถวที่โชว์ "30/9" แต่ไปอยู่เดือนอื่น
+  */
+  const all = useMemo(
+    () => everything.filter((r) => inPeriod(r.date, period)),
+    [everything, period]
+  );
+  const years = useMemo(
+    () => yearsOf(everything.map((r) => r.date), period.year),
+    [everything, period.year]
+  );
+  const activePeriod = periodLabel(period);
 
   // ตัวกรองประเภทมาก่อนทุกอย่าง เพื่อให้ยอดสรุปและตัวเลขบนชิปตรงกับที่เห็นในตาราง
   const inScope = useMemo(
@@ -216,30 +234,34 @@ function AdminPaymentsContent() {
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <h1 className="font-serif text-2xl font-bold text-stone-900">รายการโอนเงินให้ผู้ขาย</h1>
         <PendingBadge
-          count={all.reduce((n, r) => n + r.payoutReady, 0)}
+          // งานค้างนับทุกช่วงเวลา กรองเดือนอยู่ก็ต้องไม่ซ่อนงานที่ค้างจากเดือนก่อน
+          count={everything.reduce((n, r) => n + r.payoutReady, 0)}
           label="รอโอนเงินให้ผู้ขาย"
         />
       </div>
 
       {rows === null ? (
         <Spinner />
-      ) : all.length === 0 ? (
+      ) : everything.length === 0 ? (
         <EmptyState
           title="ยังไม่มีรายการการโอนเงิน"
           description="รายการจะปรากฏเมื่อผู้ซื้อชำระเงินและแนบหลักฐาน"
         />
       ) : (
         <>
-          <div className="mb-4">
+          <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <FilterChips
               options={kindChips}
               value={kind}
               onChange={(v) => setKind(v as KindFilter)}
             />
+            <MonthYearFilter years={years} value={period} onChange={setPeriod} />
           </div>
 
           <SummaryTable
-            title={`สรุปการโอนเงิน${activeKindLabel ? ` · ${activeKindLabel}` : ""}`}
+            title={`สรุปการโอนเงิน${activeKindLabel ? ` · ${activeKindLabel}` : ""}${
+              activePeriod ? ` · ${activePeriod}` : ""
+            }`}
             rows={summary}
             totalLabel="รวมทุกสถานะ"
             activeFilter={filter}
@@ -264,6 +286,7 @@ function AdminPaymentsContent() {
 
           <p className="mb-2 text-sm text-stone-500">
             แสดง {visible.length} จาก {inScope.length} รายการ
+            {activePeriod && ` · ${activePeriod}`}
             {activeKindLabel && ` · ${activeKindLabel}`}
             {activeLabel && ` · ${activeLabel}`}
             {keyword.trim() && ` · คำค้น "${keyword.trim()}"`}
@@ -271,8 +294,12 @@ function AdminPaymentsContent() {
 
           {visible.length === 0 ? (
             <EmptyState
-              title="ไม่พบรายการที่ตรงกับเงื่อนไข"
-              description="ลองเปลี่ยนตัวกรองหรือลบคำค้นหา"
+              title={
+                activePeriod && all.length === 0
+                  ? `ไม่มีรายการโอนเงินใน${activePeriod}`
+                  : "ไม่พบรายการที่ตรงกับเงื่อนไข"
+              }
+              description="ลองเปลี่ยนเดือน/ปี ตัวกรอง หรือลบคำค้นหา"
             />
           ) : (
             <div className="overflow-x-auto rounded-xl border border-stone-200 bg-white">

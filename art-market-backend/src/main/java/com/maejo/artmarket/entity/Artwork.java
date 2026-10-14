@@ -25,6 +25,14 @@ public class Artwork {
     // ถ้าไม่ระบุ columnDefinition Hibernate จะสร้างเป็น varchar(255) แล้ว insert พังทันที
     @Column(columnDefinition = "LONGTEXT")
     private String artworkImage;
+
+    /**
+     * ภาพตัวอย่างมีลายน้ำ (jpeg ย่อขนาด) — รูปที่ส่งให้ทุกคนที่ไม่ใช่เจ้าของงาน
+     * สร้างตอนบันทึก/เปลี่ยนรูป และเติมให้งานเก่าตอนเปิดระบบ (ดู WatermarkBackfill)
+     * เก็บไว้แทนการสร้างทุกครั้งที่มีคนเปิดหน้าค้นหา ซึ่งจะต้องวาดรูปใหม่หลายสิบรูปต่อคำขอ
+     */
+    @Column(columnDefinition = "LONGTEXT")
+    private String watermarkedImage;
     private String artworkType;
     private String artworkStyle;
     private String artworkMediums;

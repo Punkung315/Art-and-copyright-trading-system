@@ -97,7 +97,7 @@ export default function HomePage() {
 
           <form onSubmit={handleSearch} className="mt-2 flex w-full max-w-xl gap-2">
             <Input
-              placeholder="ค้นหาชื่อผลงาน หรือชื่อศิลปิน"
+              placeholder="ค้นหาชื่อผลงาน ชื่อศิลปิน หรือคำในคำอธิบายผลงาน"
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
               aria-label="ค้นหาผลงานศิลปะ"

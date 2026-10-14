@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { PROTECTED_IMAGE_CLASS, protectedImageProps } from "@/lib/protectImage";
 
 /**
  * รูปที่กดขยายดูเต็มจอได้
@@ -13,12 +14,17 @@ export function ZoomableImage({
   src,
   alt,
   className = "",
+  protect = false,
 }: {
   src: string;
   alt: string;
   className?: string;
+  /** รูปผลงาน — กันคลิกขวา/ลากรูป ทั้งตอนย่อและตอนขยายเต็มจอ (สลิปโอนเงินไม่ต้องกัน) */
+  protect?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const guard = protect ? protectedImageProps : {};
+  const guardClass = protect ? PROTECTED_IMAGE_CLASS : "";
 
   // ปิดด้วย Esc และล็อกไม่ให้หน้าเลื่อนตอนเปิดดูเต็มจอ
   useEffect(() => {
@@ -47,7 +53,8 @@ export function ZoomableImage({
         <img
           src={src}
           alt={alt}
-          className="max-h-[70vh] w-auto max-w-full rounded-lg object-contain"
+          {...guard}
+          className={`max-h-[70vh] w-auto max-w-full rounded-lg object-contain ${guardClass}`}
         />
         <span className="pointer-events-none absolute bottom-3 right-3 rounded-full bg-stone-900/70 px-3 py-1 text-xs text-white opacity-0 transition group-hover:opacity-100">
           กดเพื่อขยาย
@@ -75,8 +82,9 @@ export function ZoomableImage({
           <img
             src={src}
             alt={alt}
+            {...guard}
             onClick={(e) => e.stopPropagation()}
-            className="max-h-full max-w-full object-contain"
+            className={`max-h-full max-w-full object-contain ${guardClass}`}
           />
         </div>
       )}

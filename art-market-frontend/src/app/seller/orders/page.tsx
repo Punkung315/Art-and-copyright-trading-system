@@ -1,17 +1,18 @@
 "use client";
 
-import Link from "next/link";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { RequireSeller } from "@/components/RoleGuard";
 import { useAuth } from "@/context/AuthContext";
 import { listOrdersBySeller } from "@/lib/api";
 import { Order } from "@/types";
-import { Button, Card, Container, EmptyState, Spinner } from "@/components/ui";
-import { StatusBadge } from "@/components/StatusBadge";
+import { Container, EmptyState, Spinner } from "@/components/ui";
 import { SummaryTable } from "@/components/SummaryTable";
 import { FilterChips } from "@/components/FilterChips";
 import { PendingBadge } from "@/components/PendingBadge";
+import { MonthYearFilter } from "@/components/MonthYearFilter";
+import { OrderStatusTable, sortOrdersNewestFirst } from "@/components/OrderStatusTable";
+import { useUrlQuery } from "@/hooks/useUrlQuery";
+import { Period, inPeriod, parsePeriod, periodLabel, periodQuery, yearsOf } from "@/lib/period";
 
 type OrderFilter = "all" | "waiting" | "to_ship" | "done";
 
@@ -43,37 +44,44 @@ function SellerOrdersContent() {
   const [orders, setOrders] = useState<Order[] | null>(null);
 
   /*
-    ตัวกรองอยู่ที่ URL (?filter=waiting) เพื่อให้การ์ดบนหน้าพื้นที่ผู้ขายลิงก์เข้ามาที่กลุ่มนั้นได้ตรงๆ
-    และปุ่มย้อนกลับของเบราว์เซอร์ทำงานถูกต้อง
+    ตัวกรองอยู่ที่ URL (?filter=waiting&year=2569&month=9) เพื่อให้การ์ดบนหน้าพื้นที่ผู้ขาย
+    ลิงก์เข้ามาที่กลุ่มนั้นได้ตรงๆ และปุ่มย้อนกลับของเบราว์เซอร์ทำงานถูกต้อง
   */
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const { searchParams, update } = useUrlQuery();
   const filter = parseFilter(searchParams.get("filter"));
+  const period = useMemo(() => parsePeriod(searchParams), [searchParams]);
 
   const setFilter = useCallback(
     (next: string) => {
       const value = parseFilter(next);
-      router.replace(value === "all" ? pathname : `${pathname}?filter=${value}`, { scroll: false });
+      update({ filter: value === "all" ? null : value });
     },
-    [pathname, router]
+    [update]
   );
+  const setPeriod = useCallback((p: Period) => update(periodQuery(p)), [update]);
 
   useEffect(() => {
     if (user) listOrdersBySeller(user.id).then(setOrders);
   }, [user]);
 
-  const all = useMemo(() => orders ?? [], [orders]);
+  const everything = useMemo(() => orders ?? [], [orders]);
+
+  /*
+    ช่วงเวลากรองก่อนทุกอย่าง ตารางสรุป ตัวเลขบนชิป และรายการด้านล่างจึงพูดถึง
+    "เดือนที่เลือก" ชุดเดียวกัน — ไม่งั้นสรุปบอก 9 รายการแต่ข้างล่างโชว์ 2 จะชวนงง
+  */
+  const all = useMemo(
+    () => everything.filter((o) => inPeriod(o.orderDate, period)),
+    [everything, period]
+  );
+  const years = useMemo(
+    () => yearsOf(everything.map((o) => o.orderDate), period.year),
+    [everything, period.year]
+  );
+  const activePeriod = periodLabel(period);
 
   // คำสั่งซื้อใหม่ล่าสุดอยู่บนสุด
-  const sorted = useMemo(
-    () =>
-      [...all].sort((a, b) => {
-        const diff = new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime();
-        return diff !== 0 ? diff : Number(b.id) - Number(a.id);
-      }),
-    [all]
-  );
+  const sorted = useMemo(() => sortOrdersNewestFirst(all), [all]);
 
   const visible = useMemo(
     () => (filter === "all" ? sorted : sorted.filter((o) => bucketOf(o) === filter)),
@@ -81,6 +89,8 @@ function SellerOrdersContent() {
   );
 
   const group = (bucket: Exclude<OrderFilter, "all">) => all.filter((o) => bucketOf(o) === bucket);
+  // งานค้างนับจากทุกช่วงเวลาเสมอ — กรองเดือนอยู่แล้วต้องไม่ทำให้ลืมของที่ค้างจากเดือนก่อน
+  const waitingEverywhere = everything.filter((o) => bucketOf(o) === "waiting").length;
 
   const summary = (["waiting", "to_ship", "done"] as const).map((bucket) => {
     const items = group(bucket);
@@ -104,20 +114,24 @@ function SellerOrdersContent() {
     <Container className="py-10">
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <h1 className="font-serif text-2xl font-bold text-stone-900">คำสั่งซื้อของร้านฉัน</h1>
-        <PendingBadge count={group("waiting").length} label="รอยืนยันความพร้อม" />
+        <PendingBadge count={waitingEverywhere} label="รอยืนยันความพร้อม" />
       </div>
 
       {orders === null ? (
         <Spinner />
-      ) : all.length === 0 ? (
+      ) : everything.length === 0 ? (
         <EmptyState
           title="ยังไม่มีรายการคำสั่งซื้อ"
           description="เมื่อมีผู้ซื้อสั่งซื้อผลงานของคุณ รายการจะปรากฏที่นี่"
         />
       ) : (
         <>
+          <div className="mb-4">
+            <MonthYearFilter years={years} value={period} onChange={setPeriod} />
+          </div>
+
           <SummaryTable
-            title="สรุปคำสั่งซื้อ"
+            title={`สรุปคำสั่งซื้อ${activePeriod ? ` · ${activePeriod}` : ""}`}
             rows={summary}
             totalLabel="คำสั่งซื้อทั้งหมด"
             activeFilter={filter}
@@ -134,50 +148,36 @@ function SellerOrdersContent() {
 
           <p className="mb-2 text-sm text-stone-500">
             แสดง {visible.length} จาก {all.length} รายการ
+            {activePeriod && ` · ${activePeriod}`}
             {filter !== "all" && ` · ${BUCKET_LABEL[filter]}`}
           </p>
 
           {visible.length === 0 ? (
-            <EmptyState title="ไม่พบคำสั่งซื้อที่ตรงกับเงื่อนไข" />
+            <EmptyState
+              title={
+                activePeriod && all.length === 0
+                  ? `ไม่มีคำสั่งซื้อใน${activePeriod}`
+                  : "ไม่พบคำสั่งซื้อที่ตรงกับเงื่อนไข"
+              }
+              description="ลองเปลี่ยนเดือน/ปี หรือตัวกรองสถานะ"
+            />
           ) : (
-            <div className="flex flex-col gap-3">
-              {/*
-                ทั้งการ์ดเป็นลิงก์เดียว กดตรงไหนก็เข้าได้
-                ของเดิมกดได้เฉพาะข้อความ "คำสั่งซื้อ #n" ซึ่งเป็นเป้าเล็กและมองไม่ออกว่ากดได้
-                ปุ่มยืนยันความพร้อม/ช่องจัดส่งย้ายไปอยู่ในหน้าคำสั่งซื้อแล้ว
-              */}
-              {visible.map((order) => (
-                <Link key={order.id} href={`/orders/${order.id}`} className="block">
-                  <Card className="p-4 transition hover:border-stone-300 hover:shadow-md">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-stone-900">
-                          คำสั่งซื้อ #{order.id.slice(-8)}
-                        </p>
-                        <p className="text-xs text-stone-500">
-                          ผู้ซื้อ {order.buyerName} ·{" "}
-                          {new Date(order.orderDate).toLocaleDateString("th-TH")} ·{" "}
-                          {order.items.length} รายการ · {order.grandTotal.toLocaleString()} บาท
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <StatusBadge status={order.availabilityStatus} domain="availability" />
-                        <StatusBadge status={order.paymentStatus} domain="payment" />
-                        <StatusBadge status={order.shippingStatus} domain="shipping" />
-                        {order.sellerPayout?.paid && (
-                          <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800">
-                            ได้รับเงินแล้ว
-                          </span>
-                        )}
-                        <span className="text-stone-400" aria-hidden>
-                          ›
-                        </span>
-                      </div>
-                    </div>
-                  </Card>
-                </Link>
-              ))}
-            </div>
+            <OrderStatusTable
+              orders={visible}
+              meta={(order) => (
+                <>
+                  ผู้ซื้อ {order.buyerName} · {new Date(order.orderDate).toLocaleDateString("th-TH")} ·{" "}
+                  {order.items.length} รายการ · {order.grandTotal.toLocaleString()} บาท
+                </>
+              )}
+              shippingExtra={(order) =>
+                order.sellerPayout?.paid ? (
+                  <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800">
+                    ได้รับเงินแล้ว
+                  </span>
+                ) : null
+              }
+            />
           )}
         </>
       )}

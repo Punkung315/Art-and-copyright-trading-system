@@ -1,6 +1,7 @@
 package com.maejo.artmarket.dto;
 
 import com.maejo.artmarket.entity.Artwork;
+import com.maejo.artmarket.image.ArtworkImages;
 import com.maejo.artmarket.enums.ArtworkStatus;
 import com.maejo.artmarket.enums.PublishStatus;
 import lombok.Builder;
@@ -57,6 +58,13 @@ public class ArtworkSummaryResponse {
     private Double width;
     private Double height;
 
+    /** สำหรับหน้า "ผลงานของฉัน" ของผู้ขาย — ได้รูปต้นฉบับ ผู้เรียกต้องตรวจความเป็นเจ้าของแล้ว */
+    public static ArtworkSummaryResponse forOwner(Artwork artwork, boolean copyrightSold) {
+        ArtworkSummaryResponse r = from(artwork, copyrightSold);
+        r.setArtworkImage(ArtworkImages.originalImageOf(artwork));
+        return r;
+    }
+
     /** แปลง Entity → DTO ในที่เดียว ไม่ต้องกระจาย logic ไปหลายที่ */
     public static ArtworkSummaryResponse from(Artwork artwork) {
         return from(artwork, false);
@@ -75,7 +83,7 @@ public class ArtworkSummaryResponse {
                 .height(artwork.getHeight())
                 .artworkId(artwork.getArtworkId())
                 .artworkName(artwork.getArtworkName())
-                .artworkImage(artwork.getArtworkImage())
+                .artworkImage(ArtworkImages.publicImageOf(artwork))
                 .artworkType(artwork.getArtworkType())
                 .artworkStyle(artwork.getArtworkStyle())
                 .price(artwork.getPrice())
